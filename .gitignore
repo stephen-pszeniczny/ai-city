@@ -1,0 +1,69 @@
+# AI City .gitignore
+# Public repo, code only. Real data lives in ~/AI-City-Data (outside this repo).
+# Verify changes with: git status --ignored
+
+# ── Private project docs (contain personal details) ─────────
+SPEC.md
+
+# ── Personal data ────────────────────────────────────────────
+data/
+AI-City-Data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Statements, exports, tax slips
+*.csv
+*.xlsx
+*.xls
+*.ofx
+*.qfx
+*.pdf
+
+# ── Resume and documents (blocked by type, not by name) ─────
+*.docx
+*.doc
+*.pages
+*.rtf
+*.odt
+
+# ── Email and calendar exports (Post Office / calendar) ─────
+*.eml
+*.mbox
+*.ics
+
+# ── Secrets ──────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keychain*
+secrets/
+credentials*.json
+token*.json
+client_secret*.json
+
+# ── Generated files and tool clutter ────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+dist/
+build/
+*.log
+logs/
+.DS_Store
+.claude/settings.local.json
+
+# ── Exceptions (must stay last) ─────────────────────────────
+# Test fixtures: generated FAKE statement CSVs only. Never real data.
+!tests/fixtures/**/*.csv
