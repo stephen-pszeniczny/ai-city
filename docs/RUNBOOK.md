@@ -42,6 +42,10 @@ _To be filled in when the first AI feature is built._
 
 _Added as problems come up. Format: **Symptom** → what to do._
 
+**After any fresh clone** → run `git config core.hooksPath .githooks` inside the repo. That setting isn't copied with the repo, and without it the gitleaks secret check won't run on commits. Needs `brew install gitleaks` first.
+
+**A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
+
 ---
 
 ## 7. 🚨 Emergency: a secret or personal data may have been committed

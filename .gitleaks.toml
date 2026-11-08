@@ -1,0 +1,32 @@
+# gitleaks config for AI City
+# Keeps every built-in rule (API keys, tokens, private keys) and adds rules for
+# account-number patterns, which the built-in set does not cover.
+#
+# False positives: add a NARROW allowlist entry (one path or one exact value),
+# never disable or loosen a rule. Fixture values must be obviously fake.
+
+title = "AI City gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "credit-card-number"
+description = "Visa, Mastercard or Amex card number"
+regex = '''\b(?:(?:4\d{3}|5[1-5]\d{2}|2[2-7]\d{2})(?:[ -]?\d{4}){3}|3[47]\d{2}[ -]?\d{6}[ -]?\d{5})\b'''
+
+[[rules]]
+id = "ca-bank-account"
+description = "Canadian bank account: transit (5) - institution (3) - account (7 to 12)"
+regex = '''\b\d{5}[ -]\d{3}[ -]\d{7,12}\b'''
+
+[[rules]]
+id = "ca-sin"
+description = "Canadian Social Insurance Number format (3-3-3)"
+regex = '''\b\d{3}[ -]\d{3}[ -]\d{3}\b'''
+
+[[rules]]
+id = "account-number-assignment"
+description = "Long digit run assigned to an account-like name"
+regex = '''(?i)\b(?:account|acct|card|transit|chequing|checking|sin)[\w ]{0,15}?\s*[:=#]\s*['"]?\d[\d -]{5,18}\d\b'''
+keywords = ["account", "acct", "card", "transit", "chequing", "checking", "sin"]

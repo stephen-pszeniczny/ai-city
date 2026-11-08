@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block commits that contain secrets or account numbers.
+# Adapted from gitleaks' example scripts/pre-commit.py, using the 8.x command.
+# Enable after a fresh clone with: git config core.hooksPath .githooks
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks is not installed, so this commit is blocked."
+  echo "Install it with: brew install gitleaks"
+  exit 1
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+if ! gitleaks git --pre-commit --staged --redact --verbose \
+    --config "$repo_root/.gitleaks.toml" "$repo_root"; then
+  echo
+  echo "Commit blocked: gitleaks found possible secrets or account numbers above."
+  echo "Remove them from the staged files, or if it's a false positive, add a"
+  echo "narrow allowlist entry to .gitleaks.toml (never disable a rule)."
+  exit 1
+fi
