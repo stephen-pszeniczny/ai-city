@@ -13,6 +13,18 @@ Copy this file to `handoff/YYYY-MM-DD.md` at the end of each session and fill it
 ## Done this session
 - 
 
+## Session scorecard
+<!-- Same format as the per-step scorecards (SPEC.md section 2): 10-block bars, real counts,
+     overall = average, one line on anything under 100%. Counts only, never data. -->
+```
+Requirements met   ░░░░░░░░░░   0%  (0/0)
+Tests passing      ░░░░░░░░░░   0%  (0/0)
+Break-it checks    ░░░░░░░░░░   0%  (0/0 caught)
+Lint and types     ░░░░░░░░░░   0%
+Security scans     ░░░░░░░░░░   0%
+Overall            ░░░░░░░░░░   0%
+```
+
 ## Decisions made
 <!-- One line each: the decision, then why. -->
 - 
