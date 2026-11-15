@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pre-commit hook: block commits that contain secrets or account numbers.
+# Pre-commit hook: block commits that contain secrets, account numbers, or
+# words from the private blocked-words list.
 # Adapted from gitleaks' example scripts/pre-commit.py, using the 8.x command.
 # Enable after a fresh clone with: git config core.hooksPath .githooks
 set -euo pipefail
@@ -19,3 +20,13 @@ if ! gitleaks git --pre-commit --staged --redact --verbose \
   echo "narrow allowlist entry to .gitleaks.toml (never disable a rule)."
   exit 1
 fi
+
+# Blocked words: reads <data folder>/blocked_words.txt, prints only file and
+# line number on a match, and blocks the commit if the list is missing.
+python_bin="$repo_root/.venv/bin/python"
+[ -x "$python_bin" ] || python_bin="$(command -v python3 || true)"
+if [ -z "$python_bin" ]; then
+  echo "Python not found, so the blocked-words check can't run. Commit blocked."
+  exit 1
+fi
+"$python_bin" -I "$repo_root/.githooks/blocked_words.py"

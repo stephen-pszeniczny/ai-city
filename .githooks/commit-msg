@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Commit-msg hook: block commit messages containing words from the private
+# blocked-words list (commit messages are public on GitHub too).
+# Enable after a fresh clone with: git config core.hooksPath .githooks
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+python_bin="$repo_root/.venv/bin/python"
+[ -x "$python_bin" ] || python_bin="$(command -v python3 || true)"
+if [ -z "$python_bin" ]; then
+  echo "Python not found, so the blocked-words check can't run. Commit blocked."
+  exit 1
+fi
+
+exec "$python_bin" -I "$repo_root/.githooks/blocked_words.py" --message "$1"
