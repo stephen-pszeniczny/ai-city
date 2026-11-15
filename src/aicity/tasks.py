@@ -34,6 +34,10 @@ class TaskError(ValueError):
     """The request can't be done: bad data or a change that isn't allowed."""
 
 
+class TaskConflict(TaskError):
+    """The change isn't allowed in the task's current state (e.g. completing it twice)."""
+
+
 class TaskNotFound(LookupError):
     """No task has that ID."""
 
@@ -151,7 +155,7 @@ class TaskStore:
         def work() -> None:
             current = self._to_task(self._row(task_id), now)
             if current.status == "archived":
-                raise TaskError("Archived tasks can't be edited. Reopen it first.")
+                raise TaskConflict("Archived tasks can't be edited. Reopen it first.")
             changes = {
                 k: [getattr(current, k), v] for k, v in fields.items() if getattr(current, k) != v
             }
@@ -191,7 +195,7 @@ class TaskStore:
         def work() -> None:
             old = self._row(task_id)[6]
             if old not in allowed_from:
-                raise TaskError(f"A task that is {old} can't be {kind}.")
+                raise TaskConflict(f"A task that is {old} can't be {kind}.")
             self._conn.execute(
                 "UPDATE tasks SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?",
                 (new, stamp, stamp if new == "done" else None, task_id),

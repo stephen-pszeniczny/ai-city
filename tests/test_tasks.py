@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from aicity.db import DbKind, open_database
-from aicity.tasks import TaskError, TaskNotFound, TaskStore
+from aicity.tasks import TaskConflict, TaskError, TaskNotFound, TaskStore
 
 START = datetime(2026, 11, 15, 21, 0, 0, tzinfo=UTC)
 STALE_DAYS = 7
@@ -185,7 +185,7 @@ def test_bad_edit_is_refused_and_nothing_changes(store):
 def test_editing_archived_task_is_refused(store):
     task = store.create(title="T", category="work")
     store.archive(task.id)
-    with pytest.raises(TaskError):
+    with pytest.raises(TaskConflict):
         store.edit(task.id, title="New")
 
 
@@ -236,7 +236,7 @@ def test_invalid_status_change_is_refused(store, setup, action):
     for step in setup:
         getattr(store, step)(task.id)
     before = history_kinds(store, task.id)
-    with pytest.raises(TaskError):
+    with pytest.raises(TaskConflict):
         getattr(store, action)(task.id)
     assert history_kinds(store, task.id) == before
 

@@ -6,8 +6,10 @@ Start it during development with:
 
 from fastapi import FastAPI
 
-from aicity import config
+from aicity import config, task_routes
+from aicity.db import DbKind
 from aicity.security import FrontDoorMiddleware
+from aicity.tasks import utc_now
 
 
 def create_app(*, dev: bool | None = None) -> FastAPI:
@@ -25,6 +27,14 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
     )
     # The front door lock runs before anything else sees the request.
     app.add_middleware(FrontDoorMiddleware, dev=dev)
+
+    # Which database the routes use. Always Sample until the Personal / Sample
+    # switch (with Touch ID) is built, so unfinished features never touch real data.
+    app.state.db_kind = DbKind.SAMPLE
+    # The clock the routes use; tests replace it with a fake one.
+    app.state.clock = utc_now
+
+    task_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
