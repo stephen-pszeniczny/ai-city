@@ -3,13 +3,17 @@
 // Self-contained on purpose: today it has its own page (/todo); in session 9
 // the same panel opens from a monitor inside the City Hall scene.
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getHealth } from "../api";
+import { getHealth, type ListFilter } from "../api";
 import { ModeBanner } from "./ModeBanner";
+import { QuickAdd } from "./QuickAdd";
+import { Filters, TaskList } from "./TaskList";
 import "./todo.css";
 
 export function TodoPanel() {
+  const [filter, setFilter] = useState<ListFilter>("open");
   const health = useQuery({
     queryKey: ["health"],
     queryFn: getHealth,
@@ -36,7 +40,11 @@ export function TodoPanel() {
         ) : health.isError ? (
           <EngineDown onRetry={() => void health.refetch()} retrying={health.isFetching} />
         ) : (
-          <p className="quiet">No tasks to show yet.</p>
+          <>
+            <QuickAdd />
+            <Filters value={filter} onChange={setFilter} />
+            <TaskList filter={filter} />
+          </>
         )}
       </div>
     </section>

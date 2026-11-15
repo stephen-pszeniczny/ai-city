@@ -46,7 +46,7 @@ jobs:
         run: .venv/bin/pytest -q
 
   frontend:
-    name: Frontend type check and build
+    name: Frontend tests, type check and build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -64,6 +64,10 @@ jobs:
       - name: Install locked packages
         # npm ci installs exactly package-lock.json; .npmrc keeps install scripts off.
         run: npm ci
+
+      - name: Unit tests
+        # Node's built-in test runner; no extra packages.
+        run: npm test
 
       - name: Type check
         run: npm run typecheck

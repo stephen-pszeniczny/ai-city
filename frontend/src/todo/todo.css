@@ -183,3 +183,289 @@
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
+
+/* ── Shared bits ─────────────────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.field {
+  min-height: 44px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+}
+
+textarea.field {
+  padding: 0.6rem 0.8rem;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.field::placeholder {
+  color: var(--muted);
+}
+
+.field[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+.field-label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.form-error {
+  margin: 0.5rem 0 0;
+  color: var(--bad);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.link-btn {
+  min-height: 44px;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+/* ── Quick add ───────────────────────────────────────────── */
+
+.quick-add__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quick-add__title {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.quick-add__under {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 1rem;
+}
+
+.sample-line {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--warn);
+  font-size: 0.8125rem;
+}
+
+.sample-line .warn-icon {
+  margin-top: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.quick-add__more {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.25rem 0 0.5rem;
+}
+
+/* ── Filters ─────────────────────────────────────────────── */
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin: 0.75rem 0 0.5rem;
+  padding: 2px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.segmented__item[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+
+.count {
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Rows ────────────────────────────────────────────────── */
+
+.task-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.task-row:last-child {
+  border-bottom: 0;
+}
+
+/* Round checkbox, Reminders-style. 44px hit area around a 22px circle. */
+.check {
+  flex: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  /* Grows the clickable area to 44px without growing the circle. */
+  box-shadow: 0 0 0 11px transparent;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+}
+
+.check:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.check:checked::after {
+  content: "";
+  width: 10px;
+  height: 5px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 0 2px 2px;
+  transform: rotate(-45deg);
+}
+
+.check:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.check-spacer {
+  flex: none;
+  width: 22px;
+}
+
+.task-row__main {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.task-row__title {
+  font-size: 1rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.task-row--done .task-row__title {
+  color: var(--muted);
+}
+
+.task-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  align-items: center;
+  font-size: 0.8125rem;
+}
+
+.chip {
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.chip--personal {
+  color: #d9a6ff;
+  background: rgba(191, 90, 242, 0.16);
+}
+
+.chip--work {
+  color: var(--accent-text);
+  background: rgba(65, 105, 225, 0.2);
+}
+
+.chip--side_work {
+  color: #6fdcef;
+  background: rgba(64, 200, 224, 0.14);
+}
+
+.chip--city {
+  color: #7be495;
+  background: rgba(48, 209, 88, 0.14);
+}
+
+.note--bad {
+  color: var(--bad);
+  font-weight: 500;
+}
+
+.note--warn {
+  color: var(--warn);
+}
+
+.note--accent {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.note--plain {
+  color: var(--text);
+}
+
+.note--muted {
+  color: var(--muted);
+}
