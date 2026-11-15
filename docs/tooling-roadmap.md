@@ -15,6 +15,7 @@ Third-party marketplace auto-update stays off.
 | Explore subagent (Haiku) | Project `.claude/agents/` | Only if the built-in Explore agent doesn't already use Haiku. Read-only tools. |
 | Data-protection hook | Project `.claude/settings.json` (PreToolUse) | `.claude/hooks/protect-data.py`. Denies file and search tools (Read, Edit, Write, NotebookEdit, Grep, Glob) on the private data folder and any `.env` file; asks before editing the private spec or running shell commands that mention either. Fails closed (any error means ask). Applies to subagents too. Tests: `/usr/bin/python3 .claude/hooks/test_protect_data.py`. |
 | Auto-format hook (ruff + prettier) | Project `.claude/settings.json` (PostToolUse) | `.claude/hooks/format-file.py`. After Edit/MultiEdit/Write, runs `ruff format` on Python files in the repo and `prettier --write` on frontend files, using the pinned local copies. Layout only, no lint fixes. Skips files outside the repo (links resolved), `.venv`, `node_modules`, `dist`, `.git`, the private spec and `.env` files. Never blocks an edit; no network. Tests: `/usr/bin/python3 .claude/hooks/test_format_file.py`. |
+| Playwright MCP | `microsoft/playwright-mcp` (npm `@playwright/mcp@0.0.84`), project `.mcp.json` | Lets Claude open the local page, click through it and take screenshots during verification. Isolated in-memory browser profile, headless, browser requests limited to `http://127.0.0.1:5173` and `http://127.0.0.1:8765`. Version pinned; same 14-day rule as libraries. |
 
 ## Install later
 
@@ -33,7 +34,6 @@ Each item waits for its trigger. Check triggers at the start of each session and
 | Hitting usage limits | Headroom | |
 | Demo video time | HyperFrames vs OpenMontage | Compare before choosing one. |
 | Making custom skills | skill-creator (Anthropic skills repo) | |
-| First Phase 1a UI session | Playwright MCP | Lets Claude view the local city page. Local browser only. |
 | React Three Fiber or FastAPI APIs repeatedly come out wrong | context7 MCP | Sends library names and queries to an external service. |
 | Before the first README screenshots | security-reviewer subagent | Reviews diffs for secrets and personal data; complements gitleaks. |
 
