@@ -1,7 +1,8 @@
 """The FastAPI app: the backend 'engine' the browser page talks to.
 
-Start it during development with:
-    .venv/bin/uvicorn aicity.main:app --app-dir src --host 127.0.0.1 --port 8765
+Start it with the launcher, which takes the address from config.py and
+refuses anything but this Mac:
+    .venv/bin/python scripts/run_app.py
 """
 
 from fastapi import FastAPI

@@ -17,7 +17,25 @@ If something here is out of date, tell Claude Code: "the runbook is wrong about 
 
 ## 2. Start and stop the app
 
-_To be filled in during Phase 1a._
+_The Dock app and automatic start (launchd) come later in Phase 1a. For now, start it by hand._
+
+**Start the backend**
+1. Open Terminal.
+2. `cd ~/Projects/ai-city`
+3. `.venv/bin/python scripts/run_app.py`
+4. Leave that window open. Check it's alive: open http://127.0.0.1:8765/api/health — it should say `{"status":"ok"}`.
+
+**While building the page** (two Terminal windows):
+1. Window 1: `cd ~/Projects/ai-city && AICITY_DEV=1 .venv/bin/python scripts/run_app.py`
+2. Window 2: `cd ~/Projects/ai-city/frontend && npm run dev`, then open http://127.0.0.1:5173
+
+**Stop** → click the Terminal window and press Ctrl+C.
+
+**If it says "Refusing to start: HOST must be 127.0.0.1"** → someone changed `HOST` in `src/aicity/config.py`. Change it back to `"127.0.0.1"`. The app is for this Mac only.
+
+**If it says the address is already in use** → it's already running in another window. Find it with `lsof -nP -iTCP:8765 -sTCP:LISTEN`; stop that one first.
+
+**Which data it uses:** the to-do list uses the Sample database until the Personal/Sample switch is built.
 
 ## 3. Back up
 
