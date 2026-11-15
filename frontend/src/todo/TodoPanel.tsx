@@ -4,7 +4,7 @@
 // the same panel opens from a monitor inside the City Hall scene.
 // Clicking a task swaps the list for that task's detail view in the same panel.
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getHealth, type ListFilter, type Task, type TaskStatus } from "../api";
@@ -22,6 +22,7 @@ export function TodoPanel() {
   const [returnTo, setReturnTo] = useState<number | null>(null);
   const [archived, setArchived] = useState<Archived | null>(null);
   const clearArchived = useCallback(() => setArchived(null), []);
+  const listHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const health = useQuery({
     queryKey: ["health"],
@@ -52,7 +53,9 @@ export function TodoPanel() {
               <Link className="back-link" to="/">
                 <span aria-hidden="true">‹</span> City
               </Link>
-              <h1 id="todo-title">To-do</h1>
+              <h1 id="todo-title" ref={listHeadingRef} tabIndex={-1}>
+                To-do
+              </h1>
             </header>
 
             <ModeBanner />
@@ -71,6 +74,11 @@ export function TodoPanel() {
                   <TaskList
                     filter={filter}
                     focusId={returnTo}
+                    onFocusHandled={(found) => {
+                      // The task may have left this list (e.g. restored while on Archived).
+                      if (!found) listHeadingRef.current?.focus();
+                      setReturnTo(null);
+                    }}
                     onOpen={(id) => {
                       setArchived(null);
                       setOpenId(id);

@@ -45,15 +45,27 @@ export function Filters({
 export function TaskList({
   filter,
   focusId,
+  onFocusHandled,
   onOpen,
 }: {
   filter: ListFilter;
   /** Put keyboard focus on this task's row (after coming back from its detail view). */
   focusId: number | null;
+  /** Called once the list has loaded: whether the focusId row was there to focus. */
+  onFocusHandled: (found: boolean) => void;
   onOpen: (id: number) => void;
 }) {
   const queryClient = useQueryClient();
   const tasks = useQuery({ queryKey: ["tasks", filter], queryFn: () => listTasks(filter) });
+
+  // Waits for a fresh list: the cached one can still show a task that has just
+  // left this filter. Runs after the rows' own effects, so a found row has
+  // already taken focus.
+  const settled = tasks.data !== undefined && !tasks.isFetching;
+  useEffect(() => {
+    if (focusId === null || !settled) return;
+    onFocusHandled(tasks.data.some((t) => t.id === focusId));
+  }, [focusId, settled, tasks.data, onFocusHandled]);
 
   const toggle = useMutation({
     mutationFn: (task: Task) =>
@@ -100,7 +112,7 @@ export function TaskList({
               busy={busyId === task.id}
               onToggle={() => toggle.mutate(task)}
               onOpen={() => onOpen(task.id)}
-              autoFocus={task.id === focusId}
+              autoFocus={settled && task.id === focusId}
             />
           ))}
         </ul>
