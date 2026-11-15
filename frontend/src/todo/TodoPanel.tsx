@@ -2,18 +2,27 @@
 //
 // Self-contained on purpose: today it has its own page (/todo); in session 9
 // the same panel opens from a monitor inside the City Hall scene.
+// Clicking a task swaps the list for that task's detail view in the same panel.
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getHealth, type ListFilter } from "../api";
+import { getHealth, type ListFilter, type Task, type TaskStatus } from "../api";
 import { ModeBanner } from "./ModeBanner";
 import { QuickAdd } from "./QuickAdd";
+import { TaskDetail } from "./TaskDetail";
 import { Filters, TaskList } from "./TaskList";
+import { UndoToast, type Archived } from "./UndoToast";
 import "./todo.css";
 
 export function TodoPanel() {
   const [filter, setFilter] = useState<ListFilter>("open");
+  const [openId, setOpenId] = useState<number | null>(null);
+  // The task to put keyboard focus back on when returning to the list.
+  const [returnTo, setReturnTo] = useState<number | null>(null);
+  const [archived, setArchived] = useState<Archived | null>(null);
+  const clearArchived = useCallback(() => setArchived(null), []);
+
   const health = useQuery({
     queryKey: ["health"],
     queryFn: getHealth,
@@ -21,33 +30,62 @@ export function TodoPanel() {
     retry: false,
   });
 
+  function backToList() {
+    setReturnTo(openId);
+    setOpenId(null);
+  }
+
+  function handleArchived(task: Task, previous: TaskStatus) {
+    setArchived({ task, previous });
+    setReturnTo(null);
+    setOpenId(null);
+  }
+
   return (
-    <section className="panel" aria-labelledby="todo-title">
-      <header className="panel__head">
-        <Link className="back-link" to="/">
-          <span aria-hidden="true">‹</span> City
-        </Link>
-        <h1 id="todo-title">To-do</h1>
-      </header>
-
-      <ModeBanner />
-
-      <div className="panel__body">
-        {health.isPending ? (
-          <p className="quiet" role="status">
-            Connecting to the engine…
-          </p>
-        ) : health.isError ? (
-          <EngineDown onRetry={() => void health.refetch()} retrying={health.isFetching} />
+    <>
+      <section className="panel" aria-labelledby="todo-title">
+        {openId !== null ? (
+          <TaskDetail key={openId} id={openId} onBack={backToList} onArchived={handleArchived} />
         ) : (
           <>
-            <QuickAdd />
-            <Filters value={filter} onChange={setFilter} />
-            <TaskList filter={filter} />
+            <header className="panel__head">
+              <Link className="back-link" to="/">
+                <span aria-hidden="true">‹</span> City
+              </Link>
+              <h1 id="todo-title">To-do</h1>
+            </header>
+
+            <ModeBanner />
+
+            <div className="panel__body">
+              {health.isPending ? (
+                <p className="quiet" role="status">
+                  Connecting to the engine…
+                </p>
+              ) : health.isError ? (
+                <EngineDown onRetry={() => void health.refetch()} retrying={health.isFetching} />
+              ) : (
+                <>
+                  <QuickAdd />
+                  <Filters value={filter} onChange={setFilter} />
+                  <TaskList
+                    filter={filter}
+                    focusId={returnTo}
+                    onOpen={(id) => {
+                      setArchived(null);
+                      setOpenId(id);
+                    }}
+                  />
+                </>
+              )}
+            </div>
           </>
         )}
-      </div>
-    </section>
+      </section>
+
+      {/* Outside the panel: the panel's blur would otherwise trap and clip it. */}
+      {archived && <UndoToast key={archived.task.id} archived={archived} onDone={clearArchived} />}
+    </>
   );
 }
 

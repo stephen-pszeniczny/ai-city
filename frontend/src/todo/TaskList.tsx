@@ -1,6 +1,8 @@
 // The filter control (Open / Done / Archived / All) and the list of task rows.
 // Ticking a row's circle completes the task; unticking reopens it.
+// Clicking the rest of the row opens the task's detail view.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import { completeTask, listTasks, reopenTask, type ListFilter, type Task } from "../api";
 import { categoryLabel } from "./categories";
@@ -40,7 +42,16 @@ export function Filters({
   );
 }
 
-export function TaskList({ filter }: { filter: ListFilter }) {
+export function TaskList({
+  filter,
+  focusId,
+  onOpen,
+}: {
+  filter: ListFilter;
+  /** Put keyboard focus on this task's row (after coming back from its detail view). */
+  focusId: number | null;
+  onOpen: (id: number) => void;
+}) {
   const queryClient = useQueryClient();
   const tasks = useQuery({ queryKey: ["tasks", filter], queryFn: () => listTasks(filter) });
 
@@ -88,6 +99,8 @@ export function TaskList({ filter }: { filter: ListFilter }) {
               task={task}
               busy={busyId === task.id}
               onToggle={() => toggle.mutate(task)}
+              onOpen={() => onOpen(task.id)}
+              autoFocus={task.id === focusId}
             />
           ))}
         </ul>
@@ -96,9 +109,21 @@ export function TaskList({ filter }: { filter: ListFilter }) {
   );
 }
 
-function TaskRow({ task, busy, onToggle }: { task: Task; busy: boolean; onToggle: () => void }) {
+type RowProps = {
+  task: Task;
+  busy: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  autoFocus: boolean;
+};
+
+function TaskRow({ task, busy, onToggle, onOpen, autoFocus }: RowProps) {
   const done = task.status === "done";
   const notes = statusNotes(task);
+  const openRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (autoFocus) openRef.current?.focus();
+  }, [autoFocus]);
   return (
     <li className={`task-row${done ? " task-row--done" : ""}`}>
       {task.status === "archived" ? (
@@ -113,7 +138,13 @@ function TaskRow({ task, busy, onToggle }: { task: Task; busy: boolean; onToggle
           aria-label={done ? `Reopen “${task.title}”` : `Complete “${task.title}”`}
         />
       )}
-      <div className="task-row__main">
+      <button
+        ref={openRef}
+        type="button"
+        className="task-row__main"
+        onClick={onOpen}
+        aria-label={`Open “${task.title}”`}
+      >
         <span className="task-row__title">{task.title}</span>
         <span className="task-row__meta">
           <span className={`chip chip--${task.category}`}>{categoryLabel(task.category)}</span>
@@ -123,7 +154,7 @@ function TaskRow({ task, busy, onToggle }: { task: Task; busy: boolean; onToggle
             </span>
           ))}
         </span>
-      </div>
+      </button>
     </li>
   );
 }
