@@ -1,0 +1,72 @@
+# Automatic checks: run on every push and pull request.
+#   Backend:  Python tests (pytest)
+#   Frontend: TypeScript type check (tsc --noEmit) and production build
+#
+# Security choices:
+#   - Actions are pinned to exact commit SHAs (the tag is in the comment).
+#     A tag can be moved; a SHA can't.
+#   - The workflow can only read the repo, and checkout doesn't keep the token.
+#   - Libraries install from the lock files, so CI gets exactly what's on the Mac.
+#   - No secrets are used. The blocked-words check stays on the Mac only.
+
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13.18"
+
+      - name: Install locked libraries
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements.lock
+
+      - name: Run tests
+        # AICITY_DATA_DIR is left unset: the test guard points it at a temp folder.
+        run: .venv/bin/pytest -q
+
+  frontend:
+    name: Frontend type check and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26.13.0"
+
+      - name: Install locked packages
+        # npm ci installs exactly package-lock.json; .npmrc keeps install scripts off.
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
