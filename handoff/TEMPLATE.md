@@ -15,7 +15,13 @@ Copy this file to `handoff/YYYY-MM-DD.md` at the end of each session and fill it
 
 ## Session scorecard
 <!-- Same format as the per-step scorecards (SPEC.md section 2): 10-block bars, real counts,
-     overall = average, one line on anything under 100%. Counts only, never data. -->
+     overall = average, one line on anything under 100%. Counts only, never data.
+     Scores come from the verification pass (requirements listed up front, evidence for each,
+     fresh re-run of every check, defect hunt), never from "it was done". -->
+
+### Verification findings
+<!-- Each issue found in the verification passes: severity (high/medium/low), fixed or open (why). -->
+- 
 ```
 Requirements met   ░░░░░░░░░░   0%  (0/0)
 Tests passing      ░░░░░░░░░░   0%  (0/0)

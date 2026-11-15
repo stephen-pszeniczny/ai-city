@@ -33,7 +33,7 @@ _The Dock app and automatic start (launchd) come later in Phase 1a. For now, sta
 
 **If it says "Refusing to start: HOST must be 127.0.0.1"** → someone changed `HOST` in `src/aicity/config.py`. Change it back to `"127.0.0.1"`. The app is for this Mac only.
 
-**If it says the address is already in use** → it's already running in another window. Find it with `lsof -nP -iTCP:8765 -sTCP:LISTEN`; stop that one first.
+**If it says `address already in use`** → it's already running somewhere. Find that window and press Ctrl+C. Can't find it? Run `lsof -nP -iTCP:8765 -sTCP:LISTEN`, note the number in the PID column, then run `kill <that number>` and start again.
 
 **Which data it uses:** the to-do list uses the Sample database until the Personal/Sample switch is built.
 
