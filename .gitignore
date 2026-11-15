@@ -63,6 +63,8 @@ build/
 logs/
 .DS_Store
 .claude/settings.local.json
+# Playwright MCP screenshots and page snapshots (could show app data)
+.playwright-mcp/
 
 # ── Exceptions (must stay last) ─────────────────────────────
 # Test fixtures: generated FAKE statement CSVs only. Never real data.
