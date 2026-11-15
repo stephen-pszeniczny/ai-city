@@ -1,0 +1,37 @@
+# AI City backend: project info, pinned libraries and tool settings.
+#
+# Install (first time, or after changing a version below):
+#   python3.13 -m venv .venv
+#   .venv/bin/python scripts/install_deps.py
+# Install exactly what's locked (what CI does):
+#   .venv/bin/pip install -r requirements.lock
+
+[project]
+name = "aicity"
+version = "0.1.0"
+description = "A personal life dashboard shown as a 3D space station. Local only."
+requires-python = ">=3.13,<3.14"
+
+# Exact versions only. Rule: newest release at least 14 days old when pinned.
+dependencies = [
+    "fastapi==0.162.0",
+    "uvicorn==0.54.0",
+    "astral==3.2",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",
+    "ruff==0.17.3",
+]
+
+[tool.pytest.ini_options]
+# Code lives in src/; this lets tests import it without installing the package.
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
