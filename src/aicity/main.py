@@ -5,7 +5,7 @@ refuses anything but this Mac:
     .venv/bin/python scripts/run_app.py
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from aicity import config, task_routes
 from aicity.db import DbKind
@@ -41,6 +41,15 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         """Answers 'I'm alive'. Used by the page and by checks to confirm the app runs."""
         return {"status": "ok"}
+
+    @app.get("/api/mode")
+    def mode(request: Request) -> dict[str, str]:
+        """Which database the routes use ('sample' or 'personal').
+
+        The page shows its "Sample mode, don't add real tasks" banner from this.
+        Read-only: switching modes comes with Touch ID in a later session.
+        """
+        return {"mode": DbKind(request.app.state.db_kind).value}
 
     return app
 
