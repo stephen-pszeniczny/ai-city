@@ -15,6 +15,16 @@ DEFAULT_DATA_DIR_NAME = "AI-City-Data"
 HOST = "127.0.0.1"
 PORT = 8765
 
+# While building, the page is served by the Vite dev server on this port.
+# Requests from it are accepted only when AICITY_DEV=1 is set.
+DEV_PORT = 5173
+DEV_ENV = "AICITY_DEV"
+
+
+def dev_mode() -> bool:
+    """True only when AICITY_DEV is exactly '1'."""
+    return os.environ.get(DEV_ENV, "").strip() == "1"
+
 
 def default_data_dir() -> Path:
     """The private data folder used when AICITY_DATA_DIR isn't set."""
