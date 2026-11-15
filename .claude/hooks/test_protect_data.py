@@ -4,6 +4,7 @@
 Feeds fake tool calls to the hook and checks each decision. No file is opened;
 paths inside the data folder don't need to exist.
 """
+
 import json
 import os
 import subprocess
@@ -17,8 +18,15 @@ DATA = os.path.join(os.path.expanduser("~"), "AI-City-Data")
 
 def run(stdin_text):
     env = dict(os.environ, CLAUDE_PROJECT_DIR=PROJECT)
-    out = subprocess.run(["/usr/bin/python3", HOOK], input=stdin_text, env=env,
-                         capture_output=True, text=True, timeout=10).stdout.strip()
+    out = subprocess.run(
+        ["/usr/bin/python3", HOOK],
+        check=False,
+        input=stdin_text,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    ).stdout.strip()
     return json.loads(out)["hookSpecificOutput"]["permissionDecision"] if out else "allow"
 
 
@@ -35,9 +43,17 @@ CASES = [
     ("Glob data folder pattern", call("Glob", pattern="~/AI-City-Data/**/*"), "deny"),
     ("Grep rooted at home", call("Grep", pattern="x", path="~"), "ask"),
     ("Read .env", call("Read", file_path=PROJECT + "/.env"), "deny"),
-    ("Edit .env.local", call("Edit", file_path=".env.local", old_string="a", new_string="b"), "deny"),
+    (
+        "Edit .env.local",
+        call("Edit", file_path=".env.local", old_string="a", new_string="b"),
+        "deny",
+    ),
     ("Read .env.example", call("Read", file_path=PROJECT + "/.env.example"), "allow"),
-    ("Edit SPEC.md", call("Edit", file_path=PROJECT + "/SPEC.md", old_string="a", new_string="b"), "ask"),
+    (
+        "Edit SPEC.md",
+        call("Edit", file_path=PROJECT + "/SPEC.md", old_string="a", new_string="b"),
+        "ask",
+    ),
     ("Read SPEC.md", call("Read", file_path=PROJECT + "/SPEC.md"), "allow"),
     ("Read normal repo file", call("Read", file_path=PROJECT + "/CLAUDE.md"), "allow"),
     ("Grep repo", call("Grep", pattern="x", path=PROJECT), "allow"),
@@ -62,8 +78,8 @@ def main():
         got = run(stdin_text)
         ok = got == expected
         failures += not ok
-        print("%s  %-32s expected %-5s got %s" % ("PASS" if ok else "FAIL", name, expected, got))
-    print("\n%d/%d passed" % (len(CASES) - failures, len(CASES)))
+        print(f"{'PASS' if ok else 'FAIL'}  {name:<32} expected {expected:<5} got {got}")
+    print(f"\n{len(CASES) - failures}/{len(CASES)} passed")
     sys.exit(1 if failures else 0)
 
 

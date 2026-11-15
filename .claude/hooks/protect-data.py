@@ -10,6 +10,7 @@ Reads one tool call (JSON) on stdin and prints a permission decision:
 Fails closed: any error or unexpected input returns "ask", never a silent allow.
 Standard library only; runs on the macOS system Python (3.9).
 """
+
 import json
 import os
 import re
@@ -25,13 +26,17 @@ BASH_ENV_RE = re.compile(r"""(?:^|[\s/'"=<>])(\.env(?:\.[\w.-]+)?)(?=$|[\s'";|&)
 
 
 def decide(decision, reason):
-    print(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": decision,
-            "permissionDecisionReason": reason,
-        }
-    }))
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": decision,
+                    "permissionDecisionReason": reason,
+                }
+            }
+        )
+    )
     sys.exit(0)
 
 
@@ -55,7 +60,7 @@ def is_env(resolved):
 def require_str(tool_input, key):
     value = tool_input.get(key)
     if not isinstance(value, str) or not value:
-        raise ValueError("missing or invalid '%s'" % key)
+        raise ValueError(f"missing or invalid '{key}'")
     return value
 
 
@@ -63,7 +68,7 @@ def check(call):
     tool = call.get("tool_name")
     tool_input = call.get("tool_input")
     if not isinstance(tool, str) or not isinstance(tool_input, dict):
-        raise ValueError("unexpected tool call shape")
+        raise TypeError("unexpected tool call shape")
     cwd = call.get("cwd") or os.getcwd()
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
     spec = os.path.realpath(os.path.join(project, "SPEC.md")).lower()
@@ -97,7 +102,7 @@ def check(call):
                 decide("ask", "This command mentions a .env file. Confirm before it runs.")
         return
 
-    raise ValueError("unhandled tool '%s'" % tool)
+    raise ValueError(f"unhandled tool '{tool}'")
 
 
 def main():
@@ -105,8 +110,8 @@ def main():
         check(json.loads(sys.stdin.read()))
     except SystemExit:
         raise
-    except Exception as exc:  # fail closed
-        decide("ask", "Data-protection hook could not check this call (%s). Confirm." % exc)
+    except Exception as exc:  # noqa: BLE001 (fail closed)
+        decide("ask", f"Data-protection hook could not check this call ({exc}). Confirm.")
 
 
 if __name__ == "__main__":
