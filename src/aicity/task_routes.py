@@ -21,11 +21,12 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, model_validator
 
 from aicity.db import db_path, open_database
 from aicity.settings import SettingsError, load_settings
@@ -34,14 +35,37 @@ from aicity.tasks import LIST_FILTERS, TaskConflict, TaskError, TaskNotFound, Ta
 router = APIRouter(prefix="/api/tasks")
 
 # --- What the page may send ------------------------------------------------------
-# Formats are checked here for a clear answer; the database checks real dates
-# (e.g. refuses 2026-02-30) as a second line of defence.
+# Formats and real dates (e.g. no 2026-02-30) are checked here, so the page gets
+# a clear answer; the database checks them again as a second line of defence.
 
 Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Notes = Annotated[str, StringConstraints(max_length=5000)]
 Category = Literal["work", "side_work", "personal", "city"]
-GoalDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
-ReminderAt = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$")]
+
+
+def _real_moment(fmt: str, what: str):
+    """Check a formatted date or time is a real one (refuses 2026-02-30 or 25:00)."""
+
+    def check(value: str) -> str:
+        try:
+            datetime.strptime(value, fmt)
+        except ValueError:
+            raise ValueError(f"isn't a real {what}") from None
+        return value
+
+    return AfterValidator(check)
+
+
+GoalDate = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    _real_moment("%Y-%m-%d", "calendar date"),
+]
+ReminderAt = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$"),
+    _real_moment("%Y-%m-%dT%H:%M", "date and time"),
+]
 ListFilter = Literal["open", "done", "archived", "all"]
 assert set(ListFilter.__args__) == set(LIST_FILTERS)
 

@@ -118,6 +118,25 @@ def test_bad_create_is_422_and_nothing_saved(client, body):
     assert client.get("/api/tasks?status=all").json() == []
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "wording"),
+    [
+        ("goal_date", "2026-02-30", "isn't a real calendar date"),
+        ("goal_date", "2026-13-01", "isn't a real calendar date"),
+        ("reminder_at", "2026-11-30T25:00", "isn't a real date and time"),
+        ("reminder_at", "2026-02-30T09:00", "isn't a real date and time"),
+    ],
+)
+def test_impossible_dates_get_a_clear_message(client, field, value, wording):
+    response = client.post("/api/tasks", json={"title": "x", "category": "work", field: value})
+    assert response.status_code == 422
+    assert wording in response.text
+    task = new_task(client)
+    response = client.patch(f"/api/tasks/{task['id']}", json={field: value})
+    assert response.status_code == 422
+    assert wording in response.text
+
+
 # --- Edit ------------------------------------------------------------------------
 
 
