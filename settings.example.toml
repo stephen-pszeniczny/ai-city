@@ -1,0 +1,43 @@
+# AI City settings: EXAMPLE FILE with made-up values.
+#
+# This file is public. Never put real values here.
+# Your real settings live in your private data folder at settings/settings.toml.
+# scripts/init_data_dir.py copies this file there for you to fill in.
+#
+# Money is written as text ("1234.50") so it's never rounded by accident.
+
+# Display names for each building. The code only uses the IDs on the left,
+# so names can change here without touching any code. All nine are required.
+[buildings]
+planner = "City Hall"
+finance = "Finance District"
+jobs = "Opportunity Office"
+career = "Career Academy"
+mail = "Post Office"
+relationships = "Embassy"
+projects = "Workshop"
+gym = "Gym"
+library = "Library"
+
+# Used to work out sunrise and sunset for day and night mode, on this Mac only.
+[location]
+name = "Example Town"
+latitude = 51.4779
+longitude = 0.0
+timezone = "Europe/London"   # a name from the standard time zone list
+
+[goals]
+monthly_income = "4000.00"
+currency = "CAD"
+
+[tasks]
+# Days without changes before a task is flagged as stale. Example value only.
+stale_after_days = 14
+# Default reminder time of day, 24-hour clock. Example value only.
+reminder_time = "09:00"
+
+[income]
+# TEMPORARY PLACEHOLDER until an accountant gives a real figure.
+# Shown in the app with a "placeholder" label while is_placeholder is true.
+tax_set_aside_percent = "20"
+tax_set_aside_is_placeholder = true
