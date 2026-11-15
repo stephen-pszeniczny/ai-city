@@ -27,8 +27,9 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-# Code lives in src/; this lets tests import it without installing the package.
-pythonpath = ["src"]
+# Code lives in src/; tests/ holds shared test helpers (guard.py). Listing both
+# lets tests import them the same way however pytest is started.
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
 
 [tool.ruff]

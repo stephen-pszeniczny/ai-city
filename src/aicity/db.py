@@ -69,6 +69,8 @@ def open_database(
 
     if not path.exists():
         _create(path, kind, migrations)
+    _make_private(path.parent, 0o700)
+    _make_private(path, 0o600)
 
     conn = _connect(path)
     try:
@@ -111,6 +113,12 @@ def _create(path: Path, kind: DbKind, migrations: list[Migration]) -> None:
             pass  # another program finished first; its database is used instead
     finally:
         temp.unlink(missing_ok=True)
+
+
+def _make_private(path: Path, mode: int) -> None:
+    """Tighten permissions to this Mac account only, if anyone else has access."""
+    if path.stat().st_mode & 0o077:
+        os.chmod(path, mode)
 
 
 STALE_TEMP_SECONDS = 3600

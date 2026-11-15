@@ -78,6 +78,19 @@ def test_new_database_is_private_to_this_account(tmp_path):
     assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
 
 
+def test_loose_folder_and_file_permissions_are_tightened(tmp_path):
+    folder = tmp_path / "db"
+    folder.mkdir(mode=0o755)
+    os.chmod(folder, 0o755)
+    path = folder / "personal.db"
+    open_database(path, DbKind.PERSONAL).close()
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+
+    os.chmod(path, 0o644)  # e.g. after a restore that lost permissions
+    open_database(path, DbKind.PERSONAL).close()
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
 def test_failed_creation_leaves_no_file_behind(tmp_path):
     path = tmp_path / "personal.db"
     bad = [META, Migration(2, "002_bad.sql", "CREATE TABLE oops (;")]

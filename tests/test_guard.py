@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from aicity import config
-from conftest import GUARD_EXIT_CODE, is_protected
+from guard import GUARD_EXIT_CODE, is_protected
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,7 +58,7 @@ def test_sneaky_dot_dot_path_is_protected(tmp_path):
 
 
 def test_this_run_uses_a_safe_folder():
-    from conftest import protected_dirs
+    from guard import protected_dirs
 
     assert os.environ.get(config.DATA_DIR_ENV)
     assert not is_protected(config.data_dir(), protected_dirs())
