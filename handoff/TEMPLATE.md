@@ -8,6 +8,7 @@ Copy this file to `handoff/YYYY-MM-DD.md` at the end of each session and fill it
 
 **Phase:** <!-- e.g. Phase 1a -->
 **Session length:** <!-- e.g. 2 h -->
+**SPEC.md changed this session:** yes/no <!-- if yes, which sections -->
 
 ## Done this session
 - 
