@@ -17,6 +17,8 @@ Each migration runs inside a transaction: it fully applies or not at all.
 import os
 import re
 import sqlite3
+import tempfile
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -79,10 +81,18 @@ def open_database(
 
 
 def _create(path: Path, kind: DbKind, migrations: list[Migration]) -> None:
-    """Build a new, labelled database under a temporary name, then move it into place."""
+    """Build a new, labelled database under a temporary name, then move it into place.
+
+    Safe if two programs create the same database at the same moment: each
+    builds its own uniquely named temporary file, and moving it into place
+    only succeeds if no database is there yet (os.link never overwrites).
+    The program that loses the race throws its copy away and uses the winner's.
+    """
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    temp = path.with_name(f".{path.name}.creating")
-    temp.unlink(missing_ok=True)  # leftover from an earlier crash
+    _clear_stale_temp_files(path)
+    fd, temp_name = tempfile.mkstemp(dir=path.parent, prefix=_temp_prefix(path))
+    os.close(fd)  # mkstemp makes the file owner-only (0600); SQLite fills it in
+    temp = Path(temp_name)
     try:
         conn = _connect(temp)
         try:
@@ -95,10 +105,30 @@ def _create(path: Path, kind: DbKind, migrations: list[Migration]) -> None:
             )
         finally:
             conn.close()
-        os.chmod(temp, 0o600)  # readable by this Mac account only
-        os.replace(temp, path)
+        try:
+            os.link(temp, path)
+        except FileExistsError:
+            pass  # another program finished first; its database is used instead
     finally:
         temp.unlink(missing_ok=True)
+
+
+STALE_TEMP_SECONDS = 3600
+
+
+def _temp_prefix(path: Path) -> str:
+    return f".{path.name}.creating-"
+
+
+def _clear_stale_temp_files(path: Path) -> None:
+    """Remove half-built files left by a crash. Recent ones may belong to a running program."""
+    cutoff = time.time() - STALE_TEMP_SECONDS
+    for leftover in path.parent.glob(_temp_prefix(path) + "*"):
+        try:
+            if leftover.stat().st_mtime < cutoff:
+                leftover.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -150,7 +180,9 @@ def load_migrations(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
         m = _MIGRATION_NAME.fullmatch(f.name)
         if not m:
             raise DatabaseError(f"Badly named migration file: {f.name} (expected 001_name.sql).")
-        found.append(Migration(int(m[1]), f.name, f.read_text(encoding="utf-8")))
+        migration = Migration(int(m[1]), f.name, f.read_text(encoding="utf-8"))
+        _check_no_transaction_control(migration)
+        found.append(migration)
 
     for expected, migration in enumerate(found, start=1):
         if migration.number != expected:
@@ -166,27 +198,79 @@ def schema_version(conn: sqlite3.Connection) -> int:
 
 
 def migrate(conn: sqlite3.Connection, migrations: list[Migration]) -> int:
-    """Apply migrations the database hasn't had yet. Returns how many were applied."""
-    current = schema_version(conn)
-    if current > len(migrations):
-        raise DatabaseError(
-            f"This database was updated by a newer version of the app "
-            f"(schema {current}, this version knows {len(migrations)}). Refusing to open."
-        )
-    pending = migrations[current:]
-    for migration in pending:
-        _apply(conn, migration)
-    return len(pending)
+    """Apply migrations the database hasn't had yet. Returns how many were applied.
+
+    Safe if two programs update the same database at once: each step takes
+    the write lock first (BEGIN IMMEDIATE) and only then checks the version,
+    so the second program waits, sees the work is done, and does nothing.
+    """
+    applied = 0
+    while True:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            current = schema_version(conn)
+            if current > len(migrations):
+                raise DatabaseError(
+                    f"This database was updated by a newer version of the app "
+                    f"(schema {current}, this version knows {len(migrations)}). Refusing to open."
+                )
+            if current == len(migrations):
+                conn.execute("COMMIT")
+                return applied
+            _apply(conn, migrations[current])
+            conn.execute("COMMIT")
+            applied += 1
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
 
 
 def _apply(conn: sqlite3.Connection, migration: Migration) -> None:
-    script = f"BEGIN;\n{migration.sql}\n;\nPRAGMA user_version = {migration.number};\nCOMMIT;"
+    """Run one migration inside the caller's open transaction."""
+    _check_no_transaction_control(migration)
+    script = f"{migration.sql}\n;\nPRAGMA user_version = {migration.number};"
     try:
         conn.executescript(script)
     except sqlite3.Error as exc:
-        if conn.in_transaction:
-            conn.execute("ROLLBACK")
         raise DatabaseError(f"Migration {migration.name} failed and was undone: {exc}") from None
+
+
+_TRANSACTION_WORDS = {"BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE"}
+_LEADING_COMMENTS = re.compile(r"\A(?:\s+|--[^\n]*(?:\n|\Z)|/\*.*?\*/)*", re.DOTALL)
+
+
+def _check_no_transaction_control(migration: Migration) -> None:
+    """Refuse migrations that start or end transactions themselves.
+
+    That would end the protective transaction early and break all-or-nothing.
+    Statements are split the way SQLite reads them, so a trigger's own
+    BEGIN ... END body is allowed.
+    """
+    for statement in _statements(migration.sql):
+        body = _LEADING_COMMENTS.sub("", statement)
+        first_word = re.match(r"[A-Za-z]*", body)[0].upper()
+        if first_word in _TRANSACTION_WORDS:
+            raise DatabaseError(
+                f"Migration {migration.name} contains {first_word}. Migrations must not "
+                f"control transactions; the app wraps each one in its own."
+            )
+
+
+def _statements(sql: str) -> list[str]:
+    """Split SQL into complete statements (handles strings, comments and triggers)."""
+    statements, buffer = [], ""
+    parts = sql.split(";")
+    for i, part in enumerate(parts):
+        buffer += part
+        if i < len(parts) - 1:  # a real ';' followed this part
+            buffer += ";"
+            if sqlite3.complete_statement(buffer):  # not inside a string, comment or trigger
+                statements.append(buffer)
+                buffer = ""
+    if buffer.strip():
+        statements.append(buffer)
+    return statements
 
 
 def with_transaction(conn: sqlite3.Connection, work):

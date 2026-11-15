@@ -3,12 +3,16 @@
 Every database here is a temporary file. The real databases are never used.
 """
 
+import os
 import sqlite3
 import stat
+import threading
+import time
 
 import pytest
 
 from aicity import config
+from aicity import db as db_module
 from aicity.db import (
     DatabaseError,
     DbKind,
@@ -82,12 +86,80 @@ def test_failed_creation_leaves_no_file_behind(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_leftover_from_earlier_crash_is_cleared(tmp_path):
+def test_old_leftover_from_a_crash_is_cleared(tmp_path):
     path = tmp_path / "personal.db"
-    (tmp_path / ".personal.db.creating").write_bytes(b"half-built junk")
+    leftover = tmp_path / ".personal.db.creating-abc123"
+    leftover.write_bytes(b"half-built junk")
+    two_hours_ago = time.time() - 7200
+    os.utime(leftover, (two_hours_ago, two_hours_ago))
     open_database(path, DbKind.PERSONAL).close()
     assert label_of(path) == "personal"
-    assert not (tmp_path / ".personal.db.creating").exists()
+    assert not leftover.exists()
+
+
+def test_recent_temp_file_of_another_program_is_left_alone(tmp_path):
+    path = tmp_path / "personal.db"
+    in_progress = tmp_path / ".personal.db.creating-other"
+    in_progress.write_bytes(b"another program is building this right now")
+    open_database(path, DbKind.PERSONAL).close()
+    assert in_progress.exists()
+
+
+def test_two_programs_creating_at_once_both_succeed(tmp_path, monkeypatch):
+    """Program B creates the database while program A is half-way through."""
+    path = tmp_path / "personal.db"
+    real_migrate = db_module.migrate
+    b_conn = {}
+
+    def migrate_then_let_b_run(conn, migrations):
+        result = real_migrate(conn, migrations)
+        if not b_conn:
+            monkeypatch.setattr(db_module, "migrate", real_migrate)
+            b_conn["conn"] = open_database(path, DbKind.PERSONAL)  # B finishes first
+        return result
+
+    monkeypatch.setattr(db_module, "migrate", migrate_then_let_b_run)
+    a = open_database(path, DbKind.PERSONAL)  # A loses the race but must still work
+    b = b_conn["conn"]
+    try:
+        b.execute("INSERT INTO meta VALUES ('written_by', 'B')")
+        # A and B are using the same file: A sees B's write.
+        assert a.execute("SELECT value FROM meta WHERE key='written_by'").fetchone()[0] == "B"
+        assert label_of(path) == "personal"
+    finally:
+        a.close()
+        b.close()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["personal.db"]
+
+
+def test_many_programs_opening_a_new_database_at_once(tmp_path):
+    path = tmp_path / "personal.db"
+    errors, opened = [], []
+    lock = threading.Lock()
+    start = threading.Barrier(8)
+
+    def worker():
+        start.wait()  # all eight begin at the same instant
+        try:
+            c = open_database(path, DbKind.PERSONAL, [META, TASKS_V2])
+            try:
+                version = schema_version(c)
+            finally:
+                c.close()
+            with lock:
+                opened.append(version)
+        except (sqlite3.Error, DatabaseError) as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert opened == [2] * 8
+    assert label_of(path) == "personal"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["personal.db"]
 
 
 # --- Opening existing files: the label check -------------------------------
@@ -188,6 +260,101 @@ def test_failed_migration_is_fully_undone(tmp_path):
     try:
         assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
         assert "half_done" not in tables_in(conn)  # first statement rolled back too
+    finally:
+        conn.close()
+
+
+def test_two_programs_updating_at_once_both_succeed(tmp_path):
+    """Both programs saw version 1; A updates first; B must not crash."""
+    path = tmp_path / "personal.db"
+    open_database(path, DbKind.PERSONAL, [META]).close()
+    a = db_module._connect(path)
+    b = db_module._connect(path)
+    try:
+        assert schema_version(a) == schema_version(b) == 1
+        assert migrate(a, [META, TASKS_V2]) == 1
+        assert migrate(b, [META, TASKS_V2]) == 0  # sees the work is done
+        assert schema_version(b) == 2
+    finally:
+        a.close()
+        b.close()
+
+
+def test_update_waits_for_another_programs_lock(tmp_path):
+    path = tmp_path / "personal.db"
+    open_database(path, DbKind.PERSONAL, [META]).close()
+    holder = db_module._connect(path)
+    holder.execute("BEGIN IMMEDIATE")  # another program is mid-update
+    result = {}
+
+    def updater():
+        c = db_module._connect(path)
+        try:
+            result["applied"] = migrate(c, [META, TASKS_V2])
+        finally:
+            c.close()
+
+    t = threading.Thread(target=updater)
+    t.start()
+    time.sleep(0.3)
+    assert t.is_alive()  # waiting for the lock, not crashing
+    holder.execute("COMMIT")
+    holder.close()
+    t.join(timeout=10)
+    assert result["applied"] == 1
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "BEGIN; CREATE TABLE x (id INTEGER);",
+        "CREATE TABLE x (id INTEGER); COMMIT;",
+        "CREATE TABLE x (id INTEGER);\n  -- tidy up\n  commit;",
+        "CREATE TABLE x (id INTEGER); END TRANSACTION;",
+        "SAVEPOINT s; CREATE TABLE x (id INTEGER); RELEASE s;",
+        "/* sneaky */ ROLLBACK;",
+    ],
+)
+def test_migration_that_controls_transactions_is_refused(tmp_path, sql):
+    (tmp_path / "001_bad.sql").write_text(sql)
+    with pytest.raises(DatabaseError, match="must not control transactions"):
+        load_migrations(tmp_path)
+    with pytest.raises(DatabaseError, match="must not control transactions"):
+        migrate(sqlite3.connect(":memory:", autocommit=True), [Migration(1, "001_bad.sql", sql)])
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # A trigger's body legitimately contains BEGIN ... END.
+        (
+            "CREATE TABLE t (id INTEGER PRIMARY KEY, n INTEGER) STRICT;\n"
+            "CREATE TABLE log (id INTEGER) STRICT;\n"
+            "CREATE TRIGGER t_ins AFTER INSERT ON t\nBEGIN\n  INSERT INTO log VALUES (new.id);\nEND;"
+        ),
+        # The words inside text or comments don't count.
+        "CREATE TABLE notes (body TEXT DEFAULT 'begin; commit;') STRICT; -- no COMMIT here",
+    ],
+)
+def test_harmless_uses_of_those_words_are_allowed(tmp_path, sql):
+    path = tmp_path / "personal.db"
+    conn = open_database(path, DbKind.PERSONAL, [META, Migration(2, "002_ok.sql", sql)])
+    try:
+        assert schema_version(conn) == 2
+    finally:
+        conn.close()
+
+
+def test_trigger_from_migration_actually_works(tmp_path):
+    sql = (
+        "CREATE TABLE t (id INTEGER PRIMARY KEY) STRICT;\n"
+        "CREATE TABLE log (id INTEGER) STRICT;\n"
+        "CREATE TRIGGER t_ins AFTER INSERT ON t BEGIN INSERT INTO log VALUES (new.id); END;"
+    )
+    conn = open_database(tmp_path / "p.db", DbKind.PERSONAL, [META, Migration(2, "002_t.sql", sql)])
+    try:
+        conn.execute("INSERT INTO t VALUES (7)")
+        assert conn.execute("SELECT id FROM log").fetchall() == [(7,)]
     finally:
         conn.close()
 
