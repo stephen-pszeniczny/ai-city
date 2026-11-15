@@ -281,9 +281,14 @@ def _statements(sql: str) -> list[str]:
     return statements
 
 
-def with_transaction(conn: sqlite3.Connection, work):
-    """Run work() inside a transaction: all of it is saved, or none of it."""
-    conn.execute("BEGIN")
+def with_transaction(conn: sqlite3.Connection, work, *, immediate: bool = False):
+    """Run work() inside a transaction: all of it is saved, or none of it.
+
+    immediate=True takes the write lock at the start. Use it when work() reads
+    something and then writes based on it, so another program can't change
+    the data in between.
+    """
+    conn.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
     try:
         result = work()
     except BaseException:
