@@ -27,11 +27,10 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
   const clock = useClock();
   const windowRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard and screen-reader focus moves into the open window.
+  // Keyboard and screen-reader focus moves into the open window. (The window
+  // itself, named by its title: the app's own heading is hidden in here.)
   useEffect(() => {
-    const heading = windowRef.current?.querySelector<HTMLElement>("h1, h2");
-    heading?.setAttribute("tabindex", "-1");
-    heading?.focus({ preventScroll: true });
+    windowRef.current?.focus({ preventScroll: true });
   }, [openApp]);
 
   function launch(app: App) {
@@ -68,6 +67,7 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                 role="dialog"
                 aria-label={windowTitle(openApp, apps)}
                 ref={windowRef}
+                tabIndex={-1}
               >
                 <div className="window__bar">
                   <button
