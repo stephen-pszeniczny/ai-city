@@ -7,6 +7,20 @@ export type Health = { status: string };
 
 export type Mode = "sample" | "personal";
 
+/** The nine generic building IDs (same order as the backend). Names come from settings. */
+export type BuildingId =
+  | "planner"
+  | "finance"
+  | "jobs"
+  | "career"
+  | "mail"
+  | "relationships"
+  | "projects"
+  | "gym"
+  | "library";
+
+export type Building = { id: BuildingId; name: string };
+
 export type Category = "work" | "side_work" | "personal" | "city";
 export type TaskStatus = "open" | "done" | "archived";
 export type ListFilter = TaskStatus | "all";
@@ -67,6 +81,8 @@ export const getHealth = () => request<Health>("GET", "/api/health");
 
 export const getMode = async (): Promise<Mode> =>
   (await request<{ mode: Mode }>("GET", "/api/mode")).mode;
+
+export const getBuildings = () => request<Building[]>("GET", "/api/buildings");
 
 export const listTasks = (filter: ListFilter = "open") =>
   request<Task[]>("GET", `/api/tasks?status=${filter}`);

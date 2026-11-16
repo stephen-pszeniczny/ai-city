@@ -24,6 +24,7 @@ EXAMPLE_SETTINGS = Path(__file__).resolve().parents[1] / "settings.example.toml"
 EXPECTED_AT_LEAST = {
     "/api/health",
     "/api/mode",
+    "/api/buildings",
     "/api/tasks",
     "/api/tasks/{task_id}",
     "/api/tasks/{task_id}/history",

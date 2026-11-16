@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from aicity import config, task_routes
 from aicity.db import DbKind
 from aicity.security import FrontDoorMiddleware
+from aicity.settings import BUILDING_IDS, load_settings
 from aicity.tasks import utc_now
 
 
@@ -50,6 +51,16 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
         Read-only: switching modes comes with Touch ID in a later session.
         """
         return {"mode": DbKind(request.app.state.db_kind).value}
+
+    @app.get("/api/buildings")
+    def buildings() -> list[dict[str, str]]:
+        """The nine buildings, in fixed ID order, with display names from the settings file.
+
+        The 3D city labels each building from this. A missing or invalid
+        settings file answers 503 (see task_routes.register), never made-up names.
+        """
+        names = load_settings().buildings
+        return [{"id": bid, "name": names[bid]} for bid in BUILDING_IDS]
 
     return app
 
