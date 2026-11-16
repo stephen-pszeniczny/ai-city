@@ -30,7 +30,7 @@ def test_starts_the_app_on_config_host_and_port(started):
     [(app, kwargs)] = started
     assert kwargs["host"] == config.HOST == "127.0.0.1"
     assert kwargs["port"] == config.PORT
-    assert app.title == "AI City"
+    assert app.title == "Asteroid Belt"
 
 
 def test_port_really_comes_from_config(started, monkeypatch):

@@ -1,11 +1,11 @@
-# gitleaks config for AI City
+# gitleaks config for Asteroid Belt
 # Keeps every built-in rule (API keys, tokens, private keys) and adds rules for
 # account-number patterns, which the built-in set does not cover.
 #
 # False positives: add a NARROW allowlist entry (one path or one exact value),
 # never disable or loosen a rule. Fixture values must be obviously fake.
 
-title = "AI City gitleaks config"
+title = "Asteroid Belt gitleaks config"
 
 [extend]
 useDefault = true

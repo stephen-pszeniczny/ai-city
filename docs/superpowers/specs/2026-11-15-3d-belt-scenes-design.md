@@ -1,6 +1,6 @@
-# 3D city scenes: design
+# 3D belt scenes: design
 
-Status: **approved in conversation 2026-11-15** (city → building → screen zoom, control stations
+Status: **approved in conversation 2026-11-15** (belt → building → screen zoom, control stations
 for the two station modules, asteroid desks for the other seven, desktop-computer screen with the
 monitor 10% bigger than the first prototype). Builder's calls are marked *(call)*.
 
@@ -12,23 +12,26 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
 
 ## Goals
 
-- **Level 1, the city:** the station preview, rebuilt inside the app. Central station with City
-  Hall and Finance District as two modules; seven asteroids on a flat ring with the debris belt
+- **Level 1, the belt:** the station preview, rebuilt inside the app. Central station with Belt
+  Hall and The Vault as two modules; seven asteroids on a flat ring with the debris belt
   between them; Earth, sun, stars, nebulae. Drag to rotate, scroll to zoom. Every building and
   its label is clickable and shows a live badge.
 - **Under construction:** an asteroid whose building isn't built yet shows its tint, mining rigs,
   scaffolding and an "under construction" sign (amber and black hazard stripes), readable from
-  the city view. The same sign stands beside its robot's desk at level 2, and its screen shows the
+  the belt view. The same sign stands beside its robot's desk at level 2, and its screen shows the
   "under construction" desktop. When a building is finished, its sign comes down and its landmark
-  appears. Today only City Hall is built, so all seven asteroids show the sign.
+  appears. Today only Mission Control is built, so all seven asteroids show the sign.
+- **Landmarks** (shown once a building is built): Opportunity Office radar dish, Post Office
+  antenna, Training Bay dumbbell, Shipyard crane, Crew Quarters arch, Data Core crystals, and
+  Flight School a small holographic spaceship hovering above the asteroid.
 - **Level 2, the building:** clicking a building or its label quickly pans and zooms into it.
   - *Asteroids (7):* the robot sits at a desk on the asteroid's surface, working at one
     computer, with open space behind. Robot and desk take the asteroid's tint.
-  - *City Hall and Finance District:* each robot works in its own control station in its half of
+  - *Mission Control and The Vault:* each robot works in its own control station in its half of
     the central station: a desk, a large screen, a rocket-style control panel below it (keypad,
     buttons, levers), and behind them a large window onto space where the asteroids and the belt
     drift past as they orbit.
-  - The robot's screen shows the building's live content (City Hall: the to-do list).
+  - The robot's screen shows the building's live content (Mission Control: the to-do list).
 - **Level 3, the screen:** clicking the robot, desk or computer zooms into the screen. It becomes
   a desktop computer, as in the approved prototype (`spike/desktop-screen` branch): bezel and chin,
   menu bar (robot logo, building name, Sample tag, clock), the building's apps in a dock, each app
@@ -39,7 +42,7 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
 
 ## Non-goals (this project)
 
-- New building features. Only City Hall's to-do list is real; other apps and buildings show an
+- New building features. Only Mission Control's to-do list is real; other apps and buildings show an
   "under construction" desktop.
 - The Personal/Sample switch itself (session 4). The scenes show the current mode; the switch
   control is added there.
@@ -66,23 +69,23 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
 ## Design
 
 **Structure** *(call)*
-- `frontend/src/city/`: the canvas and city (level 1), `space/` (stars, Milky Way, nebulae,
+- `frontend/src/belt/`: the canvas and belt (level 1), `space/` (stars, Milky Way, nebulae,
   Earth, sun, belt, debris; shared by every level), station, asteroids, landmarks,
   under-construction rigs and sign, and the glass labels with badges.
-- `frontend/src/interior/`: `ControlStation` (City Hall, Finance), `AsteroidDesk` (the seven),
+- `frontend/src/interior/`: `ControlStation` (Mission Control, Finance), `AsteroidDesk` (the seven),
   `Robot` (one original model, recoloured by tint), `Monitor` (bezel + live screen).
-- `frontend/src/desktop/`: `Desktop` (menu bar, dock, windows) and the app registry (City Hall:
+- `frontend/src/desktop/`: `Desktop` (menu bar, dock, windows) and the app registry (Mission Control:
   To-do real; Daily plan, Weekly review, Projects "later"; other buildings: under construction).
 - One `<Canvas>` for the whole app; the camera flies between levels instead of switching pages,
   so zooms are continuous. The current level and building live in the URL (`/`, `/b/planner`,
   `/b/planner/screen`), so Back in the browser and reloads work. *(call)*
 
-**Camera flights** *(call)*: about 1.2 s with ease-in-out. City → building: fly to a fixed
+**Camera flights** *(call)*: about 1.2 s with ease-in-out. Belt → building: fly to a fixed
 viewpoint in front of the robot's desk. Building → screen: fly until the monitor fills the view,
 then swap in the flat desktop (same size and position, so the swap is invisible). Reduced motion:
 short cross-fades instead of flights.
 
-**Rotating space:** levels 2 and 3 reuse the city's space scene from a camera inside the station
+**Rotating space:** levels 2 and 3 reuse the belt's space scene from a camera inside the station
 (control stations) or on the asteroid (desks). The sky turns slowly and the asteroids and belt
 orbit, about 40 s for an asteroid to cross the control-station window (as in the prototype).
 
@@ -91,7 +94,7 @@ screen-face with two eyes, antenna), seated, typing with a small idle loop (head
 typing hands). Tint from the building.
 
 **Building names and badges:** a new read-only route `GET /api/buildings` returns the nine IDs
-with display names from the settings file. Badges come from real data where it exists (City Hall:
+with display names from the settings file. Badges come from real data where it exists (Mission Control:
 overdue and stale counts from the tasks API) and are hidden otherwise. No made-up badge numbers
 in Personal mode. *(call)*
 
@@ -120,7 +123,7 @@ screenshots in Sample mode, with frame-time measured while idle.
    under-construction sign), labels with names and badges, drag/zoom.
 4. Level state machine + URL + camera flights + Back/Escape.
 5. Robot model.
-6. Control station (City Hall, Finance) with window view.
+6. Control station (Mission Control, Finance) with window view.
 7. Asteroid desk scene (shared by the seven, tinted).
 8. Monitor with the live screen at level 2; flat desktop at level 3 (prototype look, 10% bigger).
 9. Session check: live click-through, idle performance, all checks.

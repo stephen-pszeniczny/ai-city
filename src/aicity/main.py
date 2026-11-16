@@ -20,7 +20,7 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
         dev = config.dev_mode()
 
     app = FastAPI(
-        title="AI City",
+        title="Asteroid Belt",
         # The auto-generated API docs pages aren't needed and would be one more
         # thing exposed; turn them off.
         docs_url=None,
@@ -56,7 +56,7 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
     def buildings() -> list[dict[str, str]]:
         """The nine buildings, in fixed ID order, with display names from the settings file.
 
-        The 3D city labels each building from this. A missing or invalid
+        The 3D belt labels each building from this. A missing or invalid
         settings file answers 503 (see task_routes.register), never made-up names.
         """
         names = load_settings().buildings

@@ -46,7 +46,7 @@ def error_for(data: dict) -> str:
 def test_example_file_loads_and_is_complete():
     s = load_settings(EXAMPLE)
     assert set(s.buildings) == set(BUILDING_IDS)
-    assert s.buildings["planner"] == "City Hall"
+    assert s.buildings["planner"] == "Mission Control"
     assert s.goals.monthly_income_cents == 400_000
     assert s.goals.currency == "CAD"
     assert s.tasks.reminder_time == time(9, 0)

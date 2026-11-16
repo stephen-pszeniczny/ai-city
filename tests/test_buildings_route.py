@@ -1,6 +1,6 @@
 """Tests for GET /api/buildings: the nine buildings with their display names.
 
-The 3D city labels each building from this answer, so names must come from
+The 3D belt labels each building from this answer, so names must come from
 the settings file (never from code), in the fixed ID order, and a broken
 settings file must give a clear error rather than made-up names.
 """
@@ -46,7 +46,9 @@ def test_buildings_lists_all_nine_in_order(data_dir):
 
 def test_buildings_follow_renamed_settings(data_dir):
     (data_dir / "settings").mkdir()
-    text = EXAMPLE_SETTINGS.read_text().replace('planner = "City Hall"', 'planner = "Town Hall"')
+    text = EXAMPLE_SETTINGS.read_text().replace(
+        'planner = "Mission Control"', 'planner = "Town Hall"'
+    )
     (data_dir / "settings" / "settings.toml").write_text(text)
 
     body = client().get("/api/buildings").json()

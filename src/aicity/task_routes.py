@@ -1,4 +1,4 @@
-"""Web routes for City Hall's to-do list: the addresses the page talks to.
+"""Web routes for Mission Control's to-do list: the addresses the page talks to.
 
     GET   /api/tasks?status=open|done|archived|all   list tasks (default: open)
     POST  /api/tasks                                 create a task

@@ -1,4 +1,4 @@
-"""Start the AI City backend on this Mac.
+"""Start the Asteroid Belt backend on this Mac.
 
 Run with:  .venv/bin/python scripts/run_app.py
 While building the page (with `npm run dev` in frontend/), start it as:

@@ -62,7 +62,7 @@ test("edits show old → new; cleared values say none; notes just say changed", 
   assert.equal(e.label, "Edited");
   assert.deepEqual(e.details, [
     "Title: Book dentist → Book dentist and eye exam",
-    "Category: Personal → City",
+    "Category: Personal → Belt",
     "Goal date: Dec 1 → none",
     "Notes changed",
   ]);

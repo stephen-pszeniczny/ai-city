@@ -1,4 +1,4 @@
-"""City Hall's to-do list: creating, editing, completing and archiving tasks.
+"""Mission Control's to-do list: creating, editing, completing and archiving tasks.
 
 Every change is saved together with a history row in one transaction, so a
 task and its history can never disagree. Tasks are never deleted; "delete"

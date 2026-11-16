@@ -217,7 +217,7 @@ def test_unrelated_database_is_refused(tmp_path):
     conn.execute("CREATE TABLE something_else (x)")
     conn.commit()
     conn.close()
-    with pytest.raises(DatabaseError, match="isn't a labelled AI City database"):
+    with pytest.raises(DatabaseError, match="isn't a labelled Asteroid Belt database"):
         open_database(path, DbKind.PERSONAL)
 
 

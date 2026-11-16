@@ -1,7 +1,7 @@
 // The app's pages.
 //   /      placeholder home: engine status and a way into the to-do list.
 //          The 3D space station scene replaces it in session 9.
-//   /todo  City Hall's to-do panel.
+//   /todo  Mission Control's to-do panel.
 import { useQuery } from "@tanstack/react-query";
 import { Link, Route, Routes } from "react-router-dom";
 
@@ -42,7 +42,7 @@ function Home() {
 
   return (
     <main className="shell">
-      <h1>AI City</h1>
+      <h1>Asteroid Belt</h1>
       <p className={`status status--${state}`} role="status">
         <span className="dot" aria-hidden="true" />
         {label}
@@ -63,7 +63,7 @@ function NotFound() {
       <h1>Page not found</h1>
       <p>
         <Link className="home-link" to="/">
-          Back to the city
+          Back to the belt
         </Link>
       </p>
     </main>

@@ -1,4 +1,4 @@
-# AI City
+# Asteroid Belt
 
 @SPEC.md
 

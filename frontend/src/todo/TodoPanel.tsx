@@ -1,7 +1,7 @@
-// City Hall's to-do list as one floating glass panel.
+// Mission Control's to-do list as one floating glass panel.
 //
 // Self-contained on purpose: today it has its own page (/todo); in session 9
-// the same panel opens from a monitor inside the City Hall scene.
+// the same panel opens from a monitor inside the Mission Control scene.
 // Clicking a task swaps the list for that task's detail view in the same panel.
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
@@ -51,7 +51,7 @@ export function TodoPanel() {
           <>
             <header className="panel__head">
               <Link className="back-link" to="/">
-                <span aria-hidden="true">‹</span> City
+                <span aria-hidden="true">‹</span> Belt
               </Link>
               <h1 id="todo-title" ref={listHeadingRef} tabIndex={-1}>
                 To-do

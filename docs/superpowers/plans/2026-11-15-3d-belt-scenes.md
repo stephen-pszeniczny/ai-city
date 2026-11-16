@@ -1,14 +1,14 @@
-# 3D City Scenes Implementation Plan
+# 3D Belt Scenes Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the placeholder home with the 3D city, fly into each building's robot scene, and lean into the robot's screen to use the building's apps (City Hall: the real to-do list).
+**Goal:** Replace the placeholder home with the 3D belt, fly into each building's robot scene, and lean into the robot's screen to use the building's apps (Mission Control: the real to-do list).
 
-**Architecture:** One React Three Fiber `<Canvas>` for the whole app; the camera flies between three levels (city → building → screen) driven by the URL. Space (stars, Earth, belt, asteroids) is one shared plain-three module ported from the approved prototype and used by every level. Level 3 is a DOM desktop over the still-running canvas, ported from the `spike/desktop-screen` prototype.
+**Architecture:** One React Three Fiber `<Canvas>` for the whole app; the camera flies between three levels (belt → building → screen) driven by the URL. Space (stars, Earth, belt, asteroids) is one shared plain-three module ported from the approved prototype and used by every level. Level 3 is a DOM desktop over the still-running canvas, ported from the `spike/desktop-screen` prototype.
 
 **Tech Stack:** React 19, TypeScript, three 0.187, @react-three/fiber 9.8.2, @react-three/drei 10.7.9 (all already installed), react-router-dom 7, FastAPI backend, Node built-in test runner, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-11-15-3d-city-scenes-design.md` (and SPEC.md section 7, private).
+**Spec:** `docs/superpowers/specs/2026-11-15-3d-belt-scenes-design.md` (and SPEC.md section 7, private).
 
 ## Global Constraints
 
@@ -27,7 +27,7 @@
 ## Review Focus
 
 1. Unsaved task edits when leaving level 3 by Back button, Escape or browser Back → asks first (Task 4 test: `confirmLeave` with a dirty guard).
-2. Reload or deep link at `/b/planner/screen`, or an unknown ID like `/b/nope` → lands on that view, or on the city for unknown IDs (Task 4 tests on `parsePath`).
+2. Reload or deep link at `/b/planner/screen`, or an unknown ID like `/b/nope` → lands on that view, or on the belt for unknown IDs (Task 4 tests on `parsePath`).
 3. WebGL unavailable or the scene throws → a clear message with a link to the plain `/todo` page, not a blank screen (Task 3, live check by forcing the error).
 4. Engine down while inside a scene → the scene keeps rendering and the screen shows the to-do panel's existing engine-down state (Task 8 live check).
 5. Half-screen laptop window (1024×700) → monitor fits with no page scroll; labels don't overlap the top bar (Task 8 and Task 9 live checks).
@@ -55,8 +55,8 @@
 ### Task 2: Shared space module
 
 **Files:**
-- Create: `frontend/src/city/space/` → `sky.ts` (stars, Milky Way, nebulae, sun), `earth.ts` (procedural Earth, textures cached at module level for the session), `belt.ts` (debris, dust), `rock.ts` (`rockGeometry(seed, tint)`), `orbit.ts`, `index.ts`
-- Create: `frontend/src/city/Effects.tsx` (bloom at half resolution + film pass; takes over rendering with `useFrame(…, 1)`)
+- Create: `frontend/src/belt/space/` → `sky.ts` (stars, Milky Way, nebulae, sun), `earth.ts` (procedural Earth, textures cached at module level for the session), `belt.ts` (debris, dust), `rock.ts` (`rockGeometry(seed, tint)`), `orbit.ts`, `index.ts`
+- Create: `frontend/src/belt/Effects.tsx` (bloom at half resolution + film pass; takes over rendering with `useFrame(…, 1)`)
 - Test: `frontend/tests/orbit.test.ts`
 
 **Interfaces:**
@@ -69,11 +69,11 @@
 - [ ] **Step 4: Run** `npm test`, `npm run typecheck`, `npm run build` → pass.
 - [ ] **Step 5: Commit** "Add shared 3D space module (sky, Earth, belt, orbits)".
 
-### Task 3: Level 1, the city
+### Task 3: Level 1, the belt
 
 **Files:**
-- Create: `frontend/src/city/CityCanvas.tsx` (the one `<Canvas>`, error boundary, pauses when `document.hidden`), `city/Station.tsx` (hub, ring, truss, solar wings, City Hall and Finance modules), `city/Asteroid.tsx`, `city/construction.tsx` (mining rig, scaffolding and the "under construction" sign, exported as `ConstructionSign` props `{ scale?: number }`), `city/landmarks.tsx` (seven landmarks, shown only when built), `city/Labels.tsx`, `city/badges.ts`, `city/built.ts`
-- Modify: `frontend/src/App.tsx` (`/` renders the city; `/todo` stays as the plain fallback)
+- Create: `frontend/src/belt/BeltCanvas.tsx` (the one `<Canvas>`, error boundary, pauses when `document.hidden`), `belt/Station.tsx` (hub, ring, truss, solar wings, Mission Control and Finance modules), `belt/Asteroid.tsx`, `belt/construction.tsx` (mining rig, scaffolding and the "under construction" sign, exported as `ConstructionSign` props `{ scale?: number }`), `belt/landmarks.tsx` (seven landmarks, shown only when built), `belt/Labels.tsx`, `belt/badges.ts`, `belt/built.ts`
+- Modify: `frontend/src/App.tsx` (`/` renders the belt; `/todo` stays as the plain fallback)
 - Test: `frontend/tests/badges.test.ts`
 
 **Interfaces:**
@@ -83,25 +83,25 @@
 - [ ] **Step 1: Write failing tests** for `plannerBadge`: 2 overdue + 1 stale → `"2 overdue"`; 0 overdue + 3 stale → `"3 stale"`; none → `null`; done/archived tasks never count; uses the local date (same trap as `dates.ts`).
 - [ ] **Step 2: Run** `npm test` → FAIL.
 - [ ] **Step 3: Implement** the scene; OrbitControls with min distance 24, max 320, max polar 1.5, pan off; labels are drei `Html` glass pills, clicking a label or a building calls `onOpen(id)`; error boundary shows "3D isn't available in this browser" with a link to `/todo`; a visually hidden list of nine real buttons (one per building, settings names) opens the same views for keyboard and screen-reader users.
-- [ ] **Step 4: Run** tests, typecheck, build; live: city renders, nine labels with settings names, City Hall badge matches the demo tasks, all seven asteroids show rigs, scaffolding and a readable sign and no landmark, forced error shows the fallback.
-- [ ] **Step 5: Commit** "Add the 3D city: station, asteroids, belt, labels and badges".
+- [ ] **Step 4: Run** tests, typecheck, build; live: belt renders, nine labels with settings names, Mission Control badge matches the demo tasks, all seven asteroids show rigs, scaffolding and a readable sign and no landmark, forced error shows the fallback.
+- [ ] **Step 5: Commit** "Add the 3D belt: station, asteroids, belt, labels and badges".
 
 ### Task 4: Levels, URL, camera flights, Back
 
 **Files:**
-- Create: `frontend/src/city/levels.ts`, `city/CameraRig.tsx`, `frontend/src/leaveGuard.ts`
+- Create: `frontend/src/belt/levels.ts`, `belt/CameraRig.tsx`, `frontend/src/leaveGuard.ts`
 - Modify: `frontend/src/todo/TaskDetail.tsx` (report dirty to `leaveGuard`), `App.tsx` (routes `/b/:id`, `/b/:id/screen`)
 - Test: `frontend/tests/levels.test.ts`, `frontend/tests/leaveGuard.test.ts`
 
 **Interfaces:**
-- Produces: `type View = { level: "city" } | { level: "building"; id: BuildingId } | { level: "screen"; id: BuildingId }`; `parsePath(path: string): View`; `toPath(view: View): string`; `back(view: View): View`; `setDirty(dirty: boolean): void`; `confirmLeave(ask: (msg: string) => boolean = window.confirm): boolean`.
+- Produces: `type View = { level: "belt" } | { level: "building"; id: BuildingId } | { level: "screen"; id: BuildingId }`; `parsePath(path: string): View`; `toPath(view: View): string`; `back(view: View): View`; `setDirty(dirty: boolean): void`; `confirmLeave(ask: (msg: string) => boolean = window.confirm): boolean`.
 - Produces: `CameraRig` props `{ view: View }`; flies 1.2 s ease-in-out to `poseFor(view, t)`; Escape navigates to `toPath(back(view))` only if `confirmLeave()`.
 
-- [ ] **Step 1: Write failing tests**: `parsePath("/")` → city; `"/b/planner"` → building planner; `"/b/planner/screen"` → screen; `"/b/nope"` and `"/b/nope/screen"` → city; `toPath(parsePath(p)) === p` for the three valid shapes; `back(screen) → building`, `back(building) → city`, `back(city) → city`; `confirmLeave` returns true without asking when clean, asks with "Discard your unsaved changes?" when dirty and returns the answer.
+- [ ] **Step 1: Write failing tests**: `parsePath("/")` → belt; `"/b/planner"` → building planner; `"/b/planner/screen"` → screen; `"/b/nope"` and `"/b/nope/screen"` → belt; `toPath(parsePath(p)) === p` for the three valid shapes; `back(screen) → building`, `back(building) → belt`, `back(belt) → belt`; `confirmLeave` returns true without asking when clean, asks with "Discard your unsaved changes?" when dirty and returns the answer.
 - [ ] **Step 2: Run** `npm test` → FAIL.
 - [ ] **Step 3: Implement**; TaskDetail's existing Back confirm uses `confirmLeave` so there's one rule; browser Back at level 3 with a dirty task is blocked with react-router's `useBlocker` using the same guard.
 - [ ] **Step 4: Run** tests, typecheck, build; live: click → flight → URL changes; Escape and Back step out; reload at each URL lands correctly.
-- [ ] **Step 5: Commit** "Add city/building/screen levels with camera flights and Back".
+- [ ] **Step 5: Commit** "Add belt/building/screen levels with camera flights and Back".
 
 ### Task 5: Robot
 
@@ -115,7 +115,7 @@
 - [ ] **Step 2: Verify live** in a temporary viewer route removed before commit; screenshot with two tints.
 - [ ] **Step 3: Run** typecheck and build → pass. **Commit** "Add the robot character".
 
-### Task 6: Control station (City Hall, Finance)
+### Task 6: Control station (Mission Control, Finance)
 
 **Files:**
 - Create: `frontend/src/interior/ControlStation.tsx`, `interior/Console.tsx` (keypad, buttons, levers), `interior/Desk.tsx` (shared with Task 7)
@@ -125,8 +125,8 @@
 - Produces: `ControlStation` props `{ id: "planner" | "finance"; tint: string; onOpenScreen(): void }`; `Desk` props `{ tint: string }`; monitor mount point exported as `MONITOR_MOUNT` (position + size) for Task 8.
 
 - [ ] **Step 1: Implement** inside each module's half of the station; large window behind the console faces the ring so asteroids and belt cross it; clicking robot, desk or screen calls `onOpenScreen`; a visually hidden "Use the computer" button does the same from the keyboard.
-- [ ] **Step 2: Verify live**: City Hall and Finance scenes, an asteroid crosses the window within about 40 s.
-- [ ] **Step 3: Run** typecheck and build. **Commit** "Add control-station scenes for City Hall and Finance".
+- [ ] **Step 2: Verify live**: Mission Control and Finance scenes, an asteroid crosses the window within about 40 s.
+- [ ] **Step 3: Run** typecheck and build. **Commit** "Add control-station scenes for Mission Control and Finance".
 
 ### Task 7: Asteroid desk scene
 

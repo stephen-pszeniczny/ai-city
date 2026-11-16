@@ -1,4 +1,4 @@
-# AI City settings: EXAMPLE FILE with made-up values.
+# Asteroid Belt settings: EXAMPLE FILE with made-up values.
 #
 # This file is public. Never put real values here.
 # Your real settings live in your private data folder at settings/settings.toml.
@@ -9,15 +9,15 @@
 # Display names for each building. The code only uses the IDs on the left,
 # so names can change here without touching any code. All nine are required.
 [buildings]
-planner = "City Hall"
-finance = "Finance District"
+planner = "Mission Control"
+finance = "The Vault"
 jobs = "Opportunity Office"
-career = "Career Academy"
+career = "Flight School"
 mail = "Post Office"
-relationships = "Embassy"
-projects = "Workshop"
-gym = "Gym"
-library = "Library"
+relationships = "Crew Quarters"
+projects = "Shipyard"
+gym = "Training Bay"
+library = "Data Core"
 
 # Used to work out sunrise and sunset for day and night mode, on this Mac only.
 [location]

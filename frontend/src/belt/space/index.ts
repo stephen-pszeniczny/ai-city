@@ -1,9 +1,9 @@
-// The whole of space around the station, shared by every level of the city:
+// The whole of space around the station, shared by every level of the belt:
 // lighting, reflections, sky, sun, Earth and the asteroid belt.
 //
 // Usage: const space = createSpace(scene, renderer); call space.update(t) every
 // frame (t in seconds) and space.dispose() when the canvas goes away. The big
-// asteroids themselves are drawn by the city components (they're buildings).
+// asteroids themselves are drawn by the belt components (they're buildings).
 import * as THREE from "three";
 
 import { createBelt } from "./belt";

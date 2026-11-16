@@ -1,6 +1,6 @@
-# AI City Runbook
+# Asteroid Belt Runbook
 
-How to run, back up, fix and recover AI City. Written to be followed when tired: do the steps in order, don't skip.
+How to run, back up, fix and recover Asteroid Belt. Written to be followed when tired: do the steps in order, don't skip.
 
 If something here is out of date, tell Claude Code: "the runbook is wrong about X, fix it."
 
@@ -117,7 +117,7 @@ Assume it was copied within minutes: bots scan public repos constantly. Deleting
 | What leaked | Where to revoke it |
 |---|---|
 | Claude API key | console.anthropic.com → API Keys → delete the key, then create a new one |
-| Gmail / Google token | myaccount.google.com → Security → Your connections to third-party apps → remove AI City |
+| Gmail / Google token | myaccount.google.com → Security → Your connections to third-party apps → remove Asteroid Belt |
 | GitHub token | github.com → Settings → Applications → revoke; then run `gh auth login` again |
 | Any other key | That service's dashboard → revoke / regenerate |
 

@@ -8,7 +8,7 @@ import {
   ORBIT_SPEED,
   orbitAngle,
   orbitPosition,
-} from "../src/city/space/orbit.ts";
+} from "../src/belt/space/orbit.ts";
 
 const close = (a: number, b: number, eps = 1e-9) =>
   assert.ok(Math.abs(a - b) < eps, `${a} is not close to ${b}`);

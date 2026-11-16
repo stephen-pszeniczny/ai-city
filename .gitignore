@@ -1,4 +1,4 @@
-# AI City .gitignore
+# Asteroid Belt .gitignore
 # Public repo, code only. Real data lives in ~/AI-City-Data (outside this repo).
 # Verify changes with: git status --ignored
 

@@ -161,7 +161,7 @@ def _check_label(conn: sqlite3.Connection, expected: DbKind) -> None:
     except sqlite3.DatabaseError:
         # No meta table, or not a database file at all.
         raise DatabaseError(
-            f"Refusing to open: this file isn't a labelled AI City database "
+            f"Refusing to open: this file isn't a labelled Asteroid Belt database "
             f"(expected the {expected.value} database)."
         ) from None
     if row is None:

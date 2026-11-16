@@ -1,10 +1,10 @@
-# Session 3: City Hall to-do screen — design and plan
+# Session 3: Mission Control to-do screen — design and plan
 
 Status: **draft, waiting for approval.** No code until approved.
 
 ## Why
 
-The master to-do list is the heart of City Hall and the first thing meant for daily use
+The master to-do list is the heart of Mission Control and the first thing meant for daily use
 (spec section 1: opened daily, to-do list under control). The backend (`/api/tasks`) is done;
 this session gives it a screen.
 
@@ -55,7 +55,7 @@ shows anyway (fails safe).
 **Sketch**
 
 ```
-┌─ City Hall · To-do ─────────────────────────────────────────┐
+┌─ Mission Control · To-do ─────────────────────────────────────────┐
 │ ⚠ Sample mode — demo data. Don't add real tasks yet.          │
 │                                                               │
 │ [ Add a task…                         ] [Personal ▾] [ + ]    │
@@ -65,7 +65,7 @@ shows anyway (fails safe).
 │                                                               │
 │ ○ Send invoice            Side work   Due Dec 1               │
 │ ○ Book dentist            Personal    Overdue · Nov 12        │
-│ ○ Plan weekly review      City        Stale · 9 days          │
+│ ○ Plan weekly review      Belt        Stale · 9 days          │
 │ ○ Read article            Personal                            │
 └───────────────────────────────────────────────────────────────┘
 Click a row → the panel slides to a detail view (not a sidebar):
@@ -77,7 +77,7 @@ Archive shows "Archived · Undo" for a few seconds.
 **Behaviour**
 - Quick add: title + category (+ optional date). Enter adds. "More options" reveals notes and
   reminder. Category labels are plain generic words written in the frontend:
-  Work, Side work, Personal, City (IDs `work`, `side_work`, `personal`, `city`).
+  Work, Side work, Personal, Belt (IDs `work`, `side_work`, `personal`, `city`; the `city` ID predates the rename and is kept so saved tasks stay valid).
 - Filters: Open (default, with count), Done, Archived, All — a segmented control.
 - Row: round checkbox completes (and un-checking reopens), title, category chip in its own
   colour, then one status note: Overdue (goal date before today, red), Due today, Due <date>,

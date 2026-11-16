@@ -6,7 +6,7 @@ export const CATEGORIES: readonly { id: Category; label: string }[] = [
   { id: "personal", label: "Personal" },
   { id: "work", label: "Work" },
   { id: "side_work", label: "Side work" },
-  { id: "city", label: "City" },
+  { id: "city", label: "Belt" },
 ];
 
 export const categoryLabel = (id: Category): string =>
