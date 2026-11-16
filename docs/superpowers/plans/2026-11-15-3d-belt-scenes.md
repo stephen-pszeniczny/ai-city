@@ -109,7 +109,7 @@
 - Create: `frontend/src/interior/Robot.tsx`
 
 **Interfaces:**
-- Produces: `Robot` props `{ tint: string; seated?: boolean }` (default seated); idle loop (head tilt, blink, typing hands) slowed under reduced motion.
+- Produces: `Robot` props `{ tint: string; seated?: boolean }` (default seated, facing +z toward its desk); idle loop (head tilt, blink, typing hands) slowed under reduced motion. The back gets real detail (vents, status light, tint stripe) because the building view is third person from behind.
 
 - [ ] **Step 1: Implement** from simple shapes: rounded body, screen-face with two eyes, antenna, arms reaching to a keyboard height of 0.75 desk units.
 - [ ] **Step 2: Verify live** in a temporary viewer route removed before commit; screenshot with two tints.
@@ -124,7 +124,7 @@
 - Consumes: Task 5 `Robot`; Task 4 `poseFor` gets a `building` pose per station.
 - Produces: `ControlStation` props `{ id: "planner" | "finance"; tint: string; onOpenScreen(): void }`; `Desk` props `{ tint: string }`; monitor mount point exported as `MONITOR_MOUNT` (position + size) for Task 8.
 
-- [ ] **Step 1: Implement** inside each module's half of the station; large window behind the console faces the ring so asteroids and belt cross it; clicking robot, desk or screen calls `onOpenScreen`; a visually hidden "Use the computer" button does the same from the keyboard.
+- [ ] **Step 1: Implement** inside each module's half of the station; the `building` camera pose is third person behind the robot, over its shoulder, looking at the desk and screen; large window behind the console faces the ring so asteroids and belt cross it; clicking robot, desk or screen calls `onOpenScreen`; a visually hidden "Use the computer" button does the same from the keyboard.
 - [ ] **Step 2: Verify live**: Mission Control and Finance scenes, an asteroid crosses the window within about 40 s.
 - [ ] **Step 3: Run** typecheck and build. **Commit** "Add control-station scenes for Mission Control and Finance".
 
@@ -137,7 +137,7 @@
 - Consumes: `Robot`, `Desk`, Task 2 `ASTEROIDS`, Task 3 `BUILT` and `ConstructionSign`.
 - Produces: `AsteroidDesk` props `{ id: BuildingId; tint: string; onOpenScreen(): void }`; sits on the asteroid's deck and turns with the asteroid's spin, so space sweeps slowly behind.
 
-- [ ] **Step 1: Implement**; the camera pose for asteroid buildings follows the asteroid (computed each frame from `orbitPosition` and its spin).
+- [ ] **Step 1: Implement**; third person from behind the robot as in Task 6; the camera pose for asteroid buildings follows the asteroid (computed each frame from `orbitPosition` and its spin).
 - [ ] **Step 2: Verify live** for two asteroids with different tints; robot and desk take the tint; an unbuilt asteroid shows the sign beside the desk.
 - [ ] **Step 3: Run** typecheck and build. **Commit** "Add asteroid desk scenes".
 

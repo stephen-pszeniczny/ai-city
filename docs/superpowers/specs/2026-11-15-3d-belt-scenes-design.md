@@ -31,6 +31,8 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
     the central station: a desk, a large screen, a rocket-style control panel below it (keypad,
     buttons, levers), and behind them a large window onto space where the asteroids and the belt
     drift past as they orbit.
+  - The view is third person: the camera sits behind the robot and looks over its shoulder at
+    the desk and screen, so the robot is seen from the back (Steve's direction, 2026-11-15).
   - The robot's screen shows the building's live content (Mission Control: the to-do list).
 - **Level 3, the screen:** clicking the robot, desk or computer zooms into the screen. It becomes
   a desktop computer, as in the approved prototype (`spike/desktop-screen` branch): bezel and chin,
