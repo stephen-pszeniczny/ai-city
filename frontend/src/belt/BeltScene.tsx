@@ -1,13 +1,17 @@
 // Level 1, the belt: space, the station and the seven asteroid buildings.
 // Clicking a building calls onOpen(id). Each frame it also moves the glass
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
+import { useQuery } from "@tanstack/react-query";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import * as THREE from "three";
 
-import type { BuildingId } from "../api";
+import { getBuildings, type BuildingId } from "../api";
+import { ControlStation } from "../interior/ControlStation";
 import { createAsteroids } from "./asteroids";
 import type { SceneApi } from "./CameraRig";
+import type { View } from "./levels";
+import { tintOf } from "./tints";
 import type { LabelElements } from "./Labels";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
@@ -17,10 +21,12 @@ import { createStation } from "./station";
 const CLICK_SLOP = 5;
 
 export function BeltScene({
+  view,
   onOpen,
   labels,
   api,
 }: {
+  view: View;
   onOpen: (id: BuildingId) => void;
   labels: RefObject<LabelElements>;
   /** Filled in for the camera rig: where each building is, this frame. */
@@ -73,6 +79,21 @@ export function BeltScene({
     [world],
   );
   const v = useMemo(() => new THREE.Vector3(), []);
+
+  // Inside Mission Control or the Vault: build that control station, and hide
+  // the station's outside (its truss runs right through the module, and the
+  // window looks away from the station anyway).
+  const insideModule =
+    view.level !== "belt" && (view.id === "planner" || view.id === "finance") ? view.id : null;
+  useEffect(() => {
+    world.station.group.visible = insideModule === null;
+  }, [insideModule, world]);
+  const buildings = useQuery({
+    queryKey: ["buildings"],
+    queryFn: getBuildings,
+    staleTime: Infinity,
+  });
+  const titleOf = (id: BuildingId) => buildings.data?.find((b) => b.id === id)?.name ?? "";
 
   useEffect(() => {
     const modules = {
@@ -131,6 +152,15 @@ export function BeltScene({
   return (
     <>
       <primitive object={world.station.group} {...events} />
+      {insideModule && (
+        <group position={[insideModule === "planner" ? -10.5 : 10.5, 0, 0]}>
+          <ControlStation
+            title={titleOf(insideModule)}
+            tint={tintOf(insideModule)}
+            onOpenScreen={() => onOpen(insideModule)}
+          />
+        </group>
+      )}
       {world.asteroids.map((a) => (
         <primitive key={a.id} object={a.group} {...events} />
       ))}

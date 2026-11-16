@@ -37,7 +37,7 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
           gl={{ antialias: false, powerPreference: "high-performance" }}
           camera={{ fov: 38, near: 0.5, far: 20000, position: [0, 22, 78] }}
         >
-          <BeltScene onOpen={onOpen} labels={labels} api={api} />
+          <BeltScene view={view} onOpen={onOpen} labels={labels} api={api} />
           <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
           <OrbitControls
             makeDefault

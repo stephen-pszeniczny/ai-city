@@ -3,13 +3,16 @@
 // holds a viewpoint in front of it, following the asteroid as it orbits.
 // With reduced motion it jumps instead of flying.
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
+import { ROOM } from "../interior/ControlStation";
 import type { View } from "./levels";
 
 export const FLIGHT_SECONDS = 1.2;
+/** Lens: narrow on the belt, wider indoors so the room and window fit. */
+const FOV = { belt: 38, inside: 55 } as const;
 
 export type SceneApi = {
   /** World position of a building's centre, this frame. */
@@ -29,7 +32,10 @@ function poseFor(view: View, api: SceneApi, out: Pose): boolean {
   const c = api.locate(view.id, out.target);
   const close = view.level === "screen";
   if (isStation(view.id)) {
-    out.position.set(c.x, c.y + (close ? 1.5 : 3), c.z + (close ? 6 : 11));
+    // Inside the control station: third person behind the robot, or at the screen.
+    const room = new THREE.Vector3().copy(c).add(ROOM.offset);
+    out.position.copy(room).add(close ? ROOM.screenCamera : ROOM.camera);
+    out.target.copy(room).add(ROOM.screen);
   } else {
     const outward = new THREE.Vector3(c.x, 0, c.z).normalize();
     out.position
@@ -58,22 +64,38 @@ export function CameraRig({
     () => ({ position: new THREE.Vector3(), target: new THREE.Vector3() }),
     [],
   );
-  const flight = useRef<{ from: Pose; start: number } | null>(null);
+  const flight = useRef<{ from: Pose; start: number; fov: number } | null>(null);
   // Where the person had steered to on the belt, so flying back returns there.
   const beltPose = useRef<Pose | null>(null);
   const viewKey = view.level === "belt" ? "belt" : `${view.level}:${view.id}`;
   const lastKey = useRef(viewKey);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: it runs before the next frame is drawn.
+  // With useEffect a frame could move the camera to the new view first, and the
+  // "belt view" saved here would then be the inside view.
+  useLayoutEffect(() => {
     if (lastKey.current === viewKey) return;
     const leavingBelt = lastKey.current === "belt";
     lastKey.current = viewKey;
     const target = controls ? controls.target.clone() : new THREE.Vector3();
     if (leavingBelt)
       beltPose.current = { position: camera.position.clone(), target: target.clone() };
+    // Reduced motion, back to the belt: there's no flight to carry the camera
+    // home, so jump straight back to where the person had it, with the belt lens.
+    if (reducedMotion && viewKey === "belt" && beltPose.current) {
+      camera.position.copy(beltPose.current.position);
+      controls?.target.copy(beltPose.current.target);
+      camera.lookAt(beltPose.current.target);
+      camera.fov = FOV.belt;
+      camera.updateProjectionMatrix();
+    }
     flight.current = reducedMotion
       ? null
-      : { from: { position: camera.position.clone(), target }, start: performance.now() };
+      : {
+          from: { position: camera.position.clone(), target },
+          start: performance.now(),
+          fov: camera.fov,
+        };
   }, [viewKey, camera, controls, reducedMotion]);
 
   useFrame(() => {
@@ -92,6 +114,12 @@ export function CameraRig({
     const k = f
       ? easeInOut(Math.min(1, (performance.now() - f.start) / (FLIGHT_SECONDS * 1000)))
       : 1;
+    const fovGoal = view.level === "belt" ? FOV.belt : FOV.inside;
+    const fov = f ? THREE.MathUtils.lerp(f.fov, fovGoal, k) : fovGoal;
+    if (Math.abs(camera.fov - fov) > 0.01) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
     if (f) {
       camera.position.lerpVectors(f.from.position, goal.position, k);
       const target = new THREE.Vector3().lerpVectors(f.from.target, goal.target, k);

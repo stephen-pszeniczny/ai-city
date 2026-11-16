@@ -235,7 +235,7 @@
 .belt__inside {
   position: absolute;
   left: 50%;
-  bottom: 40px;
+  top: 56px;
   transform: translateX(-50%);
   display: grid;
   justify-items: center;
