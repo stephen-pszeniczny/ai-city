@@ -16,10 +16,11 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
   Hall and The Vault as two modules; seven asteroids on a flat ring with the debris belt
   between them; Earth, sun, stars, nebulae. Drag to rotate, scroll to zoom. Every building and
   its label is clickable and shows a live badge.
-- **Under construction:** an asteroid whose building isn't built yet shows its tint, mining rigs,
-  scaffolding and an "under construction" sign (amber and black hazard stripes), readable from
-  the belt view. The same sign stands beside its robot's desk at level 2, and its screen shows the
-  "under construction" desktop. When a building is finished, its sign comes down and its landmark
+- **Under construction:** an asteroid whose building isn't built yet shows its tint, a mining rig
+  and scaffolding, and its future landmark as a holographic projection with "UNDER CONSTRUCTION"
+  floating over it in semi-holographic lettering, kept a readable size on screen (Steve's
+  direction, 2026-11-15). A solid sign (amber and black hazard stripes) stands beside its robot's
+  desk at level 2, and its screen shows the "under construction" desktop. When a building is finished, its sign comes down and its landmark
   appears. Today only Mission Control is built, so all seven asteroids show the sign.
 - **Landmarks** (shown once a building is built): Opportunity Office radar dish, Post Office
   antenna, Training Bay dumbbell, Shipyard crane, Crew Quarters arch, Data Core crystals, and

@@ -2,13 +2,14 @@
 // Clicking a building calls onOpen(id). Each frame it also moves the glass
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
 import { useQuery } from "@tanstack/react-query";
-import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import * as THREE from "three";
 
 import { getBuildings, type BuildingId } from "../api";
+import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { ControlStation } from "../interior/ControlStation";
-import { createAsteroids } from "./asteroids";
+import { createAsteroids, DECK_Y } from "./asteroids";
 import type { SceneApi } from "./CameraRig";
 import type { View } from "./levels";
 import { tintOf } from "./tints";
@@ -88,6 +89,14 @@ export function BeltScene({
   useEffect(() => {
     world.station.group.visible = insideModule === null;
   }, [insideModule, world]);
+  // On an asteroid: its landmark/hologram/worksite make way for the robot's desk.
+  const insideAsteroid =
+    view.level !== "belt" && !insideModule
+      ? world.asteroids.find((a) => a.id === view.id)
+      : undefined;
+  useEffect(() => {
+    for (const a of world.asteroids) a.holder.visible = a !== insideAsteroid;
+  }, [insideAsteroid, world]);
   const buildings = useQuery({
     queryKey: ["buildings"],
     queryFn: getBuildings,
@@ -105,6 +114,12 @@ export function BeltScene({
         if (id === "planner" || id === "finance") return out.copy(modules[id]);
         const a = world.asteroids.find((x) => x.id === id);
         return a ? out.copy(a.group.position) : out.set(0, 0, 0);
+      },
+      deckToWorld(id, local, out) {
+        const a = world.asteroids.find((x) => x.id === id);
+        if (!a) return out.set(0, 0, 0);
+        a.spin.updateWorldMatrix(true, false);
+        return a.spin.localToWorld(out.copy(local).setY(local.y + DECK_Y));
       },
     };
     return () => {
@@ -161,6 +176,18 @@ export function BeltScene({
           />
         </group>
       )}
+      {insideAsteroid &&
+        createPortal(
+          <group position={[0, DECK_Y, 0]}>
+            <AsteroidDesk
+              title={titleOf(insideAsteroid.id)}
+              tint={tintOf(insideAsteroid.id)}
+              sign={insideAsteroid.deskSign}
+              onOpenScreen={() => onOpen(insideAsteroid.id)}
+            />
+          </group>,
+          insideAsteroid.spin,
+        )}
       {world.asteroids.map((a) => (
         <primitive key={a.id} object={a.group} {...events} />
       ))}

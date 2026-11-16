@@ -48,7 +48,8 @@ export function Labels({
         >
           <span className="belt-label__dot" aria-hidden="true" />
           {b.name}
-          {!BUILT.has(b.id) && (
+          {/* Asteroids show it as a holographic banner instead; only the Vault needs the tag. */}
+          {!BUILT.has(b.id) && (b.id === "planner" || b.id === "finance") && (
             <span className="belt-label__badge belt-label__badge--soon">Under construction</span>
           )}
           {badges[b.id] && (

@@ -41,7 +41,12 @@ function constructionSignTexture(): THREE.CanvasTexture {
   g.fillStyle = "#111";
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = "800 58px -apple-system, 'Helvetica Neue', Arial, sans-serif";
+  // Shrink the font until the longer word fits inside the panel.
+  let size = 58;
+  do {
+    g.font = `800 ${size}px -apple-system, 'Helvetica Neue', Arial, sans-serif`;
+    size -= 2;
+  } while (g.measureText("CONSTRUCTION").width > w - 90 && size > 20);
   g.fillText("UNDER", w / 2, h / 2 - 34);
   g.fillText("CONSTRUCTION", w / 2, h / 2 + 34);
   signTexture = new THREE.CanvasTexture(c);

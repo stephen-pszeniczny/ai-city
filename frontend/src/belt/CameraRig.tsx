@@ -7,16 +7,21 @@ import { useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
+import { DESK_SPOT } from "../interior/AsteroidDesk";
 import { ROOM } from "../interior/ControlStation";
 import type { View } from "./levels";
 
 export const FLIGHT_SECONDS = 1.2;
+/** The belt view the app opens on (matches the Canvas camera in BeltCanvas). */
+export const BELT_HOME = { position: [0, 22, 78], target: [0, 0, 0] } as const;
 /** Lens: narrow on the belt, wider indoors so the room and window fit. */
 const FOV = { belt: 38, inside: 55 } as const;
 
 export type SceneApi = {
   /** World position of a building's centre, this frame. */
   locate(id: BuildingId, out: THREE.Vector3): THREE.Vector3;
+  /** An asteroid's deck point (deck coordinates, turning with the asteroid) in world space. */
+  deckToWorld(id: BuildingId, local: THREE.Vector3, out: THREE.Vector3): THREE.Vector3;
 };
 
 type Pose = { position: THREE.Vector3; target: THREE.Vector3 };
@@ -37,12 +42,9 @@ function poseFor(view: View, api: SceneApi, out: Pose): boolean {
     out.position.copy(room).add(close ? ROOM.screenCamera : ROOM.camera);
     out.target.copy(room).add(ROOM.screen);
   } else {
-    const outward = new THREE.Vector3(c.x, 0, c.z).normalize();
-    out.position
-      .copy(c)
-      .addScaledVector(outward, close ? 6 : 12)
-      .add(new THREE.Vector3(0, close ? 4 : 6, 0));
-    out.target.y += 2; // look at the deck, not the rock's middle
+    // On the asteroid: third person behind the robot at its desk, turning with the deck.
+    api.deckToWorld(view.id, close ? DESK_SPOT.screenCamera : DESK_SPOT.camera, out.position);
+    api.deckToWorld(view.id, DESK_SPOT.screen, out.target);
   }
   return true;
 }
@@ -66,7 +68,12 @@ export function CameraRig({
   );
   const flight = useRef<{ from: Pose; start: number; fov: number } | null>(null);
   // Where the person had steered to on the belt, so flying back returns there.
-  const beltPose = useRef<Pose | null>(null);
+  // Starts at the default belt view, so leaving a building you opened directly
+  // (a reload or deep link) still flies back to the belt.
+  const beltPose = useRef<Pose | null>({
+    position: new THREE.Vector3(...BELT_HOME.position),
+    target: new THREE.Vector3(...BELT_HOME.target),
+  });
   const viewKey = view.level === "belt" ? "belt" : `${view.level}:${view.id}`;
   const lastKey = useRef(viewKey);
 

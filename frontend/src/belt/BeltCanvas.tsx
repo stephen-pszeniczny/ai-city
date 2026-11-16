@@ -10,7 +10,7 @@ import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { getBuildings, type BuildingId } from "../api";
 import { useSampleReminder } from "../todo/useMode";
 import { BeltScene } from "./BeltScene";
-import { CameraRig, type SceneApi } from "./CameraRig";
+import { BELT_HOME, CameraRig, type SceneApi } from "./CameraRig";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
 import "./belt.css";
@@ -35,7 +35,7 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
           frameloop={hidden ? "never" : "always"}
           dpr={[1, 2]}
           gl={{ antialias: false, powerPreference: "high-performance" }}
-          camera={{ fov: 38, near: 0.5, far: 20000, position: [0, 22, 78] }}
+          camera={{ fov: 38, near: 0.5, far: 20000, position: [...BELT_HOME.position] }}
         >
           <BeltScene view={view} onOpen={onOpen} labels={labels} api={api} />
           <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
