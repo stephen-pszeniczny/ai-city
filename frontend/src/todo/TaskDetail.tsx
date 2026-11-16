@@ -20,6 +20,7 @@ import {
 import { CATEGORIES, categoryLabel } from "./categories";
 import { statusNotes } from "./dates";
 import { describeEvent } from "./history";
+import { confirmLeave, setDirty as setLeaveDirty } from "../leaveGuard";
 import { ModeBanner } from "./ModeBanner";
 
 type Props = {
@@ -31,13 +32,18 @@ type Props = {
 export function TaskDetail({ id, onBack, onArchived }: Props) {
   const task = useQuery({ queryKey: ["tasks", "one", id], queryFn: () => getTask(id) });
   const [dirty, setDirty] = useState(false);
+  // Share unsaved state with every other way out (belt Back, Escape, browser Back).
+  useEffect(() => {
+    setLeaveDirty(dirty);
+  }, [dirty]);
+  useEffect(() => () => setLeaveDirty(false), []);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Move keyboard and screen-reader focus to the new view.
   useEffect(() => headingRef.current?.focus(), []);
 
   function back() {
-    if (dirty && !window.confirm("Discard your unsaved changes?")) return;
+    if (!confirmLeave()) return;
     onBack();
   }
 

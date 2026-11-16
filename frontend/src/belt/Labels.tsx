@@ -14,9 +14,12 @@ export type LabelElements = Map<BuildingId, HTMLElement>;
 export function Labels({
   elements,
   onOpen,
+  hidden = false,
 }: {
   elements: RefObject<LabelElements>;
   onOpen: (id: BuildingId) => void;
+  /** Hidden inside a building (they'd clutter the close-up). */
+  hidden?: boolean;
 }) {
   const buildings = useQuery({
     queryKey: ["buildings"],
@@ -29,7 +32,7 @@ export function Labels({
   };
 
   return (
-    <div className="belt__labels">
+    <div className="belt__labels" hidden={hidden}>
       {buildings.data?.map((b) => (
         <button
           key={b.id}

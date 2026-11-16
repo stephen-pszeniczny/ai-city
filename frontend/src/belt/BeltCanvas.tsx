@@ -10,12 +10,16 @@ import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import { getBuildings, type BuildingId } from "../api";
 import { useSampleReminder } from "../todo/useMode";
 import { BeltScene } from "./BeltScene";
+import { CameraRig, type SceneApi } from "./CameraRig";
+import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
 import "./belt.css";
 
-export function BeltCanvas({ onOpen }: { onOpen: (id: BuildingId) => void }) {
+export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: BuildingId) => void }) {
   const hidden = usePageHidden();
   const labels = useRef<LabelElements>(new Map());
+  const api = useRef<SceneApi | null>(null);
+  const [reducedMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
   const sample = useSampleReminder();
   const buildings = useQuery({
     queryKey: ["buildings"],
@@ -33,7 +37,8 @@ export function BeltCanvas({ onOpen }: { onOpen: (id: BuildingId) => void }) {
           gl={{ antialias: false, powerPreference: "high-performance" }}
           camera={{ fov: 38, near: 0.5, far: 20000, position: [0, 22, 78] }}
         >
-          <BeltScene onOpen={onOpen} labels={labels} />
+          <BeltScene onOpen={onOpen} labels={labels} api={api} />
+          <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
           <OrbitControls
             makeDefault
             enableDamping
@@ -45,7 +50,7 @@ export function BeltCanvas({ onOpen }: { onOpen: (id: BuildingId) => void }) {
           />
         </Canvas>
         {/* Inside the boundary: if 3D fails, the labels go with it. */}
-        <Labels elements={labels} onOpen={onOpen} />
+        <Labels elements={labels} onOpen={onOpen} hidden={view.level !== "belt"} />
       </ThreeErrorBoundary>
 
       <header className="belt__top">
@@ -59,7 +64,7 @@ export function BeltCanvas({ onOpen }: { onOpen: (id: BuildingId) => void }) {
         </p>
       )}
 
-      <nav className="belt__keys" aria-label="Buildings">
+      <nav className="belt__keys" aria-label="Buildings" hidden={view.level !== "belt"}>
         {buildings.data?.map((b) => (
           <button key={b.id} type="button" onClick={() => onOpen(b.id)}>
             Open {b.name}

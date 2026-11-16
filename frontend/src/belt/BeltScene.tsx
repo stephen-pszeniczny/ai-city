@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 import type { BuildingId } from "../api";
 import { createAsteroids } from "./asteroids";
+import type { SceneApi } from "./CameraRig";
 import type { LabelElements } from "./Labels";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
@@ -18,9 +19,12 @@ const CLICK_SLOP = 5;
 export function BeltScene({
   onOpen,
   labels,
+  api,
 }: {
   onOpen: (id: BuildingId) => void;
   labels: RefObject<LabelElements>;
+  /** Filled in for the camera rig: where each building is, this frame. */
+  api: RefObject<SceneApi | null>;
 }) {
   const { scene, gl } = useThree();
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
@@ -69,6 +73,23 @@ export function BeltScene({
     [world],
   );
   const v = useMemo(() => new THREE.Vector3(), []);
+
+  useEffect(() => {
+    const modules = {
+      planner: new THREE.Vector3(-10.5, 0, 0),
+      finance: new THREE.Vector3(10.5, 0, 0),
+    };
+    api.current = {
+      locate(id, out) {
+        if (id === "planner" || id === "finance") return out.copy(modules[id]);
+        const a = world.asteroids.find((x) => x.id === id);
+        return a ? out.copy(a.group.position) : out.set(0, 0, 0);
+      },
+    };
+    return () => {
+      api.current = null;
+    };
+  }, [api, world]);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
