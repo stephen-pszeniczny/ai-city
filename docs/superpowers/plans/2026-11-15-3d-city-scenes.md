@@ -72,7 +72,7 @@
 ### Task 3: Level 1, the city
 
 **Files:**
-- Create: `frontend/src/city/CityCanvas.tsx` (the one `<Canvas>`, error boundary, pauses when `document.hidden`), `city/Station.tsx` (hub, ring, truss, solar wings, City Hall and Finance modules), `city/Asteroid.tsx`, `city/construction.tsx` (mining rig + scaffolding), `city/landmarks.tsx` (seven landmarks, shown only when built), `city/Labels.tsx`, `city/badges.ts`, `city/built.ts`
+- Create: `frontend/src/city/CityCanvas.tsx` (the one `<Canvas>`, error boundary, pauses when `document.hidden`), `city/Station.tsx` (hub, ring, truss, solar wings, City Hall and Finance modules), `city/Asteroid.tsx`, `city/construction.tsx` (mining rig, scaffolding and the "under construction" sign, exported as `ConstructionSign` props `{ scale?: number }`), `city/landmarks.tsx` (seven landmarks, shown only when built), `city/Labels.tsx`, `city/badges.ts`, `city/built.ts`
 - Modify: `frontend/src/App.tsx` (`/` renders the city; `/todo` stays as the plain fallback)
 - Test: `frontend/tests/badges.test.ts`
 
@@ -83,7 +83,7 @@
 - [ ] **Step 1: Write failing tests** for `plannerBadge`: 2 overdue + 1 stale → `"2 overdue"`; 0 overdue + 3 stale → `"3 stale"`; none → `null`; done/archived tasks never count; uses the local date (same trap as `dates.ts`).
 - [ ] **Step 2: Run** `npm test` → FAIL.
 - [ ] **Step 3: Implement** the scene; OrbitControls with min distance 24, max 320, max polar 1.5, pan off; labels are drei `Html` glass pills, clicking a label or a building calls `onOpen(id)`; error boundary shows "3D isn't available in this browser" with a link to `/todo`; a visually hidden list of nine real buttons (one per building, settings names) opens the same views for keyboard and screen-reader users.
-- [ ] **Step 4: Run** tests, typecheck, build; live: city renders, nine labels with settings names, City Hall badge matches the demo tasks, forced error shows the fallback.
+- [ ] **Step 4: Run** tests, typecheck, build; live: city renders, nine labels with settings names, City Hall badge matches the demo tasks, all seven asteroids show rigs, scaffolding and a readable sign and no landmark, forced error shows the fallback.
 - [ ] **Step 5: Commit** "Add the 3D city: station, asteroids, belt, labels and badges".
 
 ### Task 4: Levels, URL, camera flights, Back
@@ -134,11 +134,11 @@
 - Create: `frontend/src/interior/AsteroidDesk.tsx`
 
 **Interfaces:**
-- Consumes: `Robot`, `Desk`, Task 2 `ASTEROIDS`.
+- Consumes: `Robot`, `Desk`, Task 2 `ASTEROIDS`, Task 3 `BUILT` and `ConstructionSign`.
 - Produces: `AsteroidDesk` props `{ id: BuildingId; tint: string; onOpenScreen(): void }`; sits on the asteroid's deck and turns with the asteroid's spin, so space sweeps slowly behind.
 
 - [ ] **Step 1: Implement**; the camera pose for asteroid buildings follows the asteroid (computed each frame from `orbitPosition` and its spin).
-- [ ] **Step 2: Verify live** for two asteroids with different tints; robot and desk take the tint.
+- [ ] **Step 2: Verify live** for two asteroids with different tints; robot and desk take the tint; an unbuilt asteroid shows the sign beside the desk.
 - [ ] **Step 3: Run** typecheck and build. **Commit** "Add asteroid desk scenes".
 
 ### Task 8: Monitor and desktop screen

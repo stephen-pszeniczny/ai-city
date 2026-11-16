@@ -16,6 +16,11 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
   Hall and Finance District as two modules; seven asteroids on a flat ring with the debris belt
   between them; Earth, sun, stars, nebulae. Drag to rotate, scroll to zoom. Every building and
   its label is clickable and shows a live badge.
+- **Under construction:** an asteroid whose building isn't built yet shows its tint, mining rigs,
+  scaffolding and an "under construction" sign (amber and black hazard stripes), readable from
+  the city view. The same sign stands beside its robot's desk at level 2, and its screen shows the
+  "under construction" desktop. When a building is finished, its sign comes down and its landmark
+  appears. Today only City Hall is built, so all seven asteroids show the sign.
 - **Level 2, the building:** clicking a building or its label quickly pans and zooms into it.
   - *Asteroids (7):* the robot sits at a desk on the asteroid's surface, working at one
     computer, with open space behind. Robot and desk take the asteroid's tint.
@@ -61,9 +66,9 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
 ## Design
 
 **Structure** *(call)*
-- `frontend/src/city/`: `CityScene` (level 1), `space/` (stars, Milky Way, nebulae, Earth, sun,
-  belt, debris; shared by every level), `buildings/` (station modules, asteroids, landmarks,
-  under-construction rigs), `labels` (glass labels with badges).
+- `frontend/src/city/`: the canvas and city (level 1), `space/` (stars, Milky Way, nebulae,
+  Earth, sun, belt, debris; shared by every level), station, asteroids, landmarks,
+  under-construction rigs and sign, and the glass labels with badges.
 - `frontend/src/interior/`: `ControlStation` (City Hall, Finance), `AsteroidDesk` (the seven),
   `Robot` (one original model, recoloured by tint), `Monitor` (bezel + live screen).
 - `frontend/src/desktop/`: `Desktop` (menu bar, dock, windows) and the app registry (City Hall:
@@ -111,8 +116,8 @@ screenshots in Sample mode, with frame-time measured while idle.
 
 1. `GET /api/buildings` route + tests.
 2. Space scene shared module (port from the prototype) + performance limits.
-3. Level 1: station, asteroids with landmarks, under-construction rigs, labels with names and
-   badges, drag/zoom.
+3. Level 1: station, asteroids (landmark if built, otherwise rigs, scaffolding and the
+   under-construction sign), labels with names and badges, drag/zoom.
 4. Level state machine + URL + camera flights + Back/Escape.
 5. Robot model.
 6. Control station (City Hall, Finance) with window view.
