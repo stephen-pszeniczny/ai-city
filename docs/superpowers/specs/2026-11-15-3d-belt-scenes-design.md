@@ -99,8 +99,10 @@ overdue and stale counts from the tasks API) and are hidden otherwise. No made-u
 in Personal mode. *(call)*
 
 **Performance** *(call)*: render on demand when nothing moves is not possible (space always
-turns), so cap at 60 fps, pause rendering when the window is hidden, half resolution for the
-bloom pass, build the procedural Earth once and cache its textures for the session. Target: idle
+turns), so: no post-processing pass (it washed the scene out with haze from Earth's
+atmosphere, and drawing straight to the screen is both more realistic and much lighter),
+pause rendering when the window is hidden, build the procedural Earth once and cache its
+textures for the session. Labels are plain page elements moved each frame, not 3D overlays. Target: idle
 CPU low enough that the fans stay quiet on the M5.
 
 **Unsaved edits:** zooming out of the screen asks first if the open task has unsaved changes,

@@ -1,17 +1,21 @@
 // The app's pages.
-//   /      placeholder home: engine status and a way into the to-do list.
-//          The 3D space station scene replaces it in session 9.
-//   /todo  Mission Control's to-do panel.
-import { useQuery } from "@tanstack/react-query";
-import { Link, Route, Routes } from "react-router-dom";
+//   /      the belt: the 3D home screen. Clicking Mission Control opens its
+//          to-do list; other buildings are under construction. (Flying into
+//          each building comes with the level work in the next step.)
+//   /todo  Mission Control's to-do panel on its own page (also the fallback
+//          when 3D isn't available).
+import { useState } from "react";
+import { Link, Route, Routes, useNavigate } from "react-router-dom";
 
-import { getHealth } from "./api";
+import type { BuildingId } from "./api";
+import { BeltCanvas } from "./belt/BeltCanvas";
+import { BUILT } from "./belt/built";
 import { TodoPanel } from "./todo/TodoPanel";
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<BeltHome />} />
       <Route
         path="/todo"
         element={
@@ -25,35 +29,28 @@ export function App() {
   );
 }
 
-function Home() {
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: getHealth,
-    refetchInterval: 10_000,
-    retry: false,
-  });
+function BeltHome() {
+  const navigate = useNavigate();
+  const [note, setNote] = useState<string | null>(null);
 
-  const state = health.isPending ? "checking" : health.data?.status === "ok" ? "alive" : "down";
-  const label = {
-    checking: "Checking engine…",
-    alive: "Engine is alive",
-    down: "Engine not reachable",
-  }[state];
+  function open(id: BuildingId) {
+    if (id === "planner") {
+      navigate("/todo");
+      return;
+    }
+    setNote(BUILT.has(id) ? null : "That building is under construction.");
+    window.setTimeout(() => setNote(null), 2500);
+  }
 
   return (
-    <main className="shell">
-      <h1>Asteroid Belt</h1>
-      <p className={`status status--${state}`} role="status">
-        <span className="dot" aria-hidden="true" />
-        {label}
-      </p>
-      <p>
-        <Link className="home-link" to="/todo">
-          Open the to-do list
-        </Link>
-      </p>
-      <p className="hint">Skeleton build. The space station arrives in session 9.</p>
-    </main>
+    <>
+      <BeltCanvas onOpen={open} />
+      {note && (
+        <p className="belt__note" role="status">
+          {note}
+        </p>
+      )}
+    </>
   );
 }
 

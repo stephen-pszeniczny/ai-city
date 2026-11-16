@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- No new packages (npm or Python). Postprocessing uses three's own addons (`three/addons/postprocessing/*`).
+- No new packages (npm or Python). No post-processing pass (removed in Task 3).
 - Building IDs in code: `planner, finance, jobs, career, mail, relationships, projects, gym, library`. Display names only from settings (`GET /api/buildings`).
 - Built today: `planner` only. Every other building and app shows "under construction".
 - CSS colours with transparency use commas (`rgba(1, 2, 3, 0.5)`), never space-separated triples (gitleaks SIN rule).
@@ -56,7 +56,7 @@
 
 **Files:**
 - Create: `frontend/src/belt/space/` → `sky.ts` (stars, Milky Way, nebulae, sun), `earth.ts` (procedural Earth, textures cached at module level for the session), `belt.ts` (debris, dust), `rock.ts` (`rockGeometry(seed, tint)`), `orbit.ts`, `index.ts`
-- Create: `frontend/src/belt/Effects.tsx` (bloom at half resolution + film pass; takes over rendering with `useFrame(…, 1)`)
+- (Built then removed in Task 3: a bloom + film post-processing pass. It washed the scene out; the belt draws straight to the screen.)
 - Test: `frontend/tests/orbit.test.ts`
 
 **Interfaces:**

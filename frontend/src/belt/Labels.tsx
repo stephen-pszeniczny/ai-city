@@ -1,0 +1,58 @@
+// Glass labels over each building. Plain page elements (not inside the 3D
+// scene): BeltScene moves them every frame to follow their building, and hides
+// them when a building is behind the camera.
+import { useQuery } from "@tanstack/react-query";
+import type { CSSProperties, RefObject } from "react";
+
+import { getBuildings, listTasks, type BuildingId } from "../api";
+import { plannerBadge } from "./badges";
+import { BUILT } from "./built";
+import { tintOf } from "./tints";
+
+export type LabelElements = Map<BuildingId, HTMLElement>;
+
+export function Labels({
+  elements,
+  onOpen,
+}: {
+  elements: RefObject<LabelElements>;
+  onOpen: (id: BuildingId) => void;
+}) {
+  const buildings = useQuery({
+    queryKey: ["buildings"],
+    queryFn: getBuildings,
+    staleTime: Infinity,
+  });
+  const open = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
+  const badges: Partial<Record<BuildingId, string | null>> = {
+    planner: open.data ? plannerBadge(open.data) : null,
+  };
+
+  return (
+    <div className="belt__labels">
+      {buildings.data?.map((b) => (
+        <button
+          key={b.id}
+          type="button"
+          className="belt-label"
+          style={{ "--tint": tintOf(b.id) } as CSSProperties}
+          onClick={() => onOpen(b.id)}
+          tabIndex={-1} // the hidden building list is the keyboard route
+          ref={(el) => {
+            if (el) elements.current.set(b.id, el);
+            else elements.current.delete(b.id);
+          }}
+        >
+          <span className="belt-label__dot" aria-hidden="true" />
+          {b.name}
+          {!BUILT.has(b.id) && (
+            <span className="belt-label__badge belt-label__badge--soon">Under construction</span>
+          )}
+          {badges[b.id] && (
+            <span className="belt-label__badge belt-label__badge--urgent">{badges[b.id]}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
