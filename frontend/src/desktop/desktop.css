@@ -1,0 +1,321 @@
+/* Level 3, the desktop screen: the approved prototype's monitor (10% bigger),
+   floating over the live 3D room or asteroid. Colours with transparency use
+   commas (the secret scanner's SIN rule). */
+
+.desk-zoom {
+  --bezel: #0d0f14;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 64px 7vw 24px;
+  pointer-events: none; /* the space around the monitor stays the 3D view */
+}
+
+.desk-zoom .monitor {
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .desk-zoom .monitor {
+    animation: desk-zoom-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@keyframes desk-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* ── The monitor ────────────────────────────────────────── */
+
+.monitor {
+  position: relative;
+  z-index: 2;
+  /* Width follows the available height too, so screen and chin always match. */
+  width: min(1210px, 100%, calc(66vh * 1.6)); /* 10% bigger than the first cut */
+}
+
+.monitor__screen {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  border: 14px solid var(--bezel);
+  border-bottom-width: 14px;
+  border-radius: 18px 18px 4px 4px;
+  background:
+    radial-gradient(120% 90% at 80% 110%, rgba(65, 105, 225, 0.55), transparent 60%),
+    radial-gradient(60% 50% at 15% 10%, rgba(90, 60, 255, 0.25), transparent 70%), #060a18;
+  box-shadow:
+    0 0 0 1px #262a33,
+    0 30px 80px rgba(0, 0, 0, 0.8),
+    0 0 60px rgba(65, 105, 225, 0.15);
+  /* Makes "fixed" things (like the Undo banner) stay inside the screen. */
+  transform: translateZ(0);
+}
+
+.monitor__glare {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.06), transparent 35%);
+}
+
+.monitor__chin {
+  height: 26px;
+  margin: 0 auto;
+  background: linear-gradient(#15181f, #0b0d12);
+  border-radius: 0 0 14px 14px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 1px #262a33;
+}
+
+.monitor__led {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #30d158;
+  box-shadow: 0 0 6px #30d158;
+}
+
+/* Menu bar across the top of the screen. */
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  height: 30px;
+  padding: 0 0.9rem;
+  background: rgba(10, 14, 28, 0.6);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+
+.menubar__logo {
+  display: grid;
+  color: #8aa4ff;
+}
+
+.menubar__spacer {
+  flex: 1;
+}
+
+.menubar__sample {
+  padding: 0.05rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 179, 64, 0.16);
+  color: #ffb340;
+  font-size: 0.75rem;
+}
+
+.menubar__clock {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The desktop and its one window. */
+.desktop {
+  position: relative;
+  min-height: 0;
+  padding: 14px 18px 8px;
+  display: grid;
+}
+
+.desktop__hint {
+  place-self: center;
+  color: var(--muted);
+}
+
+.desktop__note {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 10px;
+  background: rgba(20, 24, 36, 0.9);
+  font-size: 0.875rem;
+}
+
+.window {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  max-width: 760px;
+  width: 100%;
+  justify-self: center;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(18, 20, 30, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+
+.window__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.window__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.window__close {
+  position: absolute;
+  left: 12px;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #ff5f57;
+  cursor: pointer;
+}
+
+.window__close:focus-visible {
+  outline: 2px solid #8aa4ff;
+  outline-offset: 2px;
+}
+
+/* The scrollable app area. */
+.window__body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Today's to-do panel, fitted into the window: no floating glass, no duplicate heading. */
+.window__body .panel {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  animation: none;
+}
+
+.window__body .panel__head:has(a.back-link) {
+  display: none;
+}
+
+.window__body .panel__head {
+  padding-top: 0.9rem;
+}
+
+.window__body .mode-banner {
+  margin-top: 1rem;
+}
+
+/* Dock along the bottom of the screen. */
+.dock {
+  justify-self: center;
+  display: flex;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+
+.dock__app {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 64px;
+  padding: 4px 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dock__app:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dock__app:focus-visible {
+  outline: 2px solid #8aa4ff;
+  outline-offset: 1px;
+}
+
+.dock__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #5b82ff, #2a46b8);
+  font-size: 1.1rem;
+}
+
+.dock__app--later .dock__icon {
+  background: linear-gradient(160deg, #3a3f4d, #23262f);
+  color: var(--muted);
+}
+
+.dock__name {
+  font-size: 0.6875rem;
+  color: var(--muted);
+}
+
+.dock__dot {
+  position: absolute;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+/* Under-construction window for buildings that aren't built yet. */
+.construction {
+  display: grid;
+  place-content: center;
+  gap: 0.6rem;
+  min-height: 100%;
+  padding: 2rem;
+  text-align: center;
+}
+
+.construction h2 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.construction h2:focus {
+  outline: none;
+}
+
+.construction p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.construction__stripes {
+  height: 18px;
+  margin-top: 1rem;
+  border-radius: 4px;
+  background: repeating-linear-gradient(-45deg, #ffb340 0 16px, #111 16px 32px);
+  opacity: 0.85;
+}

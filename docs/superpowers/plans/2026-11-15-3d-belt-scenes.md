@@ -144,7 +144,7 @@
 ### Task 8: Monitor and desktop screen
 
 **Files:**
-- Create: `frontend/src/interior/Monitor.tsx` (level 2: live screen via drei `Html` with `transform`, display only), `frontend/src/desktop/Desktop.tsx`, `desktop/desktop.css`, `desktop/apps.ts`, `desktop/Surround.tsx` (station hull + console edge, or asteroid ground + desk edge, around the monitor)
+- Create: `frontend/src/interior/Monitor.tsx` (level 2: live content drawn as an image on the screen, look-only; built that way instead of drei `Html`), `frontend/src/desktop/Desktop.tsx`, `desktop/desktop.css`, `desktop/apps.ts`, `desktop/Surround.tsx` (station hull + console edge, or asteroid ground + desk edge, around the monitor)
 - Test: `frontend/tests/apps.test.ts`
 
 **Interfaces:**

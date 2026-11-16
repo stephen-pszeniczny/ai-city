@@ -6,7 +6,10 @@ import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/
 import { useEffect, useMemo, useState, type RefObject } from "react";
 import * as THREE from "three";
 
-import { getBuildings, type BuildingId } from "../api";
+import { getBuildings, listTasks, type BuildingId } from "../api";
+import type { ScreenContent } from "../interior/Monitor";
+import { statusNotes, type Tone } from "../todo/dates";
+import { BUILT } from "./built";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { ControlStation } from "../interior/ControlStation";
 import { createAsteroids, DECK_Y } from "./asteroids";
@@ -17,6 +20,15 @@ import type { LabelElements } from "./Labels";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
 import { createStation } from "./station";
+
+const TONE_COLOURS: Record<Tone, string> = {
+  bad: "#ff453a",
+  warn: "#ffb340",
+  accent: "#8aa4ff",
+  plain: "#f5f5f7",
+  muted: "#98989f",
+};
+const CONSTRUCTION: ScreenContent = { kind: "construction" };
 
 /** Pointer movement (px) below which a press counts as a click, not a drag. */
 const CLICK_SLOP = 5;
@@ -104,6 +116,27 @@ export function BeltScene({
   });
   const titleOf = (id: BuildingId) => buildings.data?.find((b) => b.id === id)?.name ?? "";
 
+  // What each robot's screen shows: Mission Control's live open tasks; an
+  // under-construction desktop for anything not built.
+  const openTasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
+  const plannerScreen = useMemo<ScreenContent>(
+    () => ({
+      kind: "lines",
+      lines: (openTasks.data ?? []).map((t) => {
+        const note = statusNotes(t)[0];
+        return {
+          title: t.title,
+          note: note?.text,
+          noteColour: note ? TONE_COLOURS[note.tone] : undefined,
+        };
+      }),
+    }),
+    [openTasks.data],
+  );
+  const screenFor = (id: BuildingId): ScreenContent =>
+    id === "planner" ? plannerScreen : BUILT.has(id) ? { kind: "lines", lines: [] } : CONSTRUCTION;
+  const atScreen = view.level === "screen";
+
   useEffect(() => {
     const modules = {
       planner: new THREE.Vector3(-10.5, 0, 0),
@@ -172,6 +205,8 @@ export function BeltScene({
           <ControlStation
             title={titleOf(insideModule)}
             tint={tintOf(insideModule)}
+            content={screenFor(insideModule)}
+            atScreen={atScreen}
             onOpenScreen={() => onOpen(insideModule)}
           />
         </group>
@@ -182,6 +217,8 @@ export function BeltScene({
             <AsteroidDesk
               title={titleOf(insideAsteroid.id)}
               tint={tintOf(insideAsteroid.id)}
+              content={screenFor(insideAsteroid.id)}
+              atScreen={atScreen}
               sign={insideAsteroid.deskSign}
               onOpenScreen={() => onOpen(insideAsteroid.id)}
             />

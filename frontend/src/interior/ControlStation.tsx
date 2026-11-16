@@ -7,7 +7,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import { Console } from "./Console";
-import { Monitor, SCREEN } from "./Monitor";
+import { Monitor, SCREEN, type ScreenContent } from "./Monitor";
 import { Robot } from "./Robot";
 
 /**
@@ -21,8 +21,9 @@ export const ROOM = {
   screen: new THREE.Vector3(0, 1.36, 1.0),
   /** Third person: behind and a little to the right of the robot, over its shoulder. */
   camera: new THREE.Vector3(0.8, 2.15, -2.05),
-  /** Screen view: straight in front of the screen. */
-  screenCamera: new THREE.Vector3(0, 1.36, 0.02),
+  /** Screen view: in front of the screen, far enough back that the monitor
+   * fills about two thirds of the width (where the desktop overlay sits). */
+  screenCamera: new THREE.Vector3(0, 1.36, -0.24),
 } as const;
 
 const W = 3.6; // room width
@@ -33,10 +34,17 @@ const FRONT = 1.9; // window wall
 export function ControlStation({
   title,
   tint,
+  content,
+  atScreen,
   onOpenScreen,
 }: {
   title: string;
   tint: string;
+  /** What the robot's screen shows. */
+  content: ScreenContent;
+  /** Zoomed into the screen: the camera leans in past the robot, and the desktop
+   * overlay takes the monitor's place, so both are hidden. */
+  atScreen: boolean;
   onOpenScreen: () => void;
 }) {
   const mats = useMemo(() => {
@@ -116,10 +124,12 @@ export function ControlStation({
 
       {/* The work area. Clicking the robot, the console or the screen opens the screen. */}
       <group onClick={click}>
-        <Robot tint={tint} />
+        <group visible={!atScreen}>
+          <Robot tint={tint} />
+        </group>
         <Console tint={tint} />
-        <group position={ROOM.screen} rotation={[0.08, 0, 0]}>
-          <Monitor title={title} tint={tint} />
+        <group position={ROOM.screen} rotation={[0.08, 0, 0]} visible={!atScreen}>
+          <Monitor title={title} tint={tint} content={content} />
         </group>
       </group>
 

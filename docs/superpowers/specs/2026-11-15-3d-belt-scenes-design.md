@@ -63,9 +63,10 @@ click it, fly in, find its robot at work, and lean into the robot's screen to do
 ## Approaches considered
 
 1. **Real 3D in the app with the live screen placed on the 3D monitor (chosen).** React Three
-   Fiber (already installed) for all three levels and the camera flights. At level 2 the real
-   to-do page is placed on the monitor surface (drei `Html` with `transform`); at level 3 a flat
-   desktop screen takes over, framed by the bezel, so text is sharp and typing works normally.
+   Fiber (already installed) for all three levels and the camera flights. At level 2 the
+   monitor shows the live content drawn as an image (level 2 is look-only; changed in build from
+   drei `Html`, which caused errors and is heavier); at level 3 a flat desktop screen takes over,
+   framed by the bezel, so text is sharp and typing works normally.
 2. Draw the list as an image on the monitor. Simpler, but blurry up close and no typing. Dropped.
 3. Pre-made 2D illustrations with zoom effects. Loses the interactive 3D. Dropped.
 

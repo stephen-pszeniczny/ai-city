@@ -17,9 +17,9 @@ import {
 
 import { getBuildings, type BuildingId } from "./api";
 import { BeltCanvas } from "./belt/BeltCanvas";
-import { BUILT } from "./belt/built";
 import { back, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
+import { Desktop } from "./desktop/Desktop";
 import { TodoPanel } from "./todo/TodoPanel";
 
 export const router = createBrowserRouter([
@@ -118,22 +118,7 @@ function BeltHome() {
         </div>
       )}
 
-      {view.level === "screen" && (
-        <div className="belt__screen">
-          {view.id === "planner" ? (
-            <TodoPanel />
-          ) : (
-            <section className="panel belt__construction" aria-labelledby="uc-title">
-              <h1 id="uc-title">{nameOf(view.id)}</h1>
-              <p>
-                {BUILT.has(view.id)
-                  ? "Nothing to show here yet."
-                  : "Under construction. This building's screens arrive in a later phase."}
-              </p>
-            </section>
-          )}
-        </div>
-      )}
+      {view.level === "screen" && <Desktop key={view.id} id={view.id} name={nameOf(view.id)} />}
     </>
   );
 }

@@ -6,7 +6,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 
 import { Desk } from "./Desk";
-import { Monitor } from "./Monitor";
+import { Monitor, type ScreenContent } from "./Monitor";
 import { Robot } from "./Robot";
 
 /**
@@ -20,18 +20,26 @@ export const DESK_SPOT = {
   sign: new THREE.Vector3(1.45, 0, 0.95),
   /** Third person: behind and a little to the right of the robot, over its shoulder. */
   camera: new THREE.Vector3(0.8, 2.15, -2.5),
-  /** Screen view: straight in front of the screen. */
-  screenCamera: new THREE.Vector3(0, 1.36, -0.48),
+  /** Screen view: in front of the screen, far enough back that the monitor
+   * fills about two thirds of the width (where the desktop overlay sits). */
+  screenCamera: new THREE.Vector3(0, 1.36, -0.74),
 } as const;
 
 export function AsteroidDesk({
   title,
   tint,
+  content,
+  atScreen,
   sign,
   onOpenScreen,
 }: {
   title: string;
   tint: string;
+  /** What the robot's screen shows. */
+  content: ScreenContent;
+  /** Zoomed into the screen: the camera leans in past the robot, and the desktop
+   * overlay takes the monitor's place, so both are hidden. */
+  atScreen: boolean;
   /** The asteroid's solid "under construction" sign, or null once built. */
   sign: THREE.Group | null;
   onOpenScreen: () => void;
@@ -45,14 +53,14 @@ export function AsteroidDesk({
   return (
     <group>
       <group onClick={click}>
-        <group position={DESK_SPOT.robot}>
+        <group position={DESK_SPOT.robot} visible={!atScreen}>
           <Robot tint={tint} />
         </group>
         <group position={DESK_SPOT.desk}>
           <Desk tint={tint} />
         </group>
-        <group position={DESK_SPOT.screen} rotation={[0.08, 0, 0]}>
-          <Monitor title={title} tint={tint} />
+        <group position={DESK_SPOT.screen} rotation={[0.08, 0, 0]} visible={!atScreen}>
+          <Monitor title={title} tint={tint} content={content} />
         </group>
       </group>
       {/* dispose={null}: the sign is reused on the next visit, so never free it here. */}
