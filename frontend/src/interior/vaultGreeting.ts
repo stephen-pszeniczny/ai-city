@@ -4,7 +4,8 @@
 //
 // Positions are in the Vault robot's "away" frame: relative to its chair (the
 // room's origin, floor level), the same frame RobotAway.position uses. Yaw 0
-// faces the desk (+z); -π/2 faces back down the hallway (-x).
+// faces the desk (+z); -π/2 faces back down the hallway (-x). Hand targets are
+// in the robot's own body frame (as the arms are drawn).
 import * as THREE from "three";
 
 import { vaultDoor } from "../belt/vaultDoor.ts";
@@ -27,8 +28,8 @@ export type GreetingPoints = {
   doorway: THREE.Vector3;
   /** Sitting in the chair (where the greeting ends). */
   chair: THREE.Vector3;
-  /** The wheel's centre, in the robot's body frame while it stands at `wheel`. */
-  wheelInHands: THREE.Vector3;
+  /** The wheel's centre (same frame). */
+  wheelCentre: THREE.Vector3;
 };
 
 export type GreetingFrame = {
@@ -51,8 +52,9 @@ export type GreetingFrame = {
 const WHEEL_TURN = Math.PI * 2.5;
 /** Wheel rim radius (matches the 3D wheel in VaultDoor.tsx). */
 const WHEEL_RIM = 0.32;
-/** How far in front of the wheel the robot floats. */
-const STAND_OFF = 0.42;
+/** Where the robot floats while turning the wheel: back from it, and off to the seat side. */
+const STAND_OFF = 0.36;
+const STAND_SIDE = -0.42;
 /** Extra height of the hop above a straight line into the chair. */
 const HOP = 0.35;
 
@@ -60,23 +62,34 @@ const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (u: number) => u * u * (3 - 2 * u);
 const phase = (s: number, from: number, to: number) => clamp01((s - from) / (to - from));
 const FACE_HALL = -Math.PI / 2;
-const FACE_DOOR = Math.PI / 2;
 
 export function greetingPoints(): GreetingPoints {
   // Station coordinates → the robot's frame (room origin at the module centre, floor level).
   const origin = new THREE.Vector3(MODULE_X.finance, FLOOR_Y, 0);
   const toFrame = (p: THREE.Vector3) => p.clone().sub(origin);
   const wheelFace = VAULT_DOOR.x - VAULT_DOOR.thickness / 2 - 0.08;
-  const wheelCentre = new THREE.Vector3(wheelFace, VAULT_DOOR.centreY, HALL.z);
-  const wheel = toFrame(new THREE.Vector3(wheelFace - STAND_OFF, FLOOR_Y, HALL.z));
+  const wheelCentre = toFrame(new THREE.Vector3(wheelFace, VAULT_DOOR.centreY, HALL.z));
+  // It stands to the seat side of the wheel, turned toward it, so the camera
+  // (coming down the middle of the hallway) sees the wheel and its hands.
+  const wheel = toFrame(new THREE.Vector3(wheelFace - STAND_OFF, FLOOR_Y, HALL.z + STAND_SIDE));
   return {
     seat: toFrame(HALL_SEAT).setY(-ROBOT_HOVER),
     wheel,
     doorway: toFrame(new THREE.Vector3(VAULT_DOOR.x + 0.35, FLOOR_Y, HALL.z)),
     chair: new THREE.Vector3(0, -ROBOT_HOVER, 0),
-    // Body frame while standing at `wheel` facing +x: the wheel is straight ahead (+z).
-    wheelInHands: new THREE.Vector3(0, wheelCentre.y - FLOOR_Y - ROBOT_HOVER, STAND_OFF - 0.02),
+    wheelCentre,
   };
+}
+
+/** The yaw that faces from `from` toward `to` (horizontal). */
+const yawTo = (from: THREE.Vector3, to: THREE.Vector3) => Math.atan2(to.x - from.x, to.z - from.z);
+
+/** A point in the robot's frame, as seen from its body standing at `at` facing `yaw`. */
+function toBody(p: THREE.Vector3, at: THREE.Vector3, yaw: number) {
+  return p
+    .clone()
+    .sub(at.clone().setY(at.y + ROBOT_HOVER))
+    .applyAxisAngle(new THREE.Vector3(0, 1, 0), -yaw);
 }
 
 const glidePath = (pts: GreetingPoints) =>
@@ -95,6 +108,7 @@ let cachedPath: { pts: GreetingPoints; curve: THREE.CatmullRomCurve3 } | null = 
 
 /** The greeting at `s` seconds after it starts (negative: still waiting on the seat). */
 export function greetingAt(s: number, pts: GreetingPoints): GreetingFrame {
+  const FACE_DOOR = yawTo(pts.wheel, pts.wheelCentre);
   const crackU = phase(s, G.toWheel, G.crack);
   const wheel = WHEEL_TURN * crackU * crackU; // stiff at first, then turning freer
   const bolts = clamp01((crackU - 0.6) / 0.4);
@@ -125,11 +139,17 @@ export function greetingAt(s: number, pts: GreetingPoints): GreetingFrame {
     const back = smooth(phase(s, G.crack, G.swing)) * 0.12;
     const position = pts.wheel.clone().add(new THREE.Vector3(-back, 0, 0));
     if (s >= G.crack) return frame(position, FACE_DOOR);
-    const c = pts.wheelInHands;
-    // Hands on opposite sides of the rim, turning with it (body frame: x right, y up).
+    // Hands on opposite sides of the rim, turning with it. The wheel faces -x, so the
+    // rim runs round in y and z; "a" is measured from +z toward +y.
     const at = (a: number) =>
-      new THREE.Vector3(c.x + Math.cos(a) * WHEEL_RIM, c.y + Math.sin(a) * WHEEL_RIM, c.z);
-    return frame(position, FACE_DOOR, [at(Math.PI - wheel), at(-wheel)]);
+      toBody(
+        pts.wheelCentre
+          .clone()
+          .add(new THREE.Vector3(0, Math.sin(a) * WHEEL_RIM, Math.cos(a) * WHEEL_RIM)),
+        position,
+        FACE_DOOR,
+      );
+    return frame(position, FACE_DOOR, [at(Math.PI + wheel), at(wheel)]);
   }
   if (s < G.glide) {
     if (cachedPath?.pts !== pts) cachedPath = { pts, curve: glidePath(pts) };

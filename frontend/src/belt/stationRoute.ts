@@ -63,8 +63,9 @@ const towards = (room: StationRoom) => (room === "planner" ? -1 : 1);
 function hatchToRoom(room: StationRoom, opts: { stopAtDoor: boolean }) {
   const s = towards(room);
   const roomSide = doorSide(room); // which way the hallway door is from the room's centre
-  const intoRoom = v(MODULE_X[room] + roomSide * (ROOM_SIZE.width / 2 - 0.6), EYE + 0.5, -0.7);
-  const stop = v(VAULT_DOOR.x - 2.0, EYE + 0.1, HALL.z);
+  const intoRoom = v(MODULE_X[room] + roomSide * (ROOM_SIZE.width / 2 - 0.6), EYE + 0.6, -1.0);
+  // Far enough back to see the robot, its seat and the whole door.
+  const stop = v(VAULT_DOOR.x - 3.4, EYE + 0.3, HALL.z + 0.35);
   const toHallway = [
     v(0, EYE, HATCH.z + 0.6), // just inside the hatch
     v(s * 0.9, EYE + 0.05, 1.5), // rounding the hub's corner
@@ -122,11 +123,12 @@ function makeLeg(
   start: Pose,
   end: Pose,
   duration: number,
-  endBlend: number,
+  endBlendAt: number | THREE.Vector3,
 ): Leg {
   const curve = new THREE.CatmullRomCurve3(points, false, "centripetal");
   // Tables of distance and weighted distance (outside counts less, so it's flown faster).
-  const N = 600;
+  const N = 4000; // fine enough that speed never jitters where short and long segments meet
+  const samples: THREE.Vector3[] = [points[0]!.clone()];
   const len: number[] = [0];
   const wsum: number[] = [0];
   let prev = curve.getPoint(0);
@@ -137,6 +139,7 @@ function makeLeg(
     const outside = smoothstep(BLEND.from, BLEND.to, HULL.distanceToPoint(mid));
     // Blend the speed (1 / weight) evenly, so the slow-down is gradual all the way in.
     const w = 1 / THREE.MathUtils.lerp(1, 1 / LOOK.flights.outsideWeight, outside);
+    samples.push(p);
     len.push(len[i - 1]! + d);
     wsum.push(wsum[i - 1]! + d * w);
     prev = p;
@@ -157,6 +160,24 @@ function makeLeg(
     const f = (value - table[lo]!) / (table[hi]! - table[lo]! || 1);
     return (lo + f) / N;
   };
+  // The end blend (turning to the final view) starts at a given fraction of the
+  // leg, or when the camera passes a given point (e.g. through a room's doorway).
+  let endBlend = typeof endBlendAt === "number" ? endBlendAt : 0.3;
+  if (typeof endBlendAt !== "number") {
+    let best = 0;
+    samples.forEach((p, i) => {
+      if (p.distanceToSquared(endBlendAt) < samples[best]!.distanceToSquared(endBlendAt)) best = i;
+    });
+    const f = wsum[best]! / weighted;
+    let lo = 0;
+    let hi = 1;
+    for (let n = 0; n < 40; n++) {
+      const m = (lo + hi) / 2;
+      if (smooth(m) < f) lo = m;
+      else hi = m;
+    }
+    endBlend = Math.min(0.75, Math.max(0.35, 1 - lo));
+  }
   const startDir = dirOf(start);
   const endDir = dirOf(end);
   const startDist = start.position.distanceTo(start.target);
@@ -173,8 +194,9 @@ function makeLeg(
     const u = lookup(wsum, smooth(k) * weighted);
     const position = curve.getPoint(u);
     const along = len[Math.round(u * N)]!;
-    const ahead = curve.getPoint(lookup(len, Math.min(total, along + LOOK.flights.lookAhead)));
-    ahead.sub(position);
+    const ahead = curve
+      .getPoint(lookup(len, Math.min(total, along + LOOK.flights.lookAhead)))
+      .sub(position);
     return { position, forward: ahead.lengthSq() > 1e-6 ? ahead.normalize() : endDir.clone() };
   };
   // Which way round each blend turns, decided once (see blendDir).
@@ -237,8 +259,16 @@ function fromPartway(start: THREE.Vector3, points: THREE.Vector3[]): THREE.Vecto
   return points.slice(best + 1);
 }
 
-/** Outside the hatch, facing in. */
-const OUTSIDE_HATCH = v(0, EYE, 9);
+/**
+ * Outside the hatch: off to the side of the hatch line (away from the room), so
+ * the camera crosses the plane of the station's big outer ring (radius 6.6,
+ * round the hub in the x = 0 plane) inside the ring, not through its tube, and
+ * the turn through the hub is one smooth curve. Returns [further out, nearer the hatch].
+ */
+const outsideHatch = (room: StationRoom) => {
+  const off = -towards(room);
+  return [v(off * 3.0, EYE + 0.9, 8.6), v(off * 1.1, EYE + 0.25, 5.2)] as const;
+};
 
 /** A point that swings the approach round the station when `p` is off to the side or behind. */
 function swingRound(p: THREE.Vector3): THREE.Vector3[] {
@@ -256,12 +286,14 @@ function swingRound(p: THREE.Vector3): THREE.Vector3[] {
 export function routeIn(room: StationRoom, from: Pose, opts: { stopAtDoor: boolean }): Route {
   const stopAtDoor = opts.stopAtDoor && room === "finance";
   const path = hatchToRoom(room, { stopAtDoor });
-  const approach = inside(from.position) ? [] : [...swingRound(from.position), OUTSIDE_HATCH];
+  const approach = inside(from.position)
+    ? []
+    : [...swingRound(from.position), ...outsideHatch(room)];
   const first = fromPartway(from.position, [...approach, ...path.toHallway]);
   const end = roomPose(room);
   if (!path.stop) {
     const pts = [from.position.clone(), ...first, ...path.toRoom];
-    return route([makeLeg(pts, from, end, LOOK.flights.toStationSeconds, 0.3)], 0);
+    return route([makeLeg(pts, from, end, LOOK.flights.toStationSeconds, path.toRoom[0]!)], 0);
   }
   return doorRoute(
     from,
@@ -288,7 +320,7 @@ function doorRoute(
   };
   // The first leg gets the route's usual time, shared by how far each leg goes.
   const probe1 = makeLeg([...toStop, stop], from, atDoor, 1, 0.4);
-  const probe2 = makeLeg([stop, ...toRoom], atDoor, end, 1, 0.6);
+  const probe2 = makeLeg([stop, ...toRoom], atDoor, end, 1, 0.85);
   const share = probe1.weighted / (probe1.weighted + probe2.weighted);
   const leg1 = makeLeg([...toStop, stop], from, atDoor, seconds * share, 0.4);
   // After the door opens, glide in with the robot, arriving as it sits down.
@@ -297,29 +329,37 @@ function doorRoute(
     atDoor,
     end,
     VAULT_GREETING.seated - VAULT_GREETING.swing,
-    0.6,
+    0.85, // a short leg: turn from the door to the desk almost all the way
   );
   return route([leg1, leg2], VAULT_GREETING.swing);
 }
 
-/** Out of a control room, back to the belt view `to`. */
+/** The route points already past a point that's partway along them are dropped (the reverse of fromPartway). */
+function upTo(end: THREE.Vector3, points: THREE.Vector3[]): THREE.Vector3[] {
+  return fromPartway(end, [...points].reverse()).reverse();
+}
+
+/**
+ * Out of a control room, back to the belt view `to`: the flight in, played in
+ * reverse. It backs out facing where it came from (the robot, the hallway, the
+ * hub, then the whole station shrinking away) and settles on the belt view, so
+ * it never has to turn round. Starting partway (Back pressed mid-flight), it
+ * backs out from wherever the camera is.
+ */
 export function routeOut(room: StationRoom, from: Pose, to: Pose): Route {
-  const inward = hatchToRoom(room, { stopAtDoor: false });
-  const station = [...inward.toRoom.slice(0, -1).reverse(), ...[...inward.toHallway].reverse()];
-  const pts = fromPartway(from.position, [roomPose(room).position, ...station]);
-  // Outside: pull away on a gentle sideways curve (like the asteroid flights) while turning to look back.
-  const away = to.position.clone().sub(OUTSIDE_HATCH);
-  const dist = away.length();
-  const sideways = new THREE.Vector3().crossVectors(away.clone().normalize(), v(0, 1, 0));
-  if (sideways.lengthSq() > 1e-9) sideways.normalize();
-  const swing = OUTSIDE_HATCH.clone()
-    .addScaledVector(away, 0.4)
-    .addScaledVector(sideways, 0.15 * dist)
-    .addScaledVector(v(0, 1, 0), 0.1 * dist);
-  const round = swingRound(to.position);
-  const outside = [OUTSIDE_HATCH.clone(), ...(round.length ? round : [swing])];
-  const all = [from.position.clone(), ...pts, ...outside, to.position.clone()];
-  return route([makeLeg(all, from, to, LOOK.flights.fromStationSeconds, 0.5)], 0);
+  const path = hatchToRoom(room, { stopAtDoor: false });
+  const approach = inside(to.position) ? [] : [...swingRound(to.position), ...outsideHatch(room)];
+  const station = [...path.toHallway, ...path.toRoom.slice(0, -1)];
+  const pts = [
+    to.position.clone(),
+    ...approach,
+    ...upTo(from.position, station),
+    from.position.clone(),
+  ];
+  const atRoom = from.position.distanceTo(roomPose(room).position) < 0.05;
+  const seconds = LOOK.flights.fromStationSeconds;
+  const inward = makeLeg(pts, to, from, seconds, atRoom ? path.toRoom[0]! : 0.3);
+  return { duration: seconds, doorStop: null, sample: (t) => inward.sample(seconds - t) };
 }
 
 /** From one control room to the other, through the hallways and the hub. */
@@ -338,7 +378,7 @@ export function routeBetween(
   const end = roomPose(toRoom);
   if (!path.stop) {
     const pts = [from.position.clone(), ...first, ...path.toRoom];
-    return route([makeLeg(pts, from, end, LOOK.flights.roomToRoomSeconds, 0.3)], 0);
+    return route([makeLeg(pts, from, end, LOOK.flights.roomToRoomSeconds, path.toRoom[0]!)], 0);
   }
   return doorRoute(
     from,

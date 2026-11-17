@@ -31,7 +31,7 @@ export const LOOK = {
     /** Belt → Mission Control or the Vault (plus the door greeting, the first time). */
     toStationSeconds: 6,
     /** Mission Control or the Vault → belt. */
-    fromStationSeconds: 5,
+    fromStationSeconds: 6,
     /** Mission Control ↔ the Vault, through the hallways and hub. */
     roomToRoomSeconds: 5,
     /** How far ahead along a station route the camera looks (station units). */

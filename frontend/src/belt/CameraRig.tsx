@@ -1,7 +1,8 @@
 // Flies the camera between the levels, slowly and deliberately:
-//   belt → Mission Control / Vault: in through the hub's hatch, pause, turn,
-//     down the hallway to the robot (waiting at the vault door the first time);
-//     Back retraces the path.
+//   belt → Mission Control / Vault: one smooth swoop in through the hub's hatch,
+//     round the hub and down the hallway to the robot (stopping at the vault door
+//     the first time, while the robot opens it); Back swoops out the same way.
+//   Mission Control ↔ Vault: through the hallways and the hub, without leaving.
 //   belt ↔ asteroid: a curved swing in (about 3 s), following the moving asteroid.
 //   building ↔ screen: a short lean in or out (1.2 s).
 // A click or Escape during a flight finishes it. On the belt the person steers
@@ -14,19 +15,13 @@ import * as THREE from "three";
 import type { BuildingId } from "../api";
 import { DESK_SPOT } from "../interior/AsteroidDesk";
 import { ROOM_OFFSET, roomView } from "../interior/stationLayout";
-import {
-  asteroidArc,
-  doorArrival,
-  reversePath,
-  samplePath,
-  stationPath,
-  withStart,
-  type Pose,
-  type Waypoint,
-} from "./flightPath";
+import { greetingClock } from "../interior/vaultGreeting";
+import { VAULT_GREETING } from "../interior/stationLayout";
+import { asteroidArc, type Pose } from "./flightPath";
 import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { LOOK } from "./look";
+import { routeBetween, routeIn, routeOut, type Route } from "./stationRoute";
 import { vaultDoor } from "./vaultDoor";
 
 /** Building ↔ screen lean, seconds. */
@@ -47,7 +42,7 @@ export type SceneApi = {
 type Controls = { target: THREE.Vector3; enabled: boolean };
 
 type Flight =
-  | { kind: "path"; path: Waypoint[]; start: number; fovFrom: number; fovTo: number }
+  | { kind: "route"; route: Route; start: number; fovFrom: number; fovTo: number }
   | { kind: "arc"; from: Pose; to: "goal" | Pose; start: number; seconds: number; fovFrom: number }
   | { kind: "lean"; from: Pose; start: number; fovFrom: number };
 
@@ -79,6 +74,12 @@ function claimVault(atMs: number): boolean {
   if (!vaultDoor.claimFirstOpening()) return false;
   vaultDoor.scheduleOpening(atMs);
   return true;
+}
+
+/** If the Vault greeting is waiting or playing, jump to its end (door open, robot seated). */
+function finishGreeting(nowMs: number) {
+  const s = greetingClock(nowMs);
+  if (vaultDoor.isOpen() && s < VAULT_GREETING.seated) vaultDoor.finishNow(nowMs);
 }
 
 export function CameraRig({
@@ -130,6 +131,8 @@ export function CameraRig({
     };
     if (prev.level === "belt")
       beltPose.current = { position: current.position.clone(), target: current.target.clone() };
+    // Leaving mid-greeting (or before the camera reached the door): don't leave it half done.
+    finishGreeting(now);
 
     if (reducedMotion) {
       flight.current = null;
@@ -148,17 +151,18 @@ export function CameraRig({
     }
 
     const fovFrom = camera.fov;
-    if (prev.level === "belt" && view.level === "building" && isStation(view.id)) {
-      const stopAtDoor = view.id === "finance" && !vaultDoor.isOpen();
-      const path = stationPath(view.id, current, { stopAtDoor });
-      if (stopAtDoor) claimVault(now + (doorArrival(path) ?? 0) * 1000);
-      flight.current = { kind: "path", path, start: now, fovFrom, fovTo: FOV.inside };
+    const toRoom = view.level === "building" && isStation(view.id) ? view.id : null;
+    const fromRoom = prev.level === "building" && isStation(prev.id) ? prev.id : null;
+    if (toRoom && (prev.level === "belt" || fromRoom)) {
+      const stopAtDoor = toRoom === "finance" && !vaultDoor.isOpen();
+      const route = fromRoom
+        ? routeBetween(fromRoom, toRoom, current, { stopAtDoor })
+        : routeIn(toRoom, current, { stopAtDoor });
+      if (route.doorStop) claimVault(now + route.doorStop.at * 1000);
+      flight.current = { kind: "route", route, start: now, fovFrom, fovTo: FOV.inside };
     } else if (prev.level === "building" && isStation(prev.id) && view.level === "belt") {
-      const path = withStart(
-        reversePath(stationPath(prev.id, beltPose.current, { stopAtDoor: false })),
-        current,
-      );
-      flight.current = { kind: "path", path, start: now, fovFrom, fovTo: FOV.belt };
+      const route = routeOut(prev.id, current, beltPose.current);
+      flight.current = { kind: "route", route, start: now, fovFrom, fovTo: FOV.belt };
     } else if (prev.level === "belt" && view.level === "building") {
       flight.current = {
         kind: "arc",
@@ -205,11 +209,12 @@ export function CameraRig({
     let pose: Pose;
     let k: number;
     let fovTo: number = view.level === "belt" ? FOV.belt : FOV.inside;
-    if (f.kind === "path") {
-      const total = f.path[f.path.length - 1]?.at ?? 0;
+    if (f.kind === "route") {
+      const total = f.route.duration;
+      if (skip) finishGreeting(performance.now());
       const t = skip ? total : Math.min(elapsed, total);
       k = total > 0 ? t / total : 1;
-      pose = samplePath(f.path, t);
+      pose = f.route.sample(t);
       // The live goal can drift (it shouldn't for the station, but be exact at the end).
       if (k >= 1 && hasGoal) pose = goal;
       fovTo = f.fovTo;

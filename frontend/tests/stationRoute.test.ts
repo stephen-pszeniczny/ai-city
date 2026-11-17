@@ -210,3 +210,25 @@ test("a route can start mid-hallway", () => {
     if (pose.position.z > HATCH.z + 1) break;
   }
 });
+
+test("routes never pass through the station's outer ring", () => {
+  // The ring (station.ts): a torus of radius 6.6, tube 0.62, in the x = 0 plane round the hub.
+  const RING = { radius: 6.6, tube: 0.62 };
+  const behind: Pose = {
+    position: new THREE.Vector3(0, 5, -40),
+    target: new THREE.Vector3(0, 0, 0),
+  };
+  const routes: [string, Route][] = [
+    ...allRoutes(),
+    ["in from behind", routeIn("planner", behind, { stopAtDoor: false })],
+    ["out to behind", routeOut("finance", roomPose("finance"), behind)],
+  ];
+  for (const [name, r] of routes) {
+    for (const t of times(r)) {
+      const p = r.sample(t).position;
+      const fromAxis = Math.hypot(p.y, p.z);
+      const toTube = Math.hypot(p.x, fromAxis - RING.radius);
+      assert.ok(toTube > RING.tube + 0.3, `${name}: through the ring at ${t.toFixed(2)}`);
+    }
+  }
+});

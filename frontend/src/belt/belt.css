@@ -226,6 +226,11 @@
   z-index: 5;
 }
 
+/* Mission Control ↔ Vault: same glass button, just under Back. */
+.belt__next {
+  top: 112px;
+}
+
 .belt__back:focus-visible,
 .belt__use:focus-visible {
   outline: 2px solid #8aa4ff;

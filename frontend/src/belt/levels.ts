@@ -41,3 +41,10 @@ export function back(view: View): View {
   if (view.level === "screen") return { level: "building", id: view.id };
   return { level: "belt" };
 }
+
+/** The other control room in the station (Mission Control ↔ the Vault), or null. */
+export function otherStationRoom(id: BuildingId): BuildingId | null {
+  if (id === "planner") return "finance";
+  if (id === "finance") return "planner";
+  return null;
+}

@@ -18,7 +18,7 @@ import {
 import { getBuildings, type BuildingId } from "./api";
 import { BeltCanvas } from "./belt/BeltCanvas";
 import { escapeAction, flightState } from "./belt/flightState";
-import { back, parsePath, toPath, type View } from "./belt/levels";
+import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
 import { Desktop } from "./desktop/Desktop";
 import { TodoPanel } from "./todo/TodoPanel";
@@ -107,6 +107,16 @@ function BeltHome() {
         <button type="button" className="belt__back" onClick={() => go(back(view))}>
           <span aria-hidden="true">‹</span>{" "}
           {view.level === "screen" ? nameOf(view.id) || "Back" : "Belt"}
+        </button>
+      )}
+
+      {view.level === "building" && otherStationRoom(view.id) && (
+        <button
+          type="button"
+          className="belt__back belt__next"
+          onClick={() => go({ level: "building", id: otherStationRoom(view.id)! })}
+        >
+          {nameOf(otherStationRoom(view.id)!)} <span aria-hidden="true">›</span>
         </button>
       )}
 
