@@ -15,7 +15,7 @@ import {
   HALL_SEAT,
   ROOM_DOOR,
   VAULT_DOOR,
-  VAULT_OPENING,
+  VAULT_GREETING,
 } from "./stationLayout";
 
 const R = VAULT_DOOR.radius;
@@ -33,8 +33,10 @@ export function doorProgress(nowMs: number): { unlock: number; swing: number } {
   if (start === null) return { unlock: 1, swing: 1 };
   const s = (nowMs - start) / 1000;
   return {
-    unlock: clamp01(s / VAULT_OPENING.unlock),
-    swing: ease(clamp01((s - VAULT_OPENING.unlock) / (VAULT_OPENING.swing - VAULT_OPENING.unlock))),
+    unlock: clamp01((s - VAULT_GREETING.toWheel) / (VAULT_GREETING.crack - VAULT_GREETING.toWheel)),
+    swing: ease(
+      clamp01((s - VAULT_GREETING.crack) / (VAULT_GREETING.swing - VAULT_GREETING.crack)),
+    ),
   };
 }
 

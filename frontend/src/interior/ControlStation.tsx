@@ -21,7 +21,7 @@ import {
   ROOM_OFFSET,
   roomView,
   ROOM_SIZE,
-  VAULT_OPENING,
+  VAULT_GREETING,
 } from "./stationLayout";
 import { WallPanel } from "./WallPanels";
 
@@ -125,21 +125,21 @@ export function ControlStation({
     if (!vault) return;
     const start = vaultDoor.openingStart();
     const s = start === null ? Infinity : (performance.now() - start) / 1000;
-    if (!vaultDoor.isOpen() || s >= VAULT_OPENING.seated) {
+    if (!vaultDoor.isOpen() || s >= VAULT_GREETING.seated) {
       away.active = false;
       return;
     }
     away.active = true;
     const facing = side * (Math.PI / 2) + (side > 0 ? 0.5 : -0.5);
-    if (s < VAULT_OPENING.wave) {
+    if (s < VAULT_GREETING.glide) {
       away.position.copy(greet);
       away.yaw = facing;
-      if (s >= VAULT_OPENING.swing - 0.2 && !waved.current) {
+      if (s >= VAULT_GREETING.swing - 0.2 && !waved.current) {
         waved.current = true;
         brain.force("wave");
       }
     } else {
-      const k = (s - VAULT_OPENING.wave) / (VAULT_OPENING.seated - VAULT_OPENING.wave);
+      const k = (s - VAULT_GREETING.glide) / (VAULT_GREETING.seated - VAULT_GREETING.glide);
       const e = k * k * (3 - 2 * k);
       away.position.copy(greet).multiplyScalar(1 - e);
       away.yaw = facing * (1 - e);

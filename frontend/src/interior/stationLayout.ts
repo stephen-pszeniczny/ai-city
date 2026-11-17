@@ -61,8 +61,23 @@ export const HALL_SEAT = new THREE.Vector3(HALL.endX - 1.0, FLOOR_Y, HALL.z - 0.
 /** The hub's hatch (where the camera flies in from outside). */
 export const HATCH = { z: HUB.radius, centreY: FLOOR_Y + 1.2 } as const;
 
-/** Vault opening timeline (seconds from when it starts). */
-export const VAULT_OPENING = { unlock: 1.0, swing: 2.6, wave: 4.2, seated: 6.2 } as const;
+/**
+ * The Vault greeting (first visit of each app session), as phase end times in
+ * seconds from when it starts: the robot rises from its hallway seat, moves to
+ * the wheel, cracks it (bolts slide back), the door swings open, the robot
+ * glides in to its chair and hops into the seat.
+ */
+export const VAULT_GREETING = {
+  rise: 0.8,
+  toWheel: 1.4,
+  crack: 3.6,
+  swing: 5.4,
+  glide: 7.0,
+  seated: 7.6,
+} as const;
+
+/** How high a robot floats when it's off its chair (it hovers instead of walking). */
+export const ROBOT_HOVER = 0.14;
 
 /** Room origin relative to its module's centre (floor below the module axis). */
 export const ROOM_OFFSET = new THREE.Vector3(0, -1.0, 0);

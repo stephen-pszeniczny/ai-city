@@ -12,7 +12,7 @@ import {
   ROOM_OFFSET,
   roomView,
   VAULT_DOOR,
-  VAULT_OPENING,
+  VAULT_GREETING,
 } from "../interior/stationLayout.ts";
 
 export type Pose = { position: THREE.Vector3; target: THREE.Vector3 };
@@ -124,7 +124,7 @@ export function stationPath(
   let hold: number | null = null;
   if (opts.stopAtDoor) {
     legs.push([v(6.4, eye + 0.1, 0), v(VAULT_DOOR.x, VAULT_DOOR.centreY, 0), 0.9]);
-    hold = legs.length; // the next point repeats this one, VAULT_OPENING.wave later
+    hold = legs.length; // the next point repeats this one, VAULT_GREETING.swing later
     legs.push([v(6.4, eye + 0.1, 0), v(VAULT_DOOR.x, VAULT_DOOR.centreY, 0), 0]);
     legs.push([v(9.0, eye + 0.3, -0.3), room.screen, 1.0]);
   } else {
@@ -137,7 +137,7 @@ export function stationPath(
   const out: Waypoint[] = [{ position: from.position.clone(), target: from.target.clone(), at: 0 }];
   let t = 0;
   legs.forEach(([p, look, dt], i) => {
-    t += i === hold ? VAULT_OPENING.wave : dt * scale;
+    t += i === hold ? VAULT_GREETING.swing : dt * scale;
     out.push({ position: p.clone(), target: look.clone(), at: t });
   });
   return out;
