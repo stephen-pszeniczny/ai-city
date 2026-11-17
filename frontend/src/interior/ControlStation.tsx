@@ -15,14 +15,20 @@ import { Console } from "./Console";
 import { Gadget } from "./Gadget";
 import { Monitor, SCREEN, type ScreenLine } from "./Monitor";
 import { Robot, useRobotBrain, type RobotAway } from "./Robot";
-import { doorSide, ROOM_OFFSET, roomView, ROOM_SIZE, VAULT_OPENING } from "./stationLayout";
+import {
+  doorSide,
+  ROOM_DOOR as DOOR,
+  ROOM_OFFSET,
+  roomView,
+  ROOM_SIZE,
+  VAULT_OPENING,
+} from "./stationLayout";
 import { WallPanel } from "./WallPanels";
 
 type Module = "planner" | "finance";
 
 const CONSOLE_Z = 0.11;
 const { width: W, back: BACK, front: FRONT, height: H } = ROOM_SIZE;
-const DOOR = { half: 1.1, top: 2.15 } as const;
 const SILL = 0.32;
 
 export function ControlStation({
