@@ -99,3 +99,14 @@ Replace the station flight sentences with:
 The exact curve type and corner rounding, the look-ahead distance, the seat's model, the
 greeting's exact timings (within about 7 to 8 s) and the door's final size and angle, as long
 as the clearance checks pass.
+
+## Changed while building (found in live checks, 2026-11-17)
+- Hallways widened 1.9 → 2.3 (Steve's addition); the hub grew (radius 2.4 → 3.0) so its sides fit the openings.
+- Out of the station: the flight in, played in reverse (backs out facing the room, hallway and
+  station), 6 s instead of 5 s, so it never has to turn round outside.
+- The approach comes in slightly off to one side so it clears the station's big outer ring (the old
+  path flew through the ring's tube).
+- The camera's door stop is further back (about 3.4 from the door) and the robot turns the wheel
+  from the seat side, so the wheel and its hands stay in view.
+- The open door lies flat against the wall away from the desk; its far end shows at the right edge
+  of the Vault room view (unavoidable on that wall).
