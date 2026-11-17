@@ -10,6 +10,7 @@ import { getBuildings, listTasks, type BuildingId } from "../api";
 import type { ScreenLine } from "../interior/Monitor";
 import { statusNotes, type Tone } from "../todo/dates";
 import { BUILT } from "./built";
+import { flightState } from "./flightState";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { StationInterior } from "../interior/StationInterior";
 import { hallwayStatus } from "./hallwayStatus";
@@ -183,6 +184,7 @@ export function BeltScene({
 
   const click = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > CLICK_SLOP) return; // that was a drag to rotate the view
+    if (flightState.flying()) return; // a click during a flight only finishes it
     const id = e.object.userData.buildingId as BuildingId | undefined;
     if (!id) return;
     e.stopPropagation();

@@ -15,34 +15,12 @@ import { Console } from "./Console";
 import { Gadget } from "./Gadget";
 import { Monitor, SCREEN, type ScreenLine } from "./Monitor";
 import { Robot, useRobotBrain, type RobotAway } from "./Robot";
-import { ROOM_SIZE, VAULT_OPENING } from "./stationLayout";
+import { doorSide, ROOM_OFFSET, roomView, ROOM_SIZE, VAULT_OPENING } from "./stationLayout";
 import { WallPanel } from "./WallPanels";
 
 type Module = "planner" | "finance";
 
-/** Room origin relative to its module's centre (floor below the module axis). */
-export const ROOM_OFFSET = new THREE.Vector3(0, -1.0, 0);
-/** Which side wall has the hallway door (+x for Mission Control, -x for the Vault). */
-export const doorSide = (m: Module) => (m === "planner" ? 1 : -1);
-
 const CONSOLE_Z = 0.11;
-const MONITOR_AT = new THREE.Vector3(0, 1.36, 1.1);
-const SCREEN_VIEW_DISTANCE = 1.24;
-
-/** Camera points for a room (room coordinates). */
-export function roomView(m: Module) {
-  const side = doorSide(m);
-  const turn = new THREE.Euler(0.2, -0.25 * side, 0, "YXZ");
-  const normal = new THREE.Vector3(0, 0, -1).applyEuler(turn);
-  return {
-    turn,
-    /** Third person: behind, above and to one side of the robot, so most of the screen shows. */
-    camera: new THREE.Vector3(1.2 * side, 2.3, -2.2),
-    screen: MONITOR_AT.clone(),
-    screenCamera: MONITOR_AT.clone().addScaledVector(normal, SCREEN_VIEW_DISTANCE),
-  };
-}
-
 const { width: W, back: BACK, front: FRONT, height: H } = ROOM_SIZE;
 const DOOR = { half: 1.1, top: 2.15 } as const;
 const SILL = 0.32;
@@ -329,3 +307,4 @@ export function ControlStation({
 }
 
 export { SCREEN };
+export { ROOM_OFFSET, roomView };

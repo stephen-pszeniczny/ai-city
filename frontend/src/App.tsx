@@ -17,6 +17,7 @@ import {
 
 import { getBuildings, type BuildingId } from "./api";
 import { BeltCanvas } from "./belt/BeltCanvas";
+import { escapeAction, flightState } from "./belt/flightState";
 import { back, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
 import { Desktop } from "./desktop/Desktop";
@@ -58,17 +59,21 @@ function BeltHome() {
     else if (view.level === "belt") go({ level: "building", id });
   }
 
-  // Escape steps out one level.
+  // Escape finishes a flight first; otherwise steps out one level.
   useEffect(() => {
-    if (view.level === "belt") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       // Escape inside a text field belongs to the field (and protects a half-typed task).
       const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) {
-        return;
-      }
-      go(back(view));
+      const inTextField =
+        !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+      const action = escapeAction({
+        flying: flightState.flying(),
+        inTextField,
+        atBelt: view.level === "belt",
+      });
+      if (action === "skip") flightState.skip();
+      else if (action === "back") go(back(view));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
