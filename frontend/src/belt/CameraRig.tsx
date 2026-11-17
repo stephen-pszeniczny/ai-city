@@ -111,7 +111,8 @@ export function CameraRig({
 
   // Opened straight into the Vault (a reload or link): the greeting plays in place.
   useLayoutEffect(() => {
-    if (view.level !== "belt" && view.id === "finance") claimVault(performance.now());
+    if (view.level !== "belt" && view.id === "finance")
+      claimVault(vaultDoor.openingTimeFor(performance.now(), reducedMotion));
     // Only on first mount.
   }, []);
 
@@ -133,7 +134,8 @@ export function CameraRig({
     if (reducedMotion) {
       flight.current = null;
       flightState.end();
-      if (view.level !== "belt" && view.id === "finance") claimVault(now);
+      if (view.level !== "belt" && view.id === "finance")
+        claimVault(vaultDoor.openingTimeFor(now, true)); // already open: no swinging door
       if (view.level === "belt") {
         // No flight to carry the camera home: jump back to where the person had it.
         camera.position.copy(beltPose.current.position);

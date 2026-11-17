@@ -67,3 +67,10 @@ test("opening time is remembered once scheduled", () => {
   vaultDoor.scheduleOpening(1234);
   assert.equal(vaultDoor.openingStart(), 1234);
 });
+
+test("with reduced motion the door is simply open (no opening plays)", () => {
+  const now = 100_000;
+  assert.equal(vaultDoor.openingTimeFor(now, false), now);
+  const start = vaultDoor.openingTimeFor(now, true);
+  assert.ok(now - start >= 6200, "the whole opening is already in the past");
+});

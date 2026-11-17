@@ -205,7 +205,7 @@ export function Monitor({
   /** Redraw as the robot works (off when far away: the last picture stays). */
   live?: boolean;
 }) {
-  const { canvas, g, texture, screenMat, bezelMat, standMat } = useMemo(() => {
+  const { g, texture, screenMat, bezelMat, standMat } = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;
@@ -215,7 +215,6 @@ export function Monitor({
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
     return {
-      canvas,
       g,
       texture,
       screenMat: new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
@@ -236,7 +235,6 @@ export function Monitor({
     },
     [texture, screenMat, bezelMat, standMat],
   );
-  void canvas;
 
   const last = useRef({ key: "", at: 0 });
   // Redraw straight away when the content (title, tasks) changes.
