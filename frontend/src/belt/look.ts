@@ -26,7 +26,19 @@ export const LOOK = {
     blinkingLights: 1.0,
   },
 
-  flights: { toAsteroidSeconds: 3, toStationSeconds: 6 },
+  flights: {
+    toAsteroidSeconds: 3,
+    /** Belt → Mission Control or the Vault (plus the door greeting, the first time). */
+    toStationSeconds: 6,
+    /** Mission Control or the Vault → belt. */
+    fromStationSeconds: 5,
+    /** Mission Control ↔ the Vault, through the hallways and hub. */
+    roomToRoomSeconds: 5,
+    /** How far ahead along a station route the camera looks (station units). */
+    lookAhead: 3.5,
+    /** Outside the station the camera covers ground faster: time per unit of distance there. */
+    outsideWeight: 0.2,
+  },
 
   earth: { cityLights: 1.0, cloudSpeed: 1.0 },
   /** Gap between shooting stars, in seconds. */
