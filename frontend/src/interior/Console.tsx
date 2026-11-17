@@ -2,7 +2,7 @@
 // types, a keypad, rows of lit buttons (a few blinking), toggle switches and
 // three levers. Units match the robot: the work surface is at y = 0.75.
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 const BUTTON_COLOURS = [0xff453a, 0xffb340, 0x30d158, 0x4169e1, 0x8aa4ff, 0x64d2ff];
@@ -37,8 +37,19 @@ export function Console({ tint }: { tint: string }) {
     [mats],
   );
 
+  const needles = useRef<THREE.Group>(null);
+  const chase = useRef<THREE.Group>(null);
   useFrame((state) => {
     const t = state.clock.elapsedTime * (reducedMotion ? 0.3 : 1);
+    needles.current?.children.forEach(
+      (n, i) => (n.rotation.z = -0.9 + Math.sin(t * (0.7 + i * 0.4) + i) * 0.8),
+    );
+    chase.current?.children.forEach((l, i) => {
+      const m = (l as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      m.color.setScalar(
+        Math.floor(t * 8) % 24 === i || Math.floor(t * 8 + 12) % 24 === i ? 1.6 : 0.15,
+      );
+    });
     mats.blink.forEach((m, i) => {
       if (i % 3 !== 0) return;
       const on = Math.sin(t * (1.3 + i * 0.4) + i) > 0.2;
@@ -75,6 +86,50 @@ export function Console({ tint }: { tint: string }) {
             </mesh>
           )),
         )}
+      </group>
+
+      {/* Chasing light strip along the front lip. */}
+      <group ref={chase} position={[0, 0.74, 0.33]}>
+        {Array.from({ length: 24 }, (_, i) => (
+          <mesh key={i} position={[-0.86 + i * 0.075, 0, -0.012]}>
+            <boxGeometry args={[0.04, 0.008, 0.004]} />
+            <meshBasicMaterial color={0x64d2ff} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+
+      {/* A raised hood behind the slope: two gauges with moving needles and a guarded switch. */}
+      <group position={[0, 0.86, 0.98]} rotation={[-0.25, 0, 0]}>
+        <mesh material={mats.body}>
+          <boxGeometry args={[1.9, 0.16, 0.06]} />
+        </mesh>
+        <group ref={needles}>
+          {[-0.78, -0.56, 0.56, 0.78].map((x) => (
+            <group key={x} position={[x, 0, -0.035]}>
+              <mesh position={[0, 0.035, 0]} rotation={[0, 0, 0]} material={mats.steel}>
+                <boxGeometry args={[0.006, 0.07, 0.004]} />
+              </mesh>
+            </group>
+          ))}
+        </group>
+        {[-0.78, -0.56, 0.56, 0.78].map((x) => (
+          <mesh
+            key={x}
+            position={[x, 0, -0.032]}
+            rotation={[Math.PI / 2, 0, 0]}
+            material={mats.top}
+          >
+            <cylinderGeometry args={[0.085, 0.085, 0.01, 28]} />
+          </mesh>
+        ))}
+        <group position={[0.35, -0.02, -0.04]}>
+          <mesh material={mats.knob}>
+            <boxGeometry args={[0.06, 0.08, 0.04]} />
+          </mesh>
+          <mesh position={[0, 0.04, -0.03]} rotation={[0.9, 0, 0]} material={mats.trim}>
+            <boxGeometry args={[0.07, 0.005, 0.09]} />
+          </mesh>
+        </group>
       </group>
 
       {/* The sloped instrument panel behind the keyboard. */}

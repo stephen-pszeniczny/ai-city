@@ -15,6 +15,9 @@ import { LOOK, motionScale } from "../belt/look";
 import { RobotBrain } from "./robotBrain";
 
 export type RobotDetail = "near" | "far";
+/** Moves the robot off its chair (hovering), e.g. to open the vault door. Mutated by the parent. */
+export type RobotAway = { active: boolean; position: THREE.Vector3; yaw: number };
+
 type ArmParts = { upper: THREE.Mesh | null; lower: THREE.Mesh | null; hand: THREE.Mesh | null };
 
 /** One brain per robot, seeded from a name so each robot works out of step with the others. */
@@ -96,13 +99,17 @@ export function Robot({
   tint,
   brain,
   detail = "near",
+  away,
 }: {
   tint: string;
   brain: RobotBrain;
   detail?: RobotDetail;
+  away?: RobotAway;
 }) {
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const swivel = useRef<THREE.Group>(null);
+  const awayRoot = useRef<THREE.Group>(null);
+  const legs = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const head = useRef<THREE.Group>(null);
   const arms = useRef<[ArmParts, ArmParts]>([
@@ -204,6 +211,18 @@ export function Robot({
     else if (s.action === "wave") yaw = window01(p, 0, 1, 0.22) * 2.3;
     else if (s.action === "gadget") yaw = window01(p, 0, 1, 0.25) * 0.55;
     if (swivel.current) swivel.current.rotation.y = yaw;
+    // Off the chair: hover at the given spot, legs tucked away.
+    const off = away?.active === true;
+    if (awayRoot.current) {
+      if (off && away) {
+        awayRoot.current.position.copy(away.position).setY(away.position.y + 0.14);
+        awayRoot.current.rotation.y = away.yaw - yaw;
+      } else {
+        awayRoot.current.position.set(0, 0, 0);
+        awayRoot.current.rotation.y = 0;
+      }
+    }
+    if (legs.current) legs.current.visible = !off;
 
     // Body: gentle bob always; leans back to stretch, forward to read.
     const bob = Math.sin(tt * 1.7) * 0.012 * LOOK.robot.bob;
@@ -240,8 +259,14 @@ export function Robot({
     // Hands. Default: resting near the keyboard.
     const [L, R] = tmp.hands;
     const k = ROBOT.keys;
-    L.set(k.x - 0.17, k.y + 0.02, k.z - 0.05);
-    R.set(k.x + 0.17, k.y + 0.02, k.z - 0.05);
+    if (away?.active) {
+      // Hovering: arms hang by its sides.
+      L.set(-0.33, 0.74, 0.1);
+      R.set(0.33, 0.74, 0.1);
+    } else {
+      L.set(k.x - 0.17, k.y + 0.02, k.z - 0.05);
+      R.set(k.x + 0.17, k.y + 0.02, k.z - 0.05);
+    }
     let glassLift = 0;
     switch (s.action) {
       case "type": {
@@ -363,127 +388,131 @@ export function Robot({
           </group>
         )}
 
-        <group ref={body}>
-          {/* The capsule: rounded bottom, straight sides; the head is its top. */}
-          <mesh position={[0, BODY_LOW, 0]} material={mats.shell} castShadow>
-            <sphereGeometry args={[BODY_R, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
-          </mesh>
-          <mesh position={[0, (BODY_LOW + HEAD_Y) / 2, 0]} material={mats.shell} castShadow>
-            <cylinderGeometry args={[BODY_R, BODY_R, HEAD_Y - BODY_LOW, 32, 1, true]} />
-          </mesh>
-          {/* Belt line and a back panel with vents and a status light. */}
-          <mesh position={[0, 0.86, 0]} material={mats.dark}>
-            <torusGeometry args={[BODY_R + 0.002, 0.012, 6, 40]} />
-          </mesh>
-          {near && (
-            <group position={[0, 0.92, -BODY_R]}>
-              <mesh material={mats.dark} position={[0, 0, 0.01]}>
-                <boxGeometry args={[0.2, 0.18, 0.03]} />
-              </mesh>
-              {[-0.05, 0, 0.05].map((y) => (
-                <mesh key={y} position={[0, y, -0.008]} material={mats.chair}>
-                  <boxGeometry args={[0.15, 0.014, 0.012]} />
+        <group ref={awayRoot}>
+          <group ref={body}>
+            {/* The capsule: rounded bottom, straight sides; the head is its top. */}
+            <mesh position={[0, BODY_LOW, 0]} material={mats.shell} castShadow>
+              <sphereGeometry args={[BODY_R, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2]} />
+            </mesh>
+            <mesh position={[0, (BODY_LOW + HEAD_Y) / 2, 0]} material={mats.shell} castShadow>
+              <cylinderGeometry args={[BODY_R, BODY_R, HEAD_Y - BODY_LOW, 32, 1, true]} />
+            </mesh>
+            {/* Belt line and a back panel with vents and a status light. */}
+            <mesh position={[0, 0.86, 0]} material={mats.dark}>
+              <torusGeometry args={[BODY_R + 0.002, 0.012, 6, 40]} />
+            </mesh>
+            {near && (
+              <group position={[0, 0.92, -BODY_R]}>
+                <mesh material={mats.dark} position={[0, 0, 0.01]}>
+                  <boxGeometry args={[0.2, 0.18, 0.03]} />
+                </mesh>
+                {[-0.05, 0, 0.05].map((y) => (
+                  <mesh key={y} position={[0, y, -0.008]} material={mats.chair}>
+                    <boxGeometry args={[0.15, 0.014, 0.012]} />
+                  </mesh>
+                ))}
+                <mesh position={[0.07, 0.07, -0.01]} material={mats.tip}>
+                  <sphereGeometry args={[0.014, 8, 6]} />
+                </mesh>
+              </group>
+            )}
+            {/* Stubby legs under the desk. */}
+            <group ref={legs}>
+              {near &&
+                [-1, 1].map((s) => (
+                  <group key={s}>
+                    <mesh
+                      position={[s * 0.12, ROBOT.seatY + 0.02, 0.2]}
+                      rotation={[Math.PI / 2, 0, 0]}
+                      material={mats.shell}
+                      castShadow
+                    >
+                      <capsuleGeometry args={[0.07, 0.2, 4, 10]} />
+                    </mesh>
+                    <mesh position={[s * 0.12, 0.3, 0.36]} material={mats.shell}>
+                      <capsuleGeometry args={[0.06, 0.26, 4, 10]} />
+                    </mesh>
+                    <mesh position={[s * 0.12, 0.06, 0.4]} material={mats.dark}>
+                      <boxGeometry args={[0.13, 0.08, 0.2]} />
+                    </mesh>
+                  </group>
+                ))}
+            </group>
+            {/* Shoulder joints. */}
+            {near &&
+              [-1, 1].map((s) => (
+                <mesh
+                  key={s}
+                  position={[s * SHOULDER.x, SHOULDER.y, SHOULDER.z]}
+                  material={mats.dark}
+                >
+                  <sphereGeometry args={[0.065, 14, 10]} />
                 </mesh>
               ))}
-              <mesh position={[0.07, 0.07, -0.01]} material={mats.tip}>
-                <sphereGeometry args={[0.014, 8, 6]} />
+
+            {/* Head: the top of the capsule, with the wide visor and antenna. */}
+            <group ref={head} position={[0, HEAD_Y, 0]}>
+              <mesh material={mats.shell} castShadow>
+                <sphereGeometry args={[BODY_R - 0.004, 32, 24]} />
               </mesh>
+              {/* The visor wraps most of the way round, so its glow shows from behind too. */}
+              <mesh position={[0, 0.02, 0]} material={mats.visor}>
+                <cylinderGeometry
+                  args={[BODY_R + 0.008, BODY_R + 0.008, 0.13, 40, 1, true, -1.75, 3.5]}
+                />
+              </mesh>
+              {near && (
+                <mesh position={[0, 0.02, 0]} material={mats.scan}>
+                  <cylinderGeometry
+                    args={[BODY_R + 0.011, BODY_R + 0.011, 0.012, 40, 1, true, -1.1, 2.2]}
+                  />
+                </mesh>
+              )}
+              {/* Antenna: a short stalk and the blinking tip. */}
+              <mesh
+                position={[0.06, BODY_R + 0.06, -0.03]}
+                rotation={[0, 0, -0.15]}
+                material={mats.dark}
+              >
+                <cylinderGeometry args={[0.011, 0.014, 0.14, 6]} />
+              </mesh>
+              <mesh position={[0.072, BODY_R + 0.14, -0.03]} material={mats.tip}>
+                <sphereGeometry args={[0.03, 12, 10]} />
+              </mesh>
+              {near && (
+                <mesh position={[0.06, BODY_R - 0.005, -0.03]} material={mats.dark}>
+                  <cylinderGeometry args={[0.04, 0.05, 0.03, 12]} />
+                </mesh>
+              )}
             </group>
-          )}
-          {/* Stubby legs under the desk. */}
+          </group>
+
+          {/* Arms: two segments and a mitten hand each, placed every frame. */}
           {near &&
-            [-1, 1].map((s) => (
-              <group key={s}>
+            ([0, 1] as const).map((i) => (
+              <group key={i}>
                 <mesh
-                  position={[s * 0.12, ROBOT.seatY + 0.02, 0.2]}
-                  rotation={[Math.PI / 2, 0, 0]}
+                  ref={(m) => void (arms.current[i].upper = m)}
+                  geometry={geo.limbUnit}
                   material={mats.shell}
                   castShadow
+                />
+                <mesh
+                  ref={(m) => void (arms.current[i].lower = m)}
+                  geometry={geo.limbUnit}
+                  material={mats.shell}
+                  castShadow
+                />
+                <mesh
+                  ref={(m) => void (arms.current[i].hand = m)}
+                  material={mats.dark}
+                  scale={[1.1, 0.8, 1.25]}
                 >
-                  <capsuleGeometry args={[0.07, 0.2, 4, 10]} />
-                </mesh>
-                <mesh position={[s * 0.12, 0.3, 0.36]} material={mats.shell}>
-                  <capsuleGeometry args={[0.06, 0.26, 4, 10]} />
-                </mesh>
-                <mesh position={[s * 0.12, 0.06, 0.4]} material={mats.dark}>
-                  <boxGeometry args={[0.13, 0.08, 0.2]} />
+                  <sphereGeometry args={[0.058, 12, 10]} />
                 </mesh>
               </group>
             ))}
-          {/* Shoulder joints. */}
-          {near &&
-            [-1, 1].map((s) => (
-              <mesh
-                key={s}
-                position={[s * SHOULDER.x, SHOULDER.y, SHOULDER.z]}
-                material={mats.dark}
-              >
-                <sphereGeometry args={[0.065, 14, 10]} />
-              </mesh>
-            ))}
-
-          {/* Head: the top of the capsule, with the wide visor and antenna. */}
-          <group ref={head} position={[0, HEAD_Y, 0]}>
-            <mesh material={mats.shell} castShadow>
-              <sphereGeometry args={[BODY_R - 0.004, 32, 24]} />
-            </mesh>
-            {/* The visor wraps most of the way round, so its glow shows from behind too. */}
-            <mesh position={[0, 0.02, 0]} material={mats.visor}>
-              <cylinderGeometry
-                args={[BODY_R + 0.008, BODY_R + 0.008, 0.13, 40, 1, true, -1.75, 3.5]}
-              />
-            </mesh>
-            {near && (
-              <mesh position={[0, 0.02, 0]} material={mats.scan}>
-                <cylinderGeometry
-                  args={[BODY_R + 0.011, BODY_R + 0.011, 0.012, 40, 1, true, -1.1, 2.2]}
-                />
-              </mesh>
-            )}
-            {/* Antenna: a short stalk and the blinking tip. */}
-            <mesh
-              position={[0.06, BODY_R + 0.06, -0.03]}
-              rotation={[0, 0, -0.15]}
-              material={mats.dark}
-            >
-              <cylinderGeometry args={[0.011, 0.014, 0.14, 6]} />
-            </mesh>
-            <mesh position={[0.072, BODY_R + 0.14, -0.03]} material={mats.tip}>
-              <sphereGeometry args={[0.03, 12, 10]} />
-            </mesh>
-            {near && (
-              <mesh position={[0.06, BODY_R - 0.005, -0.03]} material={mats.dark}>
-                <cylinderGeometry args={[0.04, 0.05, 0.03, 12]} />
-              </mesh>
-            )}
-          </group>
         </group>
-
-        {/* Arms: two segments and a mitten hand each, placed every frame. */}
-        {near &&
-          ([0, 1] as const).map((i) => (
-            <group key={i}>
-              <mesh
-                ref={(m) => void (arms.current[i].upper = m)}
-                geometry={geo.limbUnit}
-                material={mats.shell}
-                castShadow
-              />
-              <mesh
-                ref={(m) => void (arms.current[i].lower = m)}
-                geometry={geo.limbUnit}
-                material={mats.shell}
-                castShadow
-              />
-              <mesh
-                ref={(m) => void (arms.current[i].hand = m)}
-                material={mats.dark}
-                scale={[1.1, 0.8, 1.25]}
-              >
-                <sphereGeometry args={[0.058, 12, 10]} />
-              </mesh>
-            </group>
-          ))}
       </group>
 
       {/* The robot's water glass (outside the swivel so it stays on the desk). */}

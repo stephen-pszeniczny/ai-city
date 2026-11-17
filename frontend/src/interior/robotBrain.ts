@@ -68,6 +68,7 @@ export class RobotBrain {
   private tickBase = 0;
   private started = false;
   private reactNext = false;
+  private forced: RobotAction | null = null;
 
   constructor(seed: number, opts: { funShare?: number; busyness?: number } = {}) {
     this.rng = mulberry32(seed);
@@ -79,6 +80,11 @@ export class RobotBrain {
     this.weights = [...WORK_WEIGHTS, ...FUN.map((a): [RobotAction, number] => [a, funEach])];
   }
 
+  /** Make the robot do `action` next (the vault greeting's wave). */
+  force(action: RobotAction): void {
+    this.forced = action;
+  }
+
   /** Ask the robot to react (it was clicked): it waves or spins next. */
   react(): void {
     this.reactNext = true;
@@ -88,6 +94,10 @@ export class RobotBrain {
     if (!this.started) {
       this.started = true;
       this.begin(this.pick(null), t);
+    } else if (this.forced) {
+      const next = this.forced;
+      this.forced = null;
+      this.switchTo(next, t);
     } else if (this.reactNext) {
       this.reactNext = false;
       this.switchTo(this.action === "wave" ? "spin" : this.rng() < 0.5 ? "wave" : "spin", t);

@@ -125,3 +125,10 @@ test("mulberry32 gives numbers in [0, 1)", () => {
     assert.ok(x >= 0 && x < 1);
   }
 });
+
+test("force() makes that action next, even a repeat-safe one", () => {
+  const brain = new RobotBrain(8);
+  brain.update(0);
+  brain.force("wave");
+  assert.equal(brain.update(0.01).action, "wave");
+});

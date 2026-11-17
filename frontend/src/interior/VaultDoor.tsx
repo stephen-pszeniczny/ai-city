@@ -1,0 +1,147 @@
+// The Vault's round door, set in the vault room's inner wall at the end of the
+// hallway. Closed until the first visit of the app session; then the wheel
+// spins, the bolts slide back and it swings open into the vault, and stays
+// open until the app is reloaded. Station coordinates; the door faces -x
+// (toward the hub).
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+
+import { vaultDoor } from "../belt/vaultDoor";
+import { HALL, VAULT_DOOR, VAULT_OPENING } from "./stationLayout";
+
+const R = VAULT_DOOR.radius;
+const THICK = 0.32;
+const OPEN_ANGLE = -1.9;
+const BOLTS = 10;
+
+const ease = (x: number) => x * x * (3 - 2 * x);
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+
+/** How far along the opening is: unlock 0→1 (wheel and bolts), swing 0→1. */
+export function doorProgress(nowMs: number): { unlock: number; swing: number } {
+  if (!vaultDoor.isOpen()) return { unlock: 0, swing: 0 };
+  const start = vaultDoor.openingStart();
+  if (start === null) return { unlock: 1, swing: 1 };
+  const s = (nowMs - start) / 1000;
+  return {
+    unlock: clamp01(s / VAULT_OPENING.unlock),
+    swing: ease(clamp01((s - VAULT_OPENING.unlock) / (VAULT_OPENING.swing - VAULT_OPENING.unlock))),
+  };
+}
+
+export function VaultDoor() {
+  const hinge = useRef<THREE.Group>(null);
+  const wheel = useRef<THREE.Group>(null);
+  const bolts = useRef<THREE.Group>(null);
+
+  const mats = useMemo(
+    () => ({
+      steel: new THREE.MeshStandardMaterial({ color: 0xaeb5c2, roughness: 0.28, metalness: 0.95 }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x2a2f39, roughness: 0.4, metalness: 0.85 }),
+      gold: new THREE.MeshStandardMaterial({ color: 0xd9a63e, roughness: 0.25, metalness: 1 }),
+      frame: new THREE.MeshStandardMaterial({ color: 0x3a4152, roughness: 0.35, metalness: 0.9 }),
+    }),
+    [],
+  );
+  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+
+  // The frame plate: a square with a round hole, a little thicker than the wall.
+  const frameGeo = useMemo(() => {
+    const s = R + 0.15;
+    const shape = new THREE.Shape();
+    shape.moveTo(-s, -s);
+    shape.lineTo(s, -s);
+    shape.lineTo(s, s);
+    shape.lineTo(-s, s);
+    shape.closePath();
+    const hole = new THREE.Path();
+    hole.absarc(0, 0, R + 0.02, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.2,
+      bevelEnabled: false,
+      curveSegments: 48,
+    });
+    g.translate(0, 0, -0.1);
+    return g;
+  }, []);
+  useEffect(() => () => frameGeo.dispose(), [frameGeo]);
+
+  useFrame(() => {
+    const { unlock, swing } = doorProgress(performance.now());
+    if (hinge.current) hinge.current.rotation.y = OPEN_ANGLE * swing;
+    if (wheel.current) wheel.current.rotation.x = unlock * Math.PI * 3;
+    if (bolts.current)
+      for (const b of bolts.current.children) {
+        const bolt = b.children[0];
+        if (bolt) bolt.position.z = (R + 0.06) * (1 - 0.18 * unlock);
+      }
+  });
+
+  return (
+    <group position={[VAULT_DOOR.x, VAULT_DOOR.centreY, HALL.z]}>
+      {/* Frame plate in the wall (faces along x). */}
+      <mesh geometry={frameGeo} material={mats.frame} rotation={[0, Math.PI / 2, 0]} />
+      <mesh rotation={[0, Math.PI / 2, 0]} material={mats.gold}>
+        <torusGeometry args={[R + 0.05, 0.035, 10, 64]} />
+      </mesh>
+      {/* Hinge on the +z edge; the door swings into the vault (+x). */}
+      <group ref={hinge} position={[0, 0, R]}>
+        <group position={[0, 0, -R]}>
+          <mesh rotation={[0, 0, Math.PI / 2]} material={mats.steel} castShadow>
+            <cylinderGeometry args={[R, R, THICK, 64]} />
+          </mesh>
+          {/* Concentric rings and the gold rim on the outer face. */}
+          {[R * 0.92, R * 0.7, R * 0.45].map((r, i) => (
+            <mesh
+              key={r}
+              position={[-THICK / 2 - 0.005, 0, 0]}
+              rotation={[0, Math.PI / 2, 0]}
+              material={i === 0 ? mats.gold : mats.dark}
+            >
+              <torusGeometry args={[r, i === 0 ? 0.03 : 0.015, 8, 64]} />
+            </mesh>
+          ))}
+          {/* Locking bolts round the edge (slide in as it unlocks). */}
+          <group ref={bolts}>
+            {Array.from({ length: BOLTS }, (_, i) => {
+              const a = (i / BOLTS) * Math.PI * 2;
+              return (
+                <group key={i} rotation={[a, 0, 0]}>
+                  <mesh
+                    position={[0, 0, R + 0.06]}
+                    rotation={[Math.PI / 2, 0, 0]}
+                    material={mats.steel}
+                  >
+                    <cylinderGeometry args={[0.045, 0.045, 0.16, 12]} />
+                  </mesh>
+                </group>
+              );
+            })}
+          </group>
+          {/* The wheel: hub, rim and spokes, on the outer face. */}
+          <group ref={wheel} position={[-THICK / 2 - 0.08, 0, 0]}>
+            <mesh rotation={[0, 0, Math.PI / 2]} material={mats.gold}>
+              <cylinderGeometry args={[0.09, 0.09, 0.08, 20]} />
+            </mesh>
+            <mesh rotation={[0, Math.PI / 2, 0]} material={mats.steel}>
+              <torusGeometry args={[0.32, 0.025, 10, 40]} />
+            </mesh>
+            {[0, 1, 2].map((i) => (
+              <mesh key={i} rotation={[(i / 3) * Math.PI, 0, 0]} material={mats.steel}>
+                <boxGeometry args={[0.03, 0.66, 0.03]} />
+              </mesh>
+            ))}
+          </group>
+          {/* Hinge barrels. */}
+          {[-0.5, 0.5].map((y) => (
+            <mesh key={y} position={[0, y, R]} material={mats.dark}>
+              <cylinderGeometry args={[0.06, 0.06, 0.25, 12]} />
+            </mesh>
+          ))}
+        </group>
+      </group>
+    </group>
+  );
+}

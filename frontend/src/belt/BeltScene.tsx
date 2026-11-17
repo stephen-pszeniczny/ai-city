@@ -3,7 +3,7 @@
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
 import { useQuery } from "@tanstack/react-query";
 import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Fragment, useEffect, useMemo, useState, type RefObject } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 
 import { getBuildings, listTasks, type BuildingId } from "../api";
@@ -11,7 +11,8 @@ import type { ScreenLine } from "../interior/Monitor";
 import { statusNotes, type Tone } from "../todo/dates";
 import { BUILT } from "./built";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
-import { ControlStation } from "../interior/ControlStation";
+import { StationInterior } from "../interior/StationInterior";
+import { hallwayStatus } from "./hallwayStatus";
 import { createAsteroids, DECK_Y } from "./asteroids";
 import type { SceneApi } from "./CameraRig";
 import type { View } from "./levels";
@@ -93,14 +94,11 @@ export function BeltScene({
   );
   const v = useMemo(() => new THREE.Vector3(), []);
 
-  // Inside Mission Control or the Vault: build that control station, and hide
-  // the station's outside (its truss runs right through the module, and the
-  // window looks away from the station anyway).
+  // Mission Control or the Vault: the station's inside (hub, hallways, rooms)
+  // shows while the camera is inside the station; its outside shows otherwise.
   const insideModule =
     view.level !== "belt" && (view.id === "planner" || view.id === "finance") ? view.id : null;
-  useEffect(() => {
-    world.station.group.visible = insideModule === null;
-  }, [insideModule, world]);
+  const interior = useRef<THREE.Group>(null);
   // Which asteroid the camera is in (if any). Every asteroid keeps its desk and
   // hologram all the time, so all three views show the same world.
   const insideId = view.level !== "belt" && !insideModule ? view.id : null;
@@ -126,6 +124,7 @@ export function BeltScene({
       }),
     [openTasks.data],
   );
+  const hallRows = useMemo(() => hallwayStatus(buildings.data ?? [], BUILT), [buildings.data]);
   const linesFor = (id: BuildingId): ScreenLine[] => (id === "planner" ? plannerLines : NO_LINES);
   const atScreen = view.level === "screen";
 
@@ -160,6 +159,11 @@ export function BeltScene({
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
       world.kit.updateBlinkers(t);
     }
+    // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
+    const c = state.camera.position;
+    const inStation = Math.abs(c.x) < 12.9 && c.y > -1.3 && c.y < 2.2 && Math.abs(c.z) < 2.55;
+    world.station.group.visible = !inStation;
+    if (interior.current) interior.current.visible = inStation;
     // Labels follow their buildings; hidden when behind the camera or far off screen.
     const { width, height } = state.size;
     for (const { id, obj, local } of anchors) {
@@ -192,19 +196,18 @@ export function BeltScene({
   return (
     <>
       <primitive object={world.station.group} {...events} />
-      {insideModule && (
-        <group position={[insideModule === "planner" ? -10.5 : 10.5, 0, 0]}>
-          <ControlStation
-            id={insideModule}
-            title={titleOf(insideModule)}
-            tint={tintOf(insideModule)}
-            built={BUILT.has(insideModule)}
-            lines={linesFor(insideModule)}
-            atScreen={atScreen}
-            onOpenScreen={() => onOpen(insideModule)}
-          />
-        </group>
-      )}
+      <group ref={interior} visible={false}>
+        <StationInterior
+          titleOf={titleOf}
+          tintOf={tintOf}
+          built={BUILT}
+          plannerLines={plannerLines}
+          rows={hallRows}
+          summary={hallwayStatus.missionSummary(openTasks.data ?? [])}
+          screenOf={atScreen ? insideModule : null}
+          onOpenScreen={(id) => onOpen(id)}
+        />
+      </group>
       {world.asteroids.map((a) => (
         <Fragment key={a.id}>
           {createPortal(

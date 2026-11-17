@@ -125,6 +125,32 @@ export function createStation(kit: Kit): Station {
     addBlinker(group, new THREE.Vector3(0, 7.5, 0), 0xff3b30, 1.6, 0);
   }
 
+  // Pressurised hallways joining the hub to both modules, with a row of lit
+  // windows, and a glowing ring round the hub's hatch (where you fly in).
+  {
+    for (const s of [-1, 1]) {
+      const tube = cylX(0.85, 4.6, mats.hull, 32);
+      tube.position.x = s * 4.3;
+      group.add(shadowed(tube));
+      for (const x of [2.3, 6.3]) {
+        const collar = new THREE.Mesh(new THREE.TorusGeometry(0.88, 0.07, 8, 32), mats.darkMetal);
+        collar.rotation.y = Math.PI / 2;
+        collar.position.x = s * x;
+        group.add(collar);
+      }
+      const wins = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.16, 0.05), mats.window, 7);
+      const m = new THREE.Matrix4();
+      for (let i = 0; i < 7; i++) {
+        m.makeTranslation(s * (2.7 + i * 0.55), 0.15, -0.85);
+        wins.setMatrixAt(i, m);
+      }
+      group.add(wins);
+    }
+    const hatch = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 8, 40), glow(0x4169e1, 2.2));
+    hatch.position.set(0, 0, 2.97);
+    group.add(hatch);
+  }
+
   // Mission Control module: white, with lit window bands and a dish.
   const planner = new THREE.Group();
   {

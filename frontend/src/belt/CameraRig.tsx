@@ -8,7 +8,7 @@ import * as THREE from "three";
 
 import type { BuildingId } from "../api";
 import { DESK_SPOT } from "../interior/AsteroidDesk";
-import { ROOM } from "../interior/ControlStation";
+import { ROOM_OFFSET, roomView } from "../interior/ControlStation";
 import type { View } from "./levels";
 
 export const FLIGHT_SECONDS = 1.2;
@@ -38,9 +38,10 @@ function poseFor(view: View, api: SceneApi, out: Pose): boolean {
   const close = view.level === "screen";
   if (isStation(view.id)) {
     // Inside the control station: third person behind the robot, or at the screen.
-    const room = new THREE.Vector3().copy(c).add(ROOM.offset);
-    out.position.copy(room).add(close ? ROOM.screenCamera : ROOM.camera);
-    out.target.copy(room).add(ROOM.screen);
+    const room = new THREE.Vector3().copy(c).add(ROOM_OFFSET);
+    const rv = roomView(view.id as "planner" | "finance");
+    out.position.copy(room).add(close ? rv.screenCamera : rv.camera);
+    out.target.copy(room).add(rv.screen);
   } else {
     // On the asteroid: third person behind the robot at its desk, turning with the deck.
     api.deckToWorld(view.id, close ? DESK_SPOT.screenCamera : DESK_SPOT.camera, out.position);
