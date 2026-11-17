@@ -39,7 +39,13 @@
 - [ ] **Step 4: Live check.** Start the app on demo data. Take screenshots of the belt (zoomed on two asteroids) and of one asteroid building view with a neighbouring asteroid's robot in frame. Expected: every robot has two arms. Check that idle belt fps stays at 60.
 - [ ] **Step 5:** Commit: `Robots: arms at every distance`.
 
-### Task 2: Vault door hinges the other way, smaller, with a hallway seat
+### Task 2: Wider hallways; vault door hinges the other way, smaller, with a hallway seat
+
+Steve's addition: both hallways get slightly wider (`HALL.width` 1.9 → 2.3) so the seat fits
+beside the camera's path. Everything sized from the hallway (hub openings, room doorways,
+hallway walls, panels, status screens, the Mission Control hallway's consoles) must follow
+`HALL.width`. Test: add `"hallway is wide enough for the seat"`, which checks that the seat is at least
+0.9 from the hallway's centre line and at least 0.15 from its wall.
 
 **Files:**
 - Modify: `frontend/src/interior/stationLayout.ts`, `frontend/src/interior/VaultDoor.tsx`
