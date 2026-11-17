@@ -12,6 +12,8 @@ import { LOOK } from "./look";
 import { PROJECTOR_LENS, workToDeck } from "../interior/workspace";
 import type { Kit } from "./materials";
 import { ASTEROIDS, orbitPosition, rockGeometry } from "./space";
+import { pebbleGeometry } from "./space/rock";
+import { mulberry32 } from "../interior/robotBrain";
 
 export type AsteroidBuilding = {
   id: BuildingId;
@@ -50,6 +52,7 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       ),
     );
     rock.scale.setScalar(ROCK_SCALE);
+    rock.add(createBoulders(kit, rock.geometry, i * 5.1 + 2, def.tint));
     rock.castShadow = true;
     rock.receiveShadow = true;
     const deck = new THREE.Mesh(
@@ -103,7 +106,7 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       updates.push(site.update);
       // ...and "UNDER CONSTRUCTION" floating over it. Hangs from the holder (so it
       // hides with it) but is turned to face the camera every frame.
-      const bannerY = LOOK.hologramHeight + 4.4;
+      const bannerY = LOOK.hologramHeight + 4.4; // matches bannerTop below
       const banner = createHoloBanner(kit, bannerY);
       banner.group.position.set(0, bannerY, 0); // just above the hologram
       holder.add(banner.group);
@@ -117,17 +120,15 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       deskSign.traverse((o) => (o.userData.buildingId = def.id));
     }
 
+    const bannerTop = LOOK.hologramHeight + 4.4;
+    const anchor = new THREE.Vector3(0, DECK_Y + (BUILT.has(def.id) ? 4.6 : bannerTop + 2), 0);
     const spinRate = (i % 2 ? -1 : 1) * (0.03 + i * 0.006);
     const camPos = new THREE.Vector3();
     const facePos = new THREE.Vector3();
     return {
       id: def.id,
       group,
-      anchor: new THREE.Vector3(
-        0,
-        DECK_Y + (BUILT.has(def.id) ? 4.6 : LOOK.hologramHeight + 9), // above the growing banner
-        0,
-      ),
+      anchor,
       spin,
       holder,
       deskSign,
@@ -145,6 +146,8 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
           const scale = THREE.MathUtils.clamp(camPos.distanceTo(facePos) * BANNER_SCALE, 0.6, 3.2);
           signFace.scale.setScalar(scale);
           signFace.position.y = 0.65 * scale; // bottom edge stays on the hologram's top
+          // The label sits just above the banner's top edge.
+          anchor.y = DECK_Y + bannerTop + 1.3 * scale + 0.4;
         }
       },
     };
@@ -181,4 +184,51 @@ function createBeam(
       mat.opacity = 0.045 + 0.015 * Math.sin(t * 5) + (Math.sin(t * 31) > 0.97 ? -0.03 : 0);
     },
   };
+}
+
+/** A scatter of loose boulders resting on the rock's sides (rock units: the rock mesh scales them). */
+function createBoulders(
+  kit: Kit,
+  rockGeo: THREE.BufferGeometry,
+  seed: number,
+  tint: string,
+): THREE.InstancedMesh {
+  const COUNT = 16;
+  const rng = mulberry32(Math.floor(seed * 100));
+  const mesh = new THREE.InstancedMesh(
+    kit.keep(pebbleGeometry(seed, 1)),
+    kit.keep(
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0x58524d).lerp(new THREE.Color(tint), 0.18),
+        roughness: 0.95,
+        metalness: 0.05,
+        flatShading: true,
+      }),
+    ),
+    COUNT,
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  const pos = rockGeo.attributes.position as THREE.BufferAttribute;
+  const nor = rockGeo.attributes.normal as THREE.BufferAttribute;
+  const p = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const o = new THREE.Object3D();
+  let placed = 0;
+  for (let tries = 0; placed < COUNT && tries < 2000; tries++) {
+    const k = Math.floor(rng() * pos.count);
+    p.fromBufferAttribute(pos, k);
+    n.fromBufferAttribute(nor, k);
+    // On the sides, below the deck, on ground that isn't too steep.
+    if (p.y > 0.3 || p.y < -0.25 || n.y < 0.15) continue;
+    const size = 0.025 + rng() * rng() * 0.07;
+    o.position.copy(p).addScaledVector(n, size * 0.4);
+    o.rotation.set(rng() * 6, rng() * 6, rng() * 6);
+    o.scale.setScalar(size);
+    o.updateMatrix();
+    mesh.setMatrixAt(placed++, o.matrix);
+  }
+  mesh.count = placed;
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
 }

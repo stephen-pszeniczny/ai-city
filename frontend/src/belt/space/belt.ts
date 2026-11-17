@@ -3,6 +3,7 @@
 import * as THREE from "three";
 
 import { noiseTexture } from "./noise";
+import { pebbleGeometry } from "./rock";
 import { ORBIT_R } from "./orbit";
 
 type Rock = {
@@ -24,18 +25,35 @@ export type Belt = {
 export function createBelt(count = 900): Belt {
   const group = new THREE.Group();
   const bump = noiseTexture(256, 10, 1.2);
-  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+  // Four different rock shapes, so the belt doesn't look like copies of one stone.
+  const SHAPES = 4;
+  const rockGeos = Array.from({ length: SHAPES }, (_, k) => pebbleGeometry(k * 3.3 + 1.7, 2));
   const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x5b5652,
+    color: 0xffffff,
     roughness: 0.95,
     metalness: 0.05,
     bumpMap: bump,
-    bumpScale: 1,
+    bumpScale: 1.4,
+    flatShading: true,
   });
-  const mesh = new THREE.InstancedMesh(rockGeo, rockMat, count);
-  mesh.frustumCulled = false; // instances move every frame
+  const perShape = Math.ceil(count / SHAPES);
+  const meshes = rockGeos.map((geo) => {
+    const m = new THREE.InstancedMesh(geo, rockMat, perShape);
+    m.frustumCulled = false; // instances move every frame
+    return m;
+  });
+  // Colour variety: greys, browns and the odd reddish or bluish stone.
+  const palette = [0x5b5652, 0x6b6159, 0x4a4743, 0x7a6a5c, 0x5c5f66, 0x6e5348].map(
+    (h) => new THREE.Color(h),
+  );
+  const tmpC = new THREE.Color();
+  for (let i = 0; i < perShape * SHAPES; i++) {
+    const m = meshes[i % SHAPES]!;
+    tmpC.copy(palette[i % palette.length]!).multiplyScalar(0.8 + Math.random() * 0.45);
+    m.setColorAt(Math.floor(i / SHAPES), tmpC);
+  }
   const rocks: Rock[] = [];
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < perShape * SHAPES; i++) {
     const g = Math.random() + Math.random() + Math.random() - 1.5; // denser in the middle
     rocks.push({
       a: Math.random() * Math.PI * 2,
@@ -47,7 +65,7 @@ export function createBelt(count = 900): Belt {
       rot: Math.random() * 6,
     });
   }
-  group.add(mesh);
+  meshes.forEach((m) => group.add(m));
 
   const n = 5000;
   const pos = new Float32Array(n * 3);
@@ -83,14 +101,14 @@ export function createBelt(count = 900): Belt {
         q.setFromAxisAngle(d.spin, d.rot + t * d.sp);
         s.setScalar(d.s);
         m.compose(p, q, s);
-        mesh.setMatrixAt(i, m);
+        meshes[i % SHAPES]!.setMatrixAt(Math.floor(i / SHAPES), m);
       }
-      mesh.instanceMatrix.needsUpdate = true;
+      meshes.forEach((x) => (x.instanceMatrix.needsUpdate = true));
       dust.rotation.y = t * speed;
     },
     dispose() {
-      [bump, rockGeo, rockMat, dustGeo, dustMat].forEach((d) => d.dispose());
-      mesh.dispose();
+      [bump, ...rockGeos, rockMat, dustGeo, dustMat].forEach((d) => d.dispose());
+      meshes.forEach((x) => x.dispose());
     },
   };
 }
