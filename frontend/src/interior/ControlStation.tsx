@@ -8,7 +8,7 @@ import * as THREE from "three";
 
 import { Console } from "./Console";
 import { Monitor, SCREEN, type ScreenContent } from "./Monitor";
-import { Robot } from "./Robot";
+import { Robot, useRobotBrain } from "./Robot";
 
 /**
  * Room layout in room coordinates (origin on the floor under the robot, the
@@ -47,6 +47,7 @@ export function ControlStation({
   atScreen: boolean;
   onOpenScreen: () => void;
 }) {
+  const brain = useRobotBrain(title + tint);
   const mats = useMemo(() => {
     const t = new THREE.Color(tint);
     return {
@@ -125,7 +126,7 @@ export function ControlStation({
       {/* The work area. Clicking the robot, the console or the screen opens the screen. */}
       <group onClick={click}>
         <group visible={!atScreen}>
-          <Robot tint={tint} />
+          <Robot tint={tint} brain={brain} />
         </group>
         <Console tint={tint} />
         <group position={ROOM.screen} rotation={[0.08, 0, 0]} visible={!atScreen}>

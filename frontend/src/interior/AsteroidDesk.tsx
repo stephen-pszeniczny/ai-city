@@ -7,7 +7,7 @@ import * as THREE from "three";
 
 import { Desk } from "./Desk";
 import { Monitor, type ScreenContent } from "./Monitor";
-import { Robot } from "./Robot";
+import { Robot, useRobotBrain } from "./Robot";
 
 /**
  * Layout in deck coordinates (origin on the deck top, centre). The camera rig
@@ -44,6 +44,7 @@ export function AsteroidDesk({
   sign: THREE.Group | null;
   onOpenScreen: () => void;
 }) {
+  const brain = useRobotBrain(title + tint);
   const click = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 5) return;
     e.stopPropagation();
@@ -54,7 +55,7 @@ export function AsteroidDesk({
     <group>
       <group onClick={click}>
         <group position={DESK_SPOT.robot} visible={!atScreen}>
-          <Robot tint={tint} />
+          <Robot tint={tint} brain={brain} />
         </group>
         <group position={DESK_SPOT.desk}>
           <Desk tint={tint} />
