@@ -39,7 +39,8 @@ const BANNER_SCALE = 0.03;
 
 export function createAsteroids(kit: Kit): AsteroidBuilding[] {
   const { mats, glow, keep, addBlinker } = kit;
-  return ASTEROIDS.map((def, i) => {
+  const t0 = performance.now();
+  const built = ASTEROIDS.map((def, i): AsteroidBuilding => {
     const group = new THREE.Group(); // follows the orbit
     const spin = new THREE.Group(); // turns with the asteroid
     group.add(spin);
@@ -152,6 +153,8 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       },
     };
   });
+  performance.measure("asteroids", { start: t0 }); // see the browser's Performance panel
+  return built;
 }
 
 /** A faint cone of light from the desk projector's lens up to the hologram's base. */

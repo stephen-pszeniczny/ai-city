@@ -1,7 +1,7 @@
 // The whole of space around the station, shared by every level of the belt:
-// lighting, reflections, sky, sun, Earth and the asteroid belt.
+// lighting, reflections, sky, sun, Earth, the asteroid belt and the odd shooting star.
 //
-// Usage: const space = createSpace(scene, renderer); call space.update(t) every
+// Usage: const space = createSpace(scene, renderer); call space.update(t, camera) every
 // frame (t in seconds) and space.dispose() when the canvas goes away. The big
 // asteroids themselves are drawn by the belt components (they're buildings).
 import * as THREE from "three";
@@ -9,12 +9,13 @@ import * as THREE from "three";
 import { createBelt } from "./belt";
 import { createEarth, type Earth } from "./earth";
 import { ORBIT_SPEED, ORBIT_SPEED_REDUCED } from "./orbit";
+import { createShootingStars } from "./shootingStars";
 import { createSky, SUN_DIR } from "./sky";
 
 export type Space = {
   /** Radians per second the belt and asteroids move (slower with reduced motion). */
   orbitSpeed: number;
-  update(t: number): void;
+  update(t: number, camera: THREE.Camera): void;
   dispose(): void;
 };
 
@@ -61,6 +62,7 @@ export function createSpace(
   const sky = createSky(renderer.getPixelRatio());
   const belt = createBelt();
   root.add(sky.far, sky.sun, belt.group);
+  const meteors = createShootingStars(root, { reducedMotion });
 
   // Earth takes a moment to build the first time (about 0.2 s measured): do it
   // just after the first frames have painted, so the scene appears straight away.
@@ -74,8 +76,9 @@ export function createSpace(
 
   return {
     orbitSpeed,
-    update(t) {
+    update(t, camera) {
       sky.update(t);
+      meteors.update(t, camera);
       sky.far.rotation.y = t * skyTurn; // the station turning
       belt.update(t, orbitSpeed);
       earth?.update(t);
@@ -87,6 +90,7 @@ export function createSpace(
       if (scene.environment === envTarget.texture) scene.environment = null;
       sky.dispose();
       belt.dispose();
+      meteors.dispose();
       earth?.dispose();
       envTarget.dispose();
       envGeo.dispose();

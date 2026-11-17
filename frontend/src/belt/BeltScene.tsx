@@ -155,7 +155,7 @@ export function BeltScene({
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (space) {
-      space.update(t);
+      space.update(t, state.camera);
       world.station.update(t);
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
       world.kit.updateBlinkers(t);

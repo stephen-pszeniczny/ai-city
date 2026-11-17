@@ -10,7 +10,7 @@ import { mulberry32 } from "../../interior/robotBrain";
 /** Where the flat top starts (rock units, before scaling). */
 const FLAT_Y = 0.38;
 
-type Crater = { dir: THREE.Vector3; r: number; depth: number };
+type Crater = { dir: THREE.Vector3; r: number; depth: number; reach: number };
 
 function makeCraters(seed: number, count: number): Crater[] {
   const rng = mulberry32(Math.floor(seed * 1000) + 7);
@@ -21,16 +21,32 @@ function makeCraters(seed: number, count: number): Crater[] {
     dir.normalize();
     if (dir.y > 0.45) continue; // not on the flat top (the deck covers it)
     const big = rng() < 0.2;
-    out.push({ dir, r: big ? 0.22 + rng() * 0.18 : 0.05 + rng() * 0.1, depth: big ? 0.07 : 0.035 });
+    const r = big ? 0.22 + rng() * 0.18 : 0.05 + rng() * 0.1;
+    // reach: cosine of the widest angle the crater affects (a quick test before acos).
+    out.push({ dir, r, depth: big ? 0.07 : 0.035, reach: Math.cos(r * 1.6) });
   }
   return out;
 }
 
+const rockCache = new Map<string, THREE.BufferGeometry>();
+
 /**
- * Rock geometry. `detail` is the sphere's subdivision (faces = 20 × (detail + 1)²).
- * Returns positions, normals and per-vertex colours (no UVs).
+ * Rock geometry: positions, normals and per-vertex colours (no UVs). `detail`
+ * is the sphere's subdivision (faces = 20 × (detail + 1)²). Cached per session
+ * (building one takes a moment); callers get their own copy, so disposing it
+ * never breaks the cache.
  */
-export function rockGeometry(seed: number, tint: string, detail = 44): THREE.BufferGeometry {
+export function rockGeometry(seed: number, tint: string, detail = 38): THREE.BufferGeometry {
+  const key = `${seed}:${tint}:${detail}`;
+  let geo = rockCache.get(key);
+  if (!geo) {
+    geo = buildRock(seed, tint, detail);
+    rockCache.set(key, geo);
+  }
+  return geo.clone();
+}
+
+function buildRock(seed: number, tint: string, detail: number): THREE.BufferGeometry {
   let geo: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
   geo.deleteAttribute("normal");
   geo.deleteAttribute("uv");
@@ -45,15 +61,16 @@ export function rockGeometry(seed: number, tint: string, detail = 44): THREE.Buf
   const c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i).normalize();
-    const n = fbm(v.x * 1.4 + seed, v.y * 1.4, v.z * 1.4 - seed, 5);
+    const n = fbm(v.x * 1.4 + seed, v.y * 1.4, v.z * 1.4 - seed, 4);
     const ridge = 1 - Math.abs(perlin.noise(v.x * 3.2 + seed, v.y * 3.2, v.z * 3.2));
-    const grit = fbm(v.x * 9, v.y * 9 + seed, v.z * 9, 3);
+    const grit = fbm(v.x * 9, v.y * 9 + seed, v.z * 9, 2);
     // Craters: a bowl inside, a raised rim just outside.
     let crater = 0;
     let rim = 0;
     for (const k of craters) {
-      const d = Math.acos(Math.min(1, v.dot(k.dir)));
-      if (d > k.r * 1.6) continue;
+      const dot = v.dot(k.dir);
+      if (dot < k.reach) continue;
+      const d = Math.acos(Math.min(1, dot));
       const x = d / k.r;
       if (x < 1) crater = Math.min(crater, -k.depth * (1 - x * x));
       rim = Math.max(rim, k.depth * 0.45 * Math.exp(-((x - 1) * (x - 1)) / 0.04));
@@ -67,7 +84,7 @@ export function rockGeometry(seed: number, tint: string, detail = 44): THREE.Buf
     if (top) v.y = FLAT_Y + (v.y - FLAT_Y) * 0.12; // flat top for the deck
     p.setXYZ(i, v.x, v.y, v.z);
     // Colour: tinted rock, darker in crater bowls and crevices, dusty on rims and ridges.
-    const shade = 0.5 + 0.9 * (0.5 + fbm(v.x * 5 + 3, v.y * 5, v.z * 5, 3));
+    const shade = 0.5 + 0.9 * (0.5 + fbm(v.x * 5 + 3, v.y * 5, v.z * 5, 2));
     const cavity = THREE.MathUtils.clamp(1 + crater * 9 - (1 - ridge) * 0.25, 0.35, 1.1);
     c.copy(base)
       .lerp(tc, 0.24 + 0.14 * (n + 0.5))
