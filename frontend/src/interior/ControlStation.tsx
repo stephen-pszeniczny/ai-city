@@ -10,19 +10,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
-import { vaultDoor } from "../belt/vaultDoor";
 import { Console } from "./Console";
 import { Gadget } from "./Gadget";
 import { Monitor, SCREEN, type ScreenLine } from "./Monitor";
 import { Robot, useRobotBrain, type RobotAway } from "./Robot";
-import {
-  doorSide,
-  ROOM_DOOR as DOOR,
-  ROOM_OFFSET,
-  roomView,
-  ROOM_SIZE,
-  VAULT_GREETING,
-} from "./stationLayout";
+import { greetingAt, greetingClock, greetingPoints } from "./vaultGreeting";
+import { doorSide, ROOM_DOOR as DOOR, ROOM_OFFSET, roomView, ROOM_SIZE } from "./stationLayout";
 import { WallPanel } from "./WallPanels";
 
 type Module = "planner" | "finance";
@@ -114,36 +107,21 @@ export function ControlStation({
     handles.current.instanceMatrix.needsUpdate = true;
   }, [vault]);
 
-  // The Vault's greeting: hover by the door while it opens, wave, glide back to the chair.
+  // The Vault's greeting: until the first visit of the app session the robot waits
+  // on its hallway seat; then it cracks the door open, glides in and hops into its
+  // chair (see vaultGreeting.ts). After that it stays at its desk until a reload.
   const away = useMemo<RobotAway>(
-    () => ({ active: false, position: new THREE.Vector3(), yaw: 0 }),
+    () => ({ active: false, position: new THREE.Vector3(), yaw: 0, hands: null }),
     [],
   );
-  const greet = useMemo(() => new THREE.Vector3(1.3 * side, 0, -0.9), [side]);
-  const waved = useRef(false);
+  const greetPts = useMemo(() => greetingPoints(), []);
   useFrame(() => {
     if (!vault) return;
-    const start = vaultDoor.openingStart();
-    const s = start === null ? Infinity : (performance.now() - start) / 1000;
-    if (!vaultDoor.isOpen() || s >= VAULT_GREETING.seated) {
-      away.active = false;
-      return;
-    }
-    away.active = true;
-    const facing = side * (Math.PI / 2) + (side > 0 ? 0.5 : -0.5);
-    if (s < VAULT_GREETING.glide) {
-      away.position.copy(greet);
-      away.yaw = facing;
-      if (s >= VAULT_GREETING.swing - 0.2 && !waved.current) {
-        waved.current = true;
-        brain.force("wave");
-      }
-    } else {
-      const k = (s - VAULT_GREETING.glide) / (VAULT_GREETING.seated - VAULT_GREETING.glide);
-      const e = k * k * (3 - 2 * k);
-      away.position.copy(greet).multiplyScalar(1 - e);
-      away.yaw = facing * (1 - e);
-    }
+    const f = greetingAt(greetingClock(performance.now()), greetPts);
+    away.active = !f.robot.onChair;
+    away.position.copy(f.robot.position);
+    away.yaw = f.robot.yaw;
+    away.hands = f.robot.hands;
   });
 
   const click = (e: ThreeEvent<MouseEvent>) => {

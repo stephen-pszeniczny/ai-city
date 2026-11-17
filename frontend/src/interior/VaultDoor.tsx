@@ -1,46 +1,23 @@
 // The Vault's round door, set in the vault room's inner wall at the end of the
-// hallway. Closed until the first visit of the app session; then the wheel
-// spins, the bolts slide back and it swings open into the vault, and stays
-// open until the app is reloaded. Station coordinates; the door faces -x
+// hallway, and the robot's waiting seat beside it. Closed until the first visit
+// of the app session; then the robot cracks the wheel, the bolts slide back and
+// it swings open into the vault (timeline in vaultGreeting.ts), and stays open
+// until the app is reloaded. Station coordinates; the door faces -x
 // (toward the hub).
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import { vaultDoor } from "../belt/vaultDoor";
-import {
-  DOOR_OPEN_ANGLE,
-  FLOOR_Y,
-  HALL,
-  HALL_SEAT,
-  ROOM_DOOR,
-  VAULT_DOOR,
-  VAULT_GREETING,
-} from "./stationLayout";
+import { DOOR_OPEN_ANGLE, FLOOR_Y, HALL, HALL_SEAT, ROOM_DOOR, VAULT_DOOR } from "./stationLayout";
+import { greetingAt, greetingClock, greetingPoints } from "./vaultGreeting";
 
 const R = VAULT_DOOR.radius;
 const THICK = VAULT_DOOR.thickness;
 const HINGE_OUT = VAULT_DOOR.hingeOut;
 const BOLTS = 10;
 
-const ease = (x: number) => x * x * (3 - 2 * x);
-const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
-
-/** How far along the opening is: unlock 0→1 (wheel and bolts), swing 0→1. */
-export function doorProgress(nowMs: number): { unlock: number; swing: number } {
-  if (!vaultDoor.isOpen()) return { unlock: 0, swing: 0 };
-  const start = vaultDoor.openingStart();
-  if (start === null) return { unlock: 1, swing: 1 };
-  const s = (nowMs - start) / 1000;
-  return {
-    unlock: clamp01((s - VAULT_GREETING.toWheel) / (VAULT_GREETING.crack - VAULT_GREETING.toWheel)),
-    swing: ease(
-      clamp01((s - VAULT_GREETING.crack) / (VAULT_GREETING.swing - VAULT_GREETING.crack)),
-    ),
-  };
-}
-
 export function VaultDoor() {
+  const greetPts = useMemo(() => greetingPoints(), []);
   const hinge = useRef<THREE.Group>(null);
   const wheel = useRef<THREE.Group>(null);
   const bolts = useRef<THREE.Group>(null);
@@ -82,13 +59,14 @@ export function VaultDoor() {
   useEffect(() => () => frameGeo.dispose(), [frameGeo]);
 
   useFrame(() => {
-    const { unlock, swing } = doorProgress(performance.now());
-    if (hinge.current) hinge.current.rotation.y = DOOR_OPEN_ANGLE * swing;
-    if (wheel.current) wheel.current.rotation.x = unlock * Math.PI * 3;
+    const f = greetingAt(greetingClock(performance.now()), greetPts);
+    if (hinge.current) hinge.current.rotation.y = DOOR_OPEN_ANGLE * f.door;
+    // Negative: turns the same way as the robot's hands on the rim.
+    if (wheel.current) wheel.current.rotation.x = -f.wheel;
     if (bolts.current)
       for (const b of bolts.current.children) {
         const bolt = b.children[0];
-        if (bolt) bolt.position.z = (R + 0.06) * (1 - 0.18 * unlock);
+        if (bolt) bolt.position.z = (R + 0.06) * (1 - 0.18 * f.bolts);
       }
   });
 

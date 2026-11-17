@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { vaultDoor } from "../src/belt/vaultDoor.ts";
-import { greetingAt, greetingPoints } from "../src/interior/vaultGreeting.ts";
+import { greetingAt, greetingClock, greetingPoints } from "../src/interior/vaultGreeting.ts";
 import { VAULT_GREETING as G } from "../src/interior/stationLayout.ts";
 
 const pts = greetingPoints();
@@ -97,4 +97,14 @@ test("reduced motion opening is already over", () => {
   const f = greetingAt((5000 - start) / 1000, pts);
   assert.equal(f.robot.onChair, true);
   assert.equal(f.door, 1);
+});
+
+test("greeting clock: waiting before the first visit, running after, finished if unscheduled", () => {
+  vaultDoor.resetForTests();
+  assert.ok(greetingClock(1000) < 0, "not opened yet: waiting");
+  vaultDoor.claimFirstOpening();
+  assert.equal(greetingClock(1000), Infinity, "open with no schedule: finished");
+  vaultDoor.scheduleOpening(3000);
+  assert.ok(greetingClock(2000) < 0, "scheduled later: still waiting");
+  assert.equal(greetingClock(4500), 1.5);
 });

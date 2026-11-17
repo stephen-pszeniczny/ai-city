@@ -13,10 +13,18 @@ import * as THREE from "three";
 
 import { LOOK, motionScale } from "../belt/look";
 import { RobotBrain } from "./robotBrain";
+import { ROBOT_HOVER } from "./stationLayout";
 
 export type RobotDetail = "near" | "far";
 /** Moves the robot off its chair (hovering), e.g. to open the vault door. Mutated by the parent. */
-export type RobotAway = { active: boolean; position: THREE.Vector3; yaw: number };
+/** Off the chair: where it floats (relative to the chair), which way it faces, and
+ *  optionally where its hands are (its own body frame), e.g. gripping a wheel. */
+export type RobotAway = {
+  active: boolean;
+  position: THREE.Vector3;
+  yaw: number;
+  hands?: [THREE.Vector3, THREE.Vector3] | null;
+};
 
 type ArmParts = { upper: THREE.Mesh | null; lower: THREE.Mesh | null; hand: THREE.Mesh | null };
 
@@ -210,12 +218,13 @@ export function Robot({
     if (s.action === "spin") yaw = ease(p) * Math.PI * 2;
     else if (s.action === "wave") yaw = window01(p, 0, 1, 0.22) * 2.3;
     else if (s.action === "gadget") yaw = window01(p, 0, 1, 0.25) * 0.55;
-    if (swivel.current) swivel.current.rotation.y = yaw;
-    // Off the chair: hover at the given spot, legs tucked away.
+    // Off the chair: hover at the given spot, legs tucked away (the chair stays still).
     const off = away?.active === true;
+    if (off) yaw = 0;
+    if (swivel.current) swivel.current.rotation.y = yaw;
     if (awayRoot.current) {
       if (off && away) {
-        awayRoot.current.position.copy(away.position).setY(away.position.y + 0.14);
+        awayRoot.current.position.copy(away.position).setY(away.position.y + ROBOT_HOVER);
         awayRoot.current.rotation.y = away.yaw - yaw;
       } else {
         awayRoot.current.position.set(0, 0, 0);
@@ -320,6 +329,13 @@ export function Robot({
       }
       case "lookAround":
         break;
+    }
+    if (off) {
+      glassLift = 0; // the glass stays on the desk while it's away
+      if (away?.hands) {
+        L.copy(away.hands[0]);
+        R.copy(away.hands[1]);
+      }
     }
     ([0, 1] as const).forEach((i) => {
       const arm = arms.current[i];

@@ -7,6 +7,7 @@
 // faces the desk (+z); -π/2 faces back down the hallway (-x).
 import * as THREE from "three";
 
+import { vaultDoor } from "../belt/vaultDoor.ts";
 import {
   FLOOR_Y,
   HALL,
@@ -147,4 +148,15 @@ export function greetingAt(s: number, pts: GreetingPoints): GreetingFrame {
     return frame(position, 0);
   }
   return frame(pts.chair.clone(), 0, null, true);
+}
+
+/**
+ * Seconds into the greeting at `nowMs` (performance.now()): negative while the
+ * robot is still waiting (not opened this session, or opening later), Infinity
+ * when the door is open with no opening scheduled.
+ */
+export function greetingClock(nowMs: number): number {
+  if (!vaultDoor.isOpen()) return -1;
+  const start = vaultDoor.openingStart();
+  return start === null ? Infinity : (nowMs - start) / 1000;
 }
