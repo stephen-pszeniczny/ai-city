@@ -7,7 +7,8 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import { Console } from "./Console";
-import { Monitor, SCREEN, type ScreenContent } from "./Monitor";
+import type { BuildingId } from "../api";
+import { Monitor, SCREEN, type ScreenLine } from "./Monitor";
 import { Robot, useRobotBrain } from "./Robot";
 
 /**
@@ -32,16 +33,20 @@ const BACK = -2.4;
 const FRONT = 1.9; // window wall
 
 export function ControlStation({
+  id,
   title,
   tint,
-  content,
+  built,
+  lines,
   atScreen,
   onOpenScreen,
 }: {
   title: string;
   tint: string;
   /** What the robot's screen shows. */
-  content: ScreenContent;
+  lines: readonly ScreenLine[];
+  id: BuildingId;
+  built: boolean;
   /** Zoomed into the screen: the camera leans in past the robot, and the desktop
    * overlay takes the monitor's place, so both are hidden. */
   atScreen: boolean;
@@ -130,7 +135,7 @@ export function ControlStation({
         </group>
         <Console tint={tint} />
         <group position={ROOM.screen} rotation={[0.08, 0, 0]} visible={!atScreen}>
-          <Monitor title={title} tint={tint} content={content} />
+          <Monitor id={id} title={title} tint={tint} built={built} lines={lines} brain={brain} />
         </group>
       </group>
 

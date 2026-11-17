@@ -8,6 +8,8 @@ import { BUILT } from "./built";
 import { createConstructionSign, createWorksite } from "./construction";
 import { createHoloBanner, makeHologram } from "./hologram";
 import { createLandmark } from "./landmarks";
+import { LOOK } from "./look";
+import { PROJECTOR_LENS, workToDeck } from "../interior/workspace";
 import type { Kit } from "./materials";
 import { ASTEROIDS, orbitPosition, rockGeometry } from "./space";
 
@@ -25,7 +27,11 @@ export type AsteroidBuilding = {
   update(t: number, speed: number, camera: THREE.Camera): void;
 };
 
-export const DECK_Y = 1.62;
+/** Rock size, deck radius and where the deck's top sits (the robot's desk stands here). */
+const ROCK_SCALE = 4.8;
+export const DECK_R = 3.0;
+const DECK_CENTRE_Y = 1.92;
+export const DECK_Y = DECK_CENTRE_Y + 0.16;
 /** Banner size per unit of camera distance (about 200 px wide on a 900 px tall view). */
 const BANNER_SCALE = 0.03;
 
@@ -43,30 +49,31 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
         new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0.04 }),
       ),
     );
-    rock.scale.setScalar(3.6);
+    rock.scale.setScalar(ROCK_SCALE);
     rock.castShadow = true;
     rock.receiveShadow = true;
     const deck = new THREE.Mesh(
-      keep(new THREE.CylinderGeometry(1.9, 2.1, 0.32, 40)),
+      keep(new THREE.CylinderGeometry(DECK_R, DECK_R + 0.2, 0.32, 56)),
       mats.darkMetal,
     );
-    deck.position.y = 1.45;
+    deck.position.y = DECK_CENTRE_Y;
     const rim = new THREE.Mesh(
-      keep(new THREE.TorusGeometry(2.0, 0.04, 6, 64)),
+      keep(new THREE.TorusGeometry(DECK_R + 0.1, 0.045, 6, 96)),
       glow(def.tint, 2.2),
     );
     rim.rotation.x = Math.PI / 2;
     rim.position.y = DECK_Y;
     spin.add(rock, deck, rim);
     const winGeo = keep(new THREE.BoxGeometry(0.22, 0.12, 0.04));
-    for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * Math.PI * 2 + 0.3;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + 0.3;
       const w = new THREE.Mesh(winGeo, mats.window);
-      w.position.set(Math.cos(a) * 1.92, 1.42, Math.sin(a) * 1.92);
-      w.lookAt(Math.cos(a) * 5, 1.42, Math.sin(a) * 5);
+      const r = DECK_R + 0.12;
+      w.position.set(Math.cos(a) * r, DECK_CENTRE_Y - 0.03, Math.sin(a) * r);
+      w.lookAt(Math.cos(a) * 9, DECK_CENTRE_Y - 0.03, Math.sin(a) * 9);
       spin.add(w);
     }
-    addBlinker(spin, new THREE.Vector3(2.3, 0.6, 0.6), def.tint, 2.4 + i * 0.13, i * 0.37, {
+    addBlinker(spin, new THREE.Vector3(3.5, 0.8, 0.9), def.tint, 2.4 + i * 0.13, i * 0.37, {
       size: 0.1,
     });
 
@@ -82,17 +89,23 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
     if (!BUILT.has(def.id)) {
       // Not built yet: the landmark is only a holographic projection, with the
       // mining rig and scaffolding working at the deck's edge...
+      // The projection floats above the deck, beamed up from the robot's desk projector.
+      lm.group.position.y = LOOK.hologramHeight;
       const holo = makeHologram(lm.group, kit, def.tint);
       updates.push(holo.update);
+      const beam = createBeam(kit, def.tint, workToDeck(PROJECTOR_LENS), LOOK.hologramHeight);
+      holder.add(beam.mesh);
+      updates.push(beam.update);
       const site = createWorksite(kit, def.tint);
       site.group.scale.setScalar(0.7);
-      site.group.position.set(0, 0, -0.4);
+      site.group.position.set(-1.3, 0, -2.4); // out of the building view, seen from the belt
       holder.add(site.group);
       updates.push(site.update);
       // ...and "UNDER CONSTRUCTION" floating over it. Hangs from the holder (so it
       // hides with it) but is turned to face the camera every frame.
-      const banner = createHoloBanner(kit);
-      banner.group.position.set(0, 4.6, 0); // just above the hologram
+      const bannerY = LOOK.hologramHeight + 4.4;
+      const banner = createHoloBanner(kit, bannerY);
+      banner.group.position.set(0, bannerY, 0); // just above the hologram
       holder.add(banner.group);
       updates.push(banner.update);
       signFace = banner.face;
@@ -110,7 +123,11 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
     return {
       id: def.id,
       group,
-      anchor: new THREE.Vector3(0, BUILT.has(def.id) ? 6.2 : 9.4, 0),
+      anchor: new THREE.Vector3(
+        0,
+        DECK_Y + (BUILT.has(def.id) ? 4.6 : LOOK.hologramHeight + 9), // above the growing banner
+        0,
+      ),
       spin,
       holder,
       deskSign,
@@ -132,4 +149,36 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       },
     };
   });
+}
+
+/** A faint cone of light from the desk projector's lens up to the hologram's base. */
+function createBeam(
+  kit: Kit,
+  tint: string,
+  lens: THREE.Vector3,
+  height: number,
+): { mesh: THREE.Mesh; update(t: number): void } {
+  const top = new THREE.Vector3(0, height, 0);
+  const len = lens.distanceTo(top);
+  const geo = kit.keep(new THREE.CylinderGeometry(0.8, 0.02, len, 32, 1, true));
+  const mat = kit.keep(
+    new THREE.MeshBasicMaterial({
+      color: new THREE.Color(tint).lerp(new THREE.Color(0x7fe8ff), 0.6),
+      transparent: true,
+      opacity: 0.07,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    }),
+  );
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(lens).add(top).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(lens).normalize());
+  return {
+    mesh,
+    update(t) {
+      mat.opacity = 0.045 + 0.015 * Math.sin(t * 5) + (Math.sin(t * 31) > 0.97 ? -0.03 : 0);
+    },
+  };
 }

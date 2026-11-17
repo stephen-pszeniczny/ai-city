@@ -38,8 +38,8 @@ export const ROBOT = {
   mouse: new THREE.Vector3(0.42, 0.77, 0.6),
   /** Where the robot's water glass stands on the desk. */
   glass: new THREE.Vector3(0.62, 0.75, 0.48),
-  /** Direction of the desk gadget (to the robot's left). */
-  gadget: new THREE.Vector3(-0.7, 0.9, 0.55),
+  /** The desk gadget (front left of the desk). */
+  gadget: new THREE.Vector3(-0.6, 0.85, 0.66),
 } as const;
 
 const BODY_R = 0.26;
@@ -290,7 +290,7 @@ export function Robot({
       case "gadget": {
         // Left hand reaches over to the gadget and taps it.
         const reach = window01(p, 0.1, 0.9, 0.2);
-        const g = new THREE.Vector3(ROBOT.gadget.x * 0.62, 0.86, ROBOT.gadget.z * 0.8);
+        const g = ROBOT.gadget.clone();
         g.y += Math.max(0, Math.sin(tt * 7)) * 0.03 * reach;
         L.lerp(g, reach);
         break;

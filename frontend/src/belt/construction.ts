@@ -86,7 +86,7 @@ export function createConstructionSign(
       kit.keep(new THREE.CylinderGeometry(0.05, 0.05, 1.9, 6)),
       kit.mats.steel,
     );
-    post.position.set(x, 0.95, -0.02);
+    post.position.set(x, 0.95, -0.08); // fully behind the board
     face.add(post);
   }
   group.scale.setScalar(scale);

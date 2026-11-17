@@ -3,11 +3,11 @@
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
 import { useQuery } from "@tanstack/react-query";
 import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { Fragment, useEffect, useMemo, useState, type RefObject } from "react";
 import * as THREE from "three";
 
 import { getBuildings, listTasks, type BuildingId } from "../api";
-import type { ScreenContent } from "../interior/Monitor";
+import type { ScreenLine } from "../interior/Monitor";
 import { statusNotes, type Tone } from "../todo/dates";
 import { BUILT } from "./built";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
@@ -28,10 +28,10 @@ const TONE_COLOURS: Record<Tone, string> = {
   plain: "#f5f5f7",
   muted: "#98989f",
 };
-const CONSTRUCTION: ScreenContent = { kind: "construction" };
 
 /** Pointer movement (px) below which a press counts as a click, not a drag. */
 const CLICK_SLOP = 5;
+const NO_LINES: ScreenLine[] = [];
 
 export function BeltScene({
   view,
@@ -101,14 +101,9 @@ export function BeltScene({
   useEffect(() => {
     world.station.group.visible = insideModule === null;
   }, [insideModule, world]);
-  // On an asteroid: its landmark/hologram/worksite make way for the robot's desk.
-  const insideAsteroid =
-    view.level !== "belt" && !insideModule
-      ? world.asteroids.find((a) => a.id === view.id)
-      : undefined;
-  useEffect(() => {
-    for (const a of world.asteroids) a.holder.visible = a !== insideAsteroid;
-  }, [insideAsteroid, world]);
+  // Which asteroid the camera is in (if any). Every asteroid keeps its desk and
+  // hologram all the time, so all three views show the same world.
+  const insideId = view.level !== "belt" && !insideModule ? view.id : null;
   const buildings = useQuery({
     queryKey: ["buildings"],
     queryFn: getBuildings,
@@ -116,13 +111,12 @@ export function BeltScene({
   });
   const titleOf = (id: BuildingId) => buildings.data?.find((b) => b.id === id)?.name ?? "";
 
-  // What each robot's screen shows: Mission Control's live open tasks; an
-  // under-construction desktop for anything not built.
+  // Mission Control's screen shows the live open tasks; other screens show the
+  // robot's (generic) work.
   const openTasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
-  const plannerScreen = useMemo<ScreenContent>(
-    () => ({
-      kind: "lines",
-      lines: (openTasks.data ?? []).map((t) => {
+  const plannerLines = useMemo<ScreenLine[]>(
+    () =>
+      (openTasks.data ?? []).map((t) => {
         const note = statusNotes(t)[0];
         return {
           title: t.title,
@@ -130,11 +124,9 @@ export function BeltScene({
           noteColour: note ? TONE_COLOURS[note.tone] : undefined,
         };
       }),
-    }),
     [openTasks.data],
   );
-  const screenFor = (id: BuildingId): ScreenContent =>
-    id === "planner" ? plannerScreen : BUILT.has(id) ? { kind: "lines", lines: [] } : CONSTRUCTION;
+  const linesFor = (id: BuildingId): ScreenLine[] => (id === "planner" ? plannerLines : NO_LINES);
   const atScreen = view.level === "screen";
 
   useEffect(() => {
@@ -203,28 +195,37 @@ export function BeltScene({
       {insideModule && (
         <group position={[insideModule === "planner" ? -10.5 : 10.5, 0, 0]}>
           <ControlStation
+            id={insideModule}
             title={titleOf(insideModule)}
             tint={tintOf(insideModule)}
-            content={screenFor(insideModule)}
+            built={BUILT.has(insideModule)}
+            lines={linesFor(insideModule)}
             atScreen={atScreen}
             onOpenScreen={() => onOpen(insideModule)}
           />
         </group>
       )}
-      {insideAsteroid &&
-        createPortal(
-          <group position={[0, DECK_Y, 0]}>
-            <AsteroidDesk
-              title={titleOf(insideAsteroid.id)}
-              tint={tintOf(insideAsteroid.id)}
-              content={screenFor(insideAsteroid.id)}
-              atScreen={atScreen}
-              sign={insideAsteroid.deskSign}
-              onOpenScreen={() => onOpen(insideAsteroid.id)}
-            />
-          </group>,
-          insideAsteroid.spin,
-        )}
+      {world.asteroids.map((a) => (
+        <Fragment key={a.id}>
+          {createPortal(
+            <group position={[0, DECK_Y, 0]}>
+              <AsteroidDesk
+                id={a.id}
+                title={titleOf(a.id)}
+                tint={tintOf(a.id)}
+                built={BUILT.has(a.id)}
+                lines={linesFor(a.id)}
+                inside={insideId === a.id}
+                atScreen={atScreen && insideId === a.id}
+                sign={a.deskSign}
+                reducedMotion={reducedMotion}
+                onDesk={() => onOpen(a.id)}
+              />
+            </group>,
+            a.spin,
+          )}
+        </Fragment>
+      ))}
       {world.asteroids.map((a) => (
         <primitive key={a.id} object={a.group} {...events} />
       ))}

@@ -108,7 +108,10 @@ function holoTextTexture(): THREE.CanvasTexture {
  * The floating banner. `face` is turned toward the camera each frame (on its
  * vertical axis only) so it can always be read.
  */
-export function createHoloBanner(kit: Kit): {
+export function createHoloBanner(
+  kit: Kit,
+  baseY = 4.6,
+): {
   group: THREE.Group;
   face: THREE.Group;
   update(t: number): void;
@@ -131,7 +134,7 @@ export function createHoloBanner(kit: Kit): {
     group,
     face,
     update(t) {
-      group.position.y = 4.6 + Math.sin(t * 1.1) * 0.08; // gentle hover
+      group.position.y = baseY + Math.sin(t * 1.1) * 0.08; // gentle hover
       mat.opacity = Math.sin(t * 23) > 0.97 ? 0.4 : 0.9;
     },
   };
