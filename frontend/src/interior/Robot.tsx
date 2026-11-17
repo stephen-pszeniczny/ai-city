@@ -254,9 +254,7 @@ export function Robot({
     const tipOn = (tt + brain.seedOffset) % 1.4 < 0.18;
     mats.tip.color.set(tint).multiplyScalar(tipOn ? 2.4 : 0.35);
 
-    if (!near) return;
-
-    // Hands. Default: resting near the keyboard.
+    // Hands (every detail level, so robots always have arms). Default: resting near the keyboard.
     const [L, R] = tmp.hands;
     const k = ROBOT.keys;
     if (away?.active) {
@@ -488,30 +486,29 @@ export function Robot({
           </group>
 
           {/* Arms: two segments and a mitten hand each, placed every frame. */}
-          {near &&
-            ([0, 1] as const).map((i) => (
-              <group key={i}>
-                <mesh
-                  ref={(m) => void (arms.current[i].upper = m)}
-                  geometry={geo.limbUnit}
-                  material={mats.shell}
-                  castShadow
-                />
-                <mesh
-                  ref={(m) => void (arms.current[i].lower = m)}
-                  geometry={geo.limbUnit}
-                  material={mats.shell}
-                  castShadow
-                />
-                <mesh
-                  ref={(m) => void (arms.current[i].hand = m)}
-                  material={mats.dark}
-                  scale={[1.1, 0.8, 1.25]}
-                >
-                  <sphereGeometry args={[0.058, 12, 10]} />
-                </mesh>
-              </group>
-            ))}
+          {([0, 1] as const).map((i) => (
+            <group key={i}>
+              <mesh
+                ref={(m) => void (arms.current[i].upper = m)}
+                geometry={geo.limbUnit}
+                material={mats.shell}
+                castShadow
+              />
+              <mesh
+                ref={(m) => void (arms.current[i].lower = m)}
+                geometry={geo.limbUnit}
+                material={mats.shell}
+                castShadow
+              />
+              <mesh
+                ref={(m) => void (arms.current[i].hand = m)}
+                material={mats.dark}
+                scale={[1.1, 0.8, 1.25]}
+              >
+                <sphereGeometry args={[0.058, 12, 10]} />
+              </mesh>
+            </group>
+          ))}
         </group>
       </group>
 
