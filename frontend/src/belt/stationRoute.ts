@@ -347,6 +347,12 @@ function upTo(end: THREE.Vector3, points: THREE.Vector3[]): THREE.Vector3[] {
  * backs out from wherever the camera is.
  */
 export function routeOut(room: StationRoom, from: Pose, to: Pose): Route {
+  const seconds = LOOK.flights.fromStationSeconds;
+  if (!inside(from.position)) {
+    // Still outside (Back pressed early in the flight in): just pull back to the belt view.
+    const back = makeLeg([to.position.clone(), from.position.clone()], to, from, seconds, 0.3);
+    return { duration: seconds, doorStop: null, sample: (t) => back.sample(seconds - t) };
+  }
   const path = hatchToRoom(room, { stopAtDoor: false });
   const approach = inside(to.position) ? [] : [...swingRound(to.position), ...outsideHatch(room)];
   const station = [...path.toHallway, ...path.toRoom.slice(0, -1)];
@@ -357,7 +363,6 @@ export function routeOut(room: StationRoom, from: Pose, to: Pose): Route {
     from.position.clone(),
   ];
   const atRoom = from.position.distanceTo(roomPose(room).position) < 0.05;
-  const seconds = LOOK.flights.fromStationSeconds;
   const inward = makeLeg(pts, to, from, seconds, atRoom ? path.toRoom[0]! : 0.3);
   return { duration: seconds, doorStop: null, sample: (t) => inward.sample(seconds - t) };
 }
@@ -369,6 +374,8 @@ export function routeBetween(
   from: Pose,
   opts: { stopAtDoor: boolean },
 ): Route {
+  // Still outside (switched rooms early in the flight in): go in through the hatch to the other room.
+  if (!inside(from.position)) return routeIn(toRoom, from, opts);
   const a = towards(fromRoom);
   const out = roomToHub(fromRoom);
   const hub = [v(a * 0.9, EYE + 0.1, 0.35), v(0, EYE + 0.15, 0.55), v(-a * 0.9, EYE + 0.1, 0.35)];

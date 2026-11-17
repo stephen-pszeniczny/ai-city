@@ -232,3 +232,27 @@ test("routes never pass through the station's outer ring", () => {
     }
   }
 });
+
+test("leaving or switching rooms while still outside never flies through the hull", () => {
+  // Mid-way along the flight in, still outside the hatch.
+  const r = routeIn("planner", BELT, { stopAtDoor: false });
+  let outside = r.sample(0);
+  for (const t of times(r)) {
+    const p = r.sample(t);
+    if (p.position.z < HATCH.z + 4) break;
+    outside = p;
+  }
+  assert.ok(outside.position.z > HATCH.z + 3, "found a pose outside");
+  const spine = (p: THREE.Vector3) =>
+    Math.hypot(p.x - THREE.MathUtils.clamp(p.x, -13, 13), p.y, p.z);
+  const out = routeOut("planner", outside, BELT);
+  for (const t of times(out)) {
+    assert.ok(spine(out.sample(t).position) > 2.5, `out: into the hull at ${t.toFixed(2)}`);
+  }
+  const across = routeBetween("planner", "finance", outside, { stopAtDoor: false });
+  for (const t of times(across)) {
+    const p = across.sample(t).position;
+    if (Math.abs(p.x) < 0.6 && p.z <= HATCH.z + 0.7) break; // through the hatch: inside now
+    assert.ok(spine(p) > 2.5, `between: into the hull at ${t.toFixed(2)}`);
+  }
+});
