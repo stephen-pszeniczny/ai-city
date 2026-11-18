@@ -60,6 +60,25 @@ export const LOOK = {
     /** Moon size (1 = normal). */
     moonSize: 1.0,
   },
+  notifications: {
+    /** Seconds the shuttle takes to cross the screen. */
+    flightSeconds: 7,
+    /** Seconds between one shuttle leaving and the next arriving. */
+    gapSeconds: 1.5,
+    /** Rocket size (1 = about a sixth of the station's length). */
+    rocketSize: 1.0,
+    /** Engine glow under the rocket (0 = off, 1 = full). */
+    glowStrength: 1.0,
+    /** Longest banner title before it's cut with "…". */
+    bannerMaxChars: 48,
+    /** Seconds each reminder shows in the ticker before the next. */
+    tickerSecondsPerItem: 6,
+    /** With reduced motion: seconds the banner shows at the top instead of a flight. */
+    reducedMotionBannerSeconds: 5,
+    /** Shuttles that fly one by one before the rest share one "+N more" shuttle. */
+    maxSeparateShuttles: 3,
+  },
+
   /** Gap between shooting stars, in seconds. */
   shootingStars: { minSeconds: 20, maxSeconds: 60 },
 } as const;

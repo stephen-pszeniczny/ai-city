@@ -100,6 +100,28 @@ export type Daylight = {
 
 export const getDaylight = () => request<Daylight>("GET", "/api/daylight");
 
+/** Something needing attention (for now: a task's reminder has come due). */
+export type NotificationItem = {
+  id: number;
+  kind: "reminder";
+  task_id: number | null;
+  title: string;
+  /** The reminder's local time, "2026-11-30T09:00". */
+  due_at: string;
+  /** The shuttle has already flown for it. */
+  seen: boolean;
+};
+/** The list comes with the mode it belongs to; seen and dismiss send that mode back. */
+export type NotificationList = { mode: Mode; items: NotificationItem[] };
+
+export const getNotifications = () => request<NotificationList>("GET", "/api/notifications");
+
+export const markSeen = (id: number, mode: Mode) =>
+  request<{ ok: boolean }>("POST", `/api/notifications/${id}/seen`, { mode });
+
+export const dismissNotification = (id: number, mode: Mode) =>
+  request<{ ok: boolean }>("POST", `/api/notifications/${id}/dismiss`, { mode });
+
 export const listTasks = (filter: ListFilter = "open") =>
   request<Task[]>("GET", `/api/tasks?status=${filter}`);
 
