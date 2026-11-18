@@ -11,3 +11,8 @@ export function takeOpenTaskRequest(): number | null {
   pending = null;
   return id;
 }
+
+/** Look without using it up (safe in a state initialiser, which React may run twice). */
+export function peekOpenTaskRequest(): number | null {
+  return pending;
+}

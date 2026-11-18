@@ -108,7 +108,7 @@
 .belt__error {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: 84px; /* above the ticker */
   transform: translateX(-50%);
   margin: 0;
   padding: 0.6rem 1rem;
@@ -251,7 +251,7 @@
 .belt__note {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: 84px; /* above the ticker */
   transform: translateX(-50%);
   margin: 0;
   padding: 0.6rem 1rem;

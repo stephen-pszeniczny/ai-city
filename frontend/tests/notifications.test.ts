@@ -17,7 +17,11 @@ import {
   tickerPosition,
 } from "../src/notifications/rules.ts";
 import { pointOnPath, shuttlePath } from "../src/notifications/shuttlePath.ts";
-import { requestOpenTask, takeOpenTaskRequest } from "../src/todo/openRequest.ts";
+import {
+  peekOpenTaskRequest,
+  requestOpenTask,
+  takeOpenTaskRequest,
+} from "../src/todo/openRequest.ts";
 
 const item = (id: number, title = `Reminder ${id}`): NotificationItem => ({
   id,
@@ -145,4 +149,12 @@ test("an open-task request is taken once", () => {
   requestOpenTask(42);
   assert.equal(takeOpenTaskRequest(), 42);
   assert.equal(takeOpenTaskRequest(), null);
+});
+
+test("peeking at an open-task request doesn't use it up", () => {
+  requestOpenTask(7);
+  assert.equal(peekOpenTaskRequest(), 7);
+  assert.equal(peekOpenTaskRequest(), 7);
+  assert.equal(takeOpenTaskRequest(), 7);
+  assert.equal(peekOpenTaskRequest(), null);
 });

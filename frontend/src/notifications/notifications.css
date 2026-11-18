@@ -54,3 +54,92 @@
     opacity: 0;
   }
 }
+
+/* The ticker: one reminder at a time, bottom centre. */
+.ticker {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 5;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 6px 8px 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(16, 20, 32, 0.66);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  color: var(--text);
+  font:
+    500 14px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+.ticker__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #39c6ff;
+  box-shadow: 0 0 8px #39c6ff;
+}
+
+.ticker__text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ticker__open {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ticker__open:hover {
+  text-decoration: underline;
+}
+
+.ticker__count {
+  flex: none;
+  color: #98989f;
+  font-size: 12px;
+}
+
+.ticker__dismiss,
+.ticker__step {
+  flex: none;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ticker__step {
+  padding: 0 9px;
+}
+
+.ticker button:focus-visible {
+  outline: 2px solid #8aa4ff;
+  outline-offset: 2px;
+}
