@@ -199,15 +199,17 @@ def test_unknown_id_is_not_found(started):
         started.dismiss(999)
 
 
-def test_cleared_or_dismissed_older_than_90_days_are_deleted(conn, tasks, started, clock):
-    a = add(tasks, "Dismissed long ago", "2026-11-18T12:30")
+def test_old_rows_are_deleted_once_their_reminder_is_gone(conn, tasks, started, clock):
+    a = add(tasks, "Dismissed long ago, reminder since removed", "2026-11-18T12:30")
     b = add(tasks, "Dismissed recently", "2026-11-18T12:31")
     clock.at(12, 32)
     started.check_reminders()
-    ids = {n.title: n.id for n in started.list_active()}
-    started.dismiss(ids["Dismissed long ago"])
+    ids = {n.task_id: n.id for n in started.list_active()}
+    started.dismiss(ids[a.id])
+    tasks.edit(a.id, reminder_at=None)  # nothing could recreate its row now
     clock.now += timedelta(days=2)
-    started.dismiss(ids["Dismissed recently"])
+    started.dismiss(ids[b.id])
+    tasks.edit(b.id, reminder_at=None)
     clock.now = START + timedelta(days=91, minutes=10)
     started.check_reminders()
     left = {r[0] for r in conn.execute("SELECT task_id FROM notifications")}
@@ -221,3 +223,28 @@ def test_notes_are_never_copied(conn, tasks, started, clock):
     started.check_reminders()
     for row in conn.execute("SELECT * FROM notifications"):
         assert all("SECRET-NOTE-TEXT" not in str(v) for v in row)
+
+
+def test_dismissed_reminder_never_fires_again_after_the_90_day_cleanup(tasks, started, clock):
+    add(tasks, "Pay rent", "2026-11-18T12:30")
+    clock.at(12, 31)
+    started.check_reminders()
+    [n] = started.list_active()
+    started.dismiss(n.id)
+    clock.now = START + timedelta(days=91)
+    started.check_reminders()  # the cleanup runs here
+    clock.now += timedelta(seconds=30)
+    assert started.check_reminders() == 0
+    assert started.list_active() == []
+
+
+def test_reopened_after_90_days_does_not_fire_again(tasks, started, clock):
+    t = add(tasks, "Back after a long time", "2026-11-18T12:30")
+    clock.at(12, 31)
+    started.check_reminders()
+    tasks.complete(t.id)
+    started.check_reminders()
+    clock.now = START + timedelta(days=91)
+    started.check_reminders()
+    tasks.reopen(t.id)
+    assert started.check_reminders() == 0

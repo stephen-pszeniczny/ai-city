@@ -44,7 +44,11 @@ class ShownIn(BaseModel):
 
 
 @contextmanager
-def _store(request: Request, expected: str | None = None) -> Iterator[NotificationStore]:
+def _store(
+    request: Request, expected: str | None = None
+) -> Iterator[tuple[NotificationStore, DbKind]]:
+    """Open the current mode's database. Yields the store and the mode it opened,
+    read once: a switch landing mid-request must never relabel what was read."""
     state = request.app.state
     load_settings()  # same rule as every route: no settings file, no answers (503)
     kind = DbKind(state.db_kind)
@@ -52,30 +56,27 @@ def _store(request: Request, expected: str | None = None) -> Iterator[Notificati
         raise ModeChanged
     conn: sqlite3.Connection = open_database(db_path(kind), kind)
     try:
-        yield NotificationStore(conn, clock=state.clock)
+        yield NotificationStore(conn, clock=state.clock), kind
     finally:
         conn.close()
 
 
 @router.get("")
 def list_notifications(request: Request) -> dict:
-    with _store(request) as store:
-        return {
-            "mode": DbKind(request.app.state.db_kind).value,
-            "items": [asdict(n) for n in store.list_active()],
-        }
+    with _store(request) as (store, kind):
+        return {"mode": kind.value, "items": [asdict(n) for n in store.list_active()]}
 
 
 @router.post("/{nid}/seen")
 def mark_seen(request: Request, nid: int, body: ShownIn) -> dict:
-    with _store(request, body.mode) as store:
+    with _store(request, body.mode) as (store, _kind):
         store.mark_seen(nid)
     return {"ok": True}
 
 
 @router.post("/{nid}/dismiss")
 def dismiss(request: Request, nid: int, body: ShownIn) -> dict:
-    with _store(request, body.mode) as store:
+    with _store(request, body.mode) as (store, _kind):
         store.dismiss(nid)
     return {"ok": True}
 

@@ -6,16 +6,38 @@ import type { Mode, NotificationItem } from "../api";
 export type ShuttleTrip = { ids: number[]; text: string };
 
 /**
- * Oldest first, one shuttle each, up to `maxSeparate`. If more are waiting (say the
- * Mac was asleep), one last shuttle carries all the rest as "+N more reminders",
- * so there's never a parade.
+ * The next shuttle to fly from everything waiting (oldest first). The first
+ * `maxSeparate` of a run fly one by one; after that, everything still waiting goes
+ * on one "+N more" shuttle. `flownInRun` counts solo flights since the queue was
+ * last empty, so reminders that arrived in different checks still can't make a parade.
  */
-export function planShuttles(unseen: NotificationItem[], maxSeparate: number): ShuttleTrip[] {
-  const solo = unseen.slice(0, maxSeparate).map((n) => ({ ids: [n.id], text: n.title }));
-  const rest = unseen.slice(maxSeparate);
-  if (rest.length === 0) return solo;
-  const more = `+${rest.length} more ${rest.length === 1 ? "reminder" : "reminders"}`;
-  return [...solo, { ids: rest.map((n) => n.id), text: more }];
+export function nextTrip(
+  pending: NotificationItem[],
+  flownInRun: number,
+  maxSeparate: number,
+): { trip: ShuttleTrip; rest: NotificationItem[] } | null {
+  const [first, ...others] = pending;
+  if (!first) return null;
+  if (flownInRun < maxSeparate || pending.length === 1) {
+    return { trip: { ids: [first.id], text: first.title }, rest: others };
+  }
+  const n = pending.length;
+  return {
+    trip: {
+      ids: pending.map((p) => p.id),
+      text: `+${n} more ${n === 1 ? "reminder" : "reminders"}`,
+    },
+    rest: [],
+  };
+}
+
+/** The ticker moves on by itself only with several items, motion allowed, and nothing hovered or focused. */
+export function tickerShouldRotate(s: {
+  count: number;
+  reducedMotion: boolean;
+  paused: boolean;
+}): boolean {
+  return s.count > 1 && !s.reducedMotion && !s.paused;
 }
 
 /** One readable line: trimmed, cut at a word where possible, with "…". */
@@ -42,10 +64,10 @@ export function nextTickerIndex(index: number, count: number): number {
 }
 
 /** After a mode switch nothing from the other mode may stay queued for the screen. */
-export function queueAfterModeChange(
+export function queueAfterModeChange<T>(
   prevMode: Mode | undefined,
   nextMode: Mode,
-  queue: ShuttleTrip[],
-): ShuttleTrip[] {
+  queue: T[],
+): T[] {
   return prevMode !== undefined && prevMode !== nextMode ? [] : queue;
 }

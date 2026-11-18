@@ -156,3 +156,21 @@ def test_missing_settings_is_503(tmp_path, monkeypatch):
     monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path))
     client = TestClient(create_app(dev=False), base_url=APP_URL, headers={"origin": APP_URL})
     assert client.get("/api/notifications").status_code == 503
+
+
+def test_list_names_the_database_it_actually_read_even_if_the_mode_switches_meanwhile(
+    client, two_due, monkeypatch
+):
+    from aicity import notification_routes
+
+    real_open = notification_routes.open_database
+
+    def open_then_switch(path, kind):
+        conn = real_open(path, kind)
+        client.app.state.db_kind = DbKind.PERSONAL  # a switch lands mid-request
+        return conn
+
+    monkeypatch.setattr(notification_routes, "open_database", open_then_switch)
+    body = client.get("/api/notifications").json()
+    assert body["mode"] == "sample"
+    assert [i["title"] for i in body["items"]] == ["First", "Second"]

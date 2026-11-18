@@ -11,10 +11,11 @@ import { stepsToTask } from "../src/notifications/journey.ts";
 import {
   bannerText,
   nextTickerIndex,
-  planShuttles,
+  nextTrip,
   queueAfterModeChange,
   shortTitle,
   tickerPosition,
+  tickerShouldRotate,
 } from "../src/notifications/rules.ts";
 import { pointOnPath, shuttlePath } from "../src/notifications/shuttlePath.ts";
 import {
@@ -30,37 +31,6 @@ const item = (id: number, title = `Reminder ${id}`): NotificationItem => ({
   title,
   due_at: `2026-11-18T12:0${id}`,
   seen: false,
-});
-
-test("up to three shuttles fly separately, the rest share a +N more shuttle", () => {
-  const trips = planShuttles(
-    [1, 2, 3, 4, 5].map((i) => item(i)),
-    3,
-  );
-  assert.equal(trips.length, 4);
-  assert.deepEqual(
-    trips.map((t) => t.ids),
-    [[1], [2], [3], [4, 5]],
-  );
-  assert.equal(trips[0]?.text, "Reminder 1");
-  assert.equal(trips[3]?.text, "+2 more reminders");
-});
-
-test("three or fewer: one trip each, oldest first", () => {
-  const trips = planShuttles([item(1), item(2)], 3);
-  assert.deepEqual(
-    trips.map((t) => t.ids),
-    [[1], [2]],
-  );
-  assert.deepEqual(planShuttles([], 3), []);
-});
-
-test("one more than the limit says '+1 more reminder'", () => {
-  const trips = planShuttles(
-    [1, 2, 3, 4].map((i) => item(i)),
-    3,
-  );
-  assert.equal(trips[3]?.text, "+1 more reminder");
 });
 
 test("long titles are cut at a word with an ellipsis; short ones are untouched", () => {
@@ -86,13 +56,6 @@ test("ticker shows 1 of 3, nothing for a single item, and wraps", () => {
   assert.equal(nextTickerIndex(2, 3), 0);
   assert.equal(nextTickerIndex(0, 3), 1);
   assert.equal(nextTickerIndex(5, 0), 0);
-});
-
-test("a mode change empties the shuttle queue; the same mode keeps it", () => {
-  const queue = [{ ids: [1], text: "Secret personal thing" }];
-  assert.deepEqual(queueAfterModeChange("personal", "sample", queue), []);
-  assert.deepEqual(queueAfterModeChange("sample", "sample", queue), queue);
-  assert.deepEqual(queueAfterModeChange(undefined, "sample", queue), queue);
 });
 
 test("the shuttle path starts and ends off screen on opposite sides, from any camera angle", () => {
@@ -157,4 +120,42 @@ test("peeking at an open-task request doesn't use it up", () => {
   assert.equal(peekOpenTaskRequest(), 7);
   assert.equal(takeOpenTaskRequest(), 7);
   assert.equal(peekOpenTaskRequest(), null);
+});
+
+test("the parade limit counts across checks: after three solo flights the rest share one shuttle", () => {
+  // Reminders that arrived in separate checks are all waiting together.
+  let pending = [1, 2, 3, 4, 5].map((i) => item(i));
+  const texts: string[] = [];
+  let flown = 0;
+  for (;;) {
+    const next = nextTrip(pending, flown, 3);
+    if (!next) break;
+    texts.push(next.trip.text);
+    pending = next.rest;
+    flown += 1;
+  }
+  assert.deepEqual(texts, ["Reminder 1", "Reminder 2", "Reminder 3", "+2 more reminders"]);
+});
+
+test("after three solo flights a single late reminder still flies with its own title", () => {
+  const next = nextTrip([item(9)], 3, 3);
+  assert.equal(next?.trip.text, "Reminder 9");
+});
+
+test("nothing waiting, no trip", () => {
+  assert.equal(nextTrip([], 0, 3), null);
+});
+
+test("the ticker rotates only with several items, motion allowed, and nothing hovered or focused", () => {
+  assert.equal(tickerShouldRotate({ count: 3, reducedMotion: false, paused: false }), true);
+  assert.equal(tickerShouldRotate({ count: 3, reducedMotion: false, paused: true }), false);
+  assert.equal(tickerShouldRotate({ count: 3, reducedMotion: true, paused: false }), false);
+  assert.equal(tickerShouldRotate({ count: 1, reducedMotion: false, paused: false }), false);
+});
+
+test("a mode change empties the shuttle queue; the same mode keeps it", () => {
+  const queue = [item(1, "Secret personal thing")];
+  assert.deepEqual(queueAfterModeChange("personal", "sample", queue), []);
+  assert.deepEqual(queueAfterModeChange("sample", "sample", queue), queue);
+  assert.deepEqual(queueAfterModeChange(undefined, "sample", queue), queue);
 });

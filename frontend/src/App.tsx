@@ -24,7 +24,7 @@ import { Desktop } from "./desktop/Desktop";
 import { stepsToTask } from "./notifications/journey";
 import { Ticker } from "./notifications/Ticker";
 import { useNotifications } from "./notifications/useNotifications";
-import { requestOpenTask } from "./todo/openRequest";
+import { requestOpenTask, takeOpenTaskRequest } from "./todo/openRequest";
 import { TodoPanel } from "./todo/TodoPanel";
 
 export const router = createBrowserRouter([
@@ -78,6 +78,9 @@ function BeltHome() {
   const go = (next: View) => {
     if (!confirmLeave()) return;
     setDirty(false); // already confirmed: don't ask again on the way out
+    // Going somewhere yourself cancels a ticker trip still under way (and its task request).
+    setJourney([]);
+    takeOpenTaskRequest();
     navigate(toPath(next));
   };
 

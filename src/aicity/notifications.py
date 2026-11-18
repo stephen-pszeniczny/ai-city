@@ -9,7 +9,8 @@ runs in the background every 30 seconds (src/aicity/reminder_loop.py) and:
   - makes one notification per (task, reminder time), never two;
   - clears active ones whose task was finished or archived, or whose reminder
     was changed or removed;
-  - deletes ones that have been dismissed or cleared for 90 days.
+  - deletes ones that have been dismissed or cleared for 90 days, once their task
+    no longer has that reminder time (until then the row stops a second firing).
 
 Reminder times are local Mac time to the minute ("2026-11-30T09:00"), so "due"
 is a plain text comparison in that format. Only the task's title is copied.
@@ -91,8 +92,13 @@ class NotificationStore:
                      AND reminder_at <= ? AND reminder_at >= ?""",
                 (stamp, local_now, since),
             ).rowcount
+            # Old dismissed/cleared rows go, but only once nothing could recreate them:
+            # while the task still has that reminder time, the row is what stops it
+            # firing a second time.
             conn.execute(
-                "DELETE FROM notifications WHERE COALESCE(dismissed_at, cleared_at) < ?",
+                """DELETE FROM notifications WHERE COALESCE(dismissed_at, cleared_at) < ?
+                   AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = notifications.task_id
+                                   AND t.reminder_at = notifications.due_at)""",
                 (cutoff,),
             )
             return made
