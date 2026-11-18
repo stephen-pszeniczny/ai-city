@@ -9,22 +9,44 @@ import * as THREE from "three";
 import { context2d, fbm, lerp, makeCanvas, perlin, smooth } from "./noise";
 import { LOOK } from "../look";
 import { SUN_DIR } from "./sky";
+import { fingerprint, rememberEarthMaps, setVersions, storedEarthMaps } from "./stored";
 
 export const EARTH_R = 1091;
 /** Where Earth sits, far below the station (scene units). */
 export const EARTH_POS = new THREE.Vector3(248, -1466, -450);
 
 type EarthTextures = {
-  day: THREE.CanvasTexture;
-  night: THREE.CanvasTexture;
-  spec: THREE.CanvasTexture;
-  clouds: THREE.CanvasTexture;
+  day: THREE.Texture;
+  night: THREE.Texture;
+  spec: THREE.Texture;
+  clouds: THREE.Texture;
 };
 let cached: EarthTextures | null = null;
 
 function earthTextures(): EarthTextures {
   if (cached) return cached;
   const t0 = performance.now();
+  // Painted on a previous open? Use those maps (see stored.ts) instead of painting again.
+  const kept = storedEarthMaps();
+  if (kept) {
+    const fromBitmap = (b: ImageBitmap, srgb: boolean) => {
+      const t = new THREE.Texture(b);
+      t.flipY = false; // already flipped when decoded, to match canvas textures
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      t.needsUpdate = true;
+      return t;
+    };
+    const [day, night, spec, clouds] = kept as [ImageBitmap, ImageBitmap, ImageBitmap, ImageBitmap];
+    cached = {
+      day: fromBitmap(day, true),
+      night: fromBitmap(night, true),
+      spec: fromBitmap(spec, false),
+      clouds: fromBitmap(clouds, false),
+    };
+    performance.measure("earth textures (kept)", { start: t0 });
+    return cached;
+  }
   const W = 1536;
   const H = 768;
   const CW = W / 2;
@@ -134,9 +156,13 @@ function earthTextures(): EarthTextures {
     spec: tex(2, sI, false),
     clouds: tex(3, cI, false),
   };
+  rememberEarthMaps(canvases);
   performance.measure("earth textures", { start: t0 }); // see the browser's Performance panel
   return cached;
 }
+
+// Stored maps from older versions of this code are ignored (see stored.ts).
+setVersions({ earth: fingerprint(earthTextures, fbm, perlin.noise) });
 
 export type Earth = {
   group: THREE.Group;
