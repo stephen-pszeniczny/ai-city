@@ -4,12 +4,15 @@ import { test } from "node:test";
 
 import {
   blend,
+  fadeSecondsFor,
   isNight,
+  isPastChange,
   loadChoice,
   msUntilRefresh,
   nextChoice,
   saveChoice,
 } from "../src/belt/dayNight.ts";
+import { LOOK } from "../src/belt/look.ts";
 
 const daylight = (is_night: boolean) => ({
   is_night,
@@ -94,4 +97,25 @@ test("blend: start, middle, end, and zero fade", () => {
   assert.equal(blend(0, 1, 25, 20), 1);
   assert.equal(blend(0, 1, 5, 0), 1);
   assert.equal(blend(1, 0, 25, 20), 0);
+});
+
+test("a change from the Sky button fades quickly", () => {
+  assert.equal(fadeSecondsFor("auto", "day", { fadeSeconds: 20, buttonFadeSeconds: 3 }), 3);
+});
+
+test("sunset in Auto fades slowly, even after earlier button presses", () => {
+  // The choice is unchanged since last time (Auto), so the change came from the backend.
+  assert.equal(fadeSecondsFor("auto", "auto", { fadeSeconds: 20, buttonFadeSeconds: 3 }), 20);
+});
+
+test("a past next change means it's time to ask again (Mac woke from sleep)", () => {
+  const next = "2026-06-21T21:20:00+01:00";
+  assert.equal(isPastChange(next, Date.parse("2026-06-21T23:00:00+01:00")), true);
+  assert.equal(isPastChange(next, Date.parse("2026-06-21T20:00:00+01:00")), false);
+  assert.equal(isPastChange("not a time", Date.now()), false);
+});
+
+test("how dark night gets lives in the look settings", () => {
+  assert.equal(typeof LOOK.dayNight.nightSunStrength, "number");
+  assert.equal(typeof LOOK.dayNight.nightFillStrength, "number");
 });

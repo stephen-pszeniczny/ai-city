@@ -58,6 +58,25 @@ export function msUntilRefresh(nextChange: string, nowMs: number): number {
   return Math.min(MAX_REFRESH_MS, Math.max(MIN_REFRESH_MS, wait));
 }
 
+/** True once the backend's next change has passed (e.g. the Mac slept through sunset). */
+export function isPastChange(nextChange: string, nowMs: number): boolean {
+  const at = Date.parse(nextChange);
+  return !Number.isNaN(at) && nowMs >= at;
+}
+
+/**
+ * How long a change should fade: quick when the Sky choice itself changed (a button
+ * press), slow when the choice is the same and the backend's answer changed (sunrise
+ * or sunset).
+ */
+export function fadeSecondsFor(
+  lastChoice: SkyChoice,
+  choice: SkyChoice,
+  look: { fadeSeconds: number; buttonFadeSeconds: number },
+): number {
+  return lastChoice === choice ? look.fadeSeconds : look.buttonFadeSeconds;
+}
+
 /** Eased fade from `from` to `to` over `fadeS` seconds. */
 export function blend(from: number, to: number, elapsedS: number, fadeS: number): number {
   if (fadeS <= 0) return to;

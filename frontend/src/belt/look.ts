@@ -47,6 +47,10 @@ export const LOOK = {
     fadeSeconds: 20,
     /** Seconds the fade takes after pressing the Sky button (quicker, so it feels responsive). */
     buttonFadeSeconds: 3,
+    /** Sunlight left at night (day is 3.4). Higher = lighter nights. */
+    nightSunStrength: 0.3,
+    /** Soft fill light from the viewer's side at night (day is 0.55); keeps asteroid colours readable. */
+    nightFillStrength: 1.5,
     /** How much brighter the stars are at night (1 = same as day). */
     nightStarBrightness: 1.6,
     /** How much brighter the station's windows glow at night (1 = same as day). */

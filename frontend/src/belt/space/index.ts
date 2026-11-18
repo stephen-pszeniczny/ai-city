@@ -36,10 +36,7 @@ export type Space = {
 /** At night the sun is straight behind Earth as seen from the station. */
 const NIGHT_SUN_DIR = EARTH_POS.clone().normalize();
 const SUN_DAY = 3.4;
-const SUN_NIGHT = 0.3;
-/** At night the soft fill from the viewer's side brightens, so the asteroids' colours stay readable. */
 const FILL_DAY = 0.55;
-const FILL_NIGHT = 1.5;
 const SUN_DAY_COLOUR = new THREE.Color(0xfff1dc);
 const SUN_NIGHT_COLOUR = new THREE.Color(0x9fb6ff);
 
@@ -105,9 +102,9 @@ export function createSpace(
   const apply = (a: number) => {
     sunDir.copy(SUN_DIR).lerp(NIGHT_SUN_DIR, a).normalize();
     sun.position.copy(sunDir).multiplyScalar(60);
-    sun.intensity = SUN_DAY + (SUN_NIGHT - SUN_DAY) * a;
+    sun.intensity = SUN_DAY + (LOOK.dayNight.nightSunStrength - SUN_DAY) * a;
     sun.color.copy(SUN_DAY_COLOUR).lerp(SUN_NIGHT_COLOUR, a);
-    fill.intensity = FILL_DAY + (FILL_NIGHT - FILL_DAY) * a;
+    fill.intensity = FILL_DAY + (LOOK.dayNight.nightFillStrength - FILL_DAY) * a;
     earth?.setSunDir(sunDir);
     sky.setNight(a);
     moon.setVisible(a);

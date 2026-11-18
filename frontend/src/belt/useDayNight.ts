@@ -1,21 +1,25 @@
 // Day or night for the belt right now: the backend's answer (worked out from the
 // settings' location) combined with the Sky button's override.
 //
-// The backend is asked again at its next_change (sunrise or sunset), whenever the
-// window comes back into focus (the Mac may have slept through a change), and at
-// least every six hours.
+// The backend is asked again at its next_change (sunrise or sunset), when the page
+// becomes visible again, and at least every six hours. Timers can stall while the
+// Mac sleeps, so a once-a-minute check of the real clock also asks again as soon as
+// next_change has passed.
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getDaylight } from "../api";
 import {
   isNight,
+  isPastChange,
   loadChoice,
   msUntilRefresh,
   nextChoice,
   saveChoice,
   type SkyChoice,
 } from "./dayNight";
+
+const CLOCK_CHECK_MS = 60_000;
 
 function browserStorage(): Storage | null {
   try {
@@ -31,14 +35,11 @@ export type DayNight = {
   choice: SkyChoice;
   /** False until there's something real to show (backend answered, or failed, or an override is set). */
   ready: boolean;
-  /** True when the last change came from the Sky button (it fades quicker). */
-  byHand: boolean;
   cycle(): void;
 };
 
 export function useDayNight(): DayNight {
   const [choice, setChoice] = useState<SkyChoice>(() => loadChoice(browserStorage()));
-  const [byHand, setByHand] = useState(false);
   const daylight = useQuery({
     queryKey: ["daylight"],
     queryFn: getDaylight,
@@ -48,15 +49,15 @@ export function useDayNight(): DayNight {
       q.state.data ? msUntilRefresh(q.state.data.next_change, Date.now()) : 60_000,
   });
 
-  // A change from the backend (sunrise or sunset) is not a button press.
-  const lastAnswer = useRef<boolean | undefined>(undefined);
-  const answer = daylight.data?.is_night;
+  const nextChange = daylight.data?.next_change;
+  const { refetch } = daylight;
   useEffect(() => {
-    if (answer !== lastAnswer.current) {
-      lastAnswer.current = answer;
-      setByHand(false);
-    }
-  }, [answer]);
+    if (!nextChange) return;
+    const id = window.setInterval(() => {
+      if (isPastChange(nextChange, Date.now())) void refetch();
+    }, CLOCK_CHECK_MS);
+    return () => window.clearInterval(id);
+  }, [nextChange, refetch]);
 
   const cycle = useCallback(() => {
     setChoice((c) => {
@@ -64,7 +65,6 @@ export function useDayNight(): DayNight {
       saveChoice(browserStorage(), next);
       return next;
     });
-    setByHand(true);
   }, []);
 
   return {
@@ -72,7 +72,6 @@ export function useDayNight(): DayNight {
     moonPhase: daylight.data?.moon_phase ?? 0.5,
     choice,
     ready: choice !== "auto" || daylight.status !== "pending",
-    byHand,
     cycle,
   };
 }
