@@ -143,3 +143,54 @@
   outline: 2px solid #8aa4ff;
   outline-offset: 2px;
 }
+
+/* The tow line: from the banner's leading edge down to the hitch on the rocket's back.
+   Length and angle come from Shuttle.tsx (--tow-length, --tow-angle). */
+.shuttle-banner__tow {
+  position: absolute;
+  top: 50%;
+  width: var(--tow-length, 100px);
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, rgba(201, 243, 255, 0.95), rgba(57, 198, 255, 0.8));
+  box-shadow:
+    0 0 4px rgba(57, 198, 255, 0.9),
+    0 0 10px rgba(57, 198, 255, 0.45);
+}
+
+.shuttle-banner[data-dir="right"] .shuttle-banner__tow {
+  left: 100%;
+  transform-origin: left center;
+  transform: rotate(var(--tow-angle, 16deg));
+}
+
+.shuttle-banner[data-dir="left"] .shuttle-banner__tow {
+  right: 100%;
+  transform-origin: right center;
+  transform: rotate(var(--tow-angle, -16deg));
+}
+
+/* A small clasp where the line meets the banner, and a ring where it meets the hitch. */
+.shuttle-banner__tow::before,
+.shuttle-banner__tow::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  border: 1.5px solid #c9f3ff;
+  box-shadow: 0 0 6px rgba(57, 198, 255, 0.9);
+}
+
+.shuttle-banner[data-dir="right"] .shuttle-banner__tow::before,
+.shuttle-banner[data-dir="left"] .shuttle-banner__tow::after {
+  left: -3px;
+}
+
+.shuttle-banner[data-dir="right"] .shuttle-banner__tow::after,
+.shuttle-banner[data-dir="left"] .shuttle-banner__tow::before {
+  right: -3px;
+}

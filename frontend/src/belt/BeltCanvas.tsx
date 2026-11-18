@@ -106,7 +106,9 @@ export function BeltCanvas({
             }
             role="status"
           >
-            {tripBanner(trip)}
+            <span className="shuttle-banner__text">{tripBanner(trip)}</span>
+            {/* The tow line from the rocket's hitch to the banner (not with reduced motion). */}
+            {!still && <span className="shuttle-banner__tow" aria-hidden="true" />}
           </div>
         )}
       </ThreeErrorBoundary>
