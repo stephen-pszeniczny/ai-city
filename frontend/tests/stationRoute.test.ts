@@ -256,3 +256,77 @@ test("leaving or switching rooms while still outside never flies through the hul
     assert.ok(spine(p) > 2.5, `between: into the hull at ${t.toFixed(2)}`);
   }
 });
+
+// --- Smooth everyday flights (Steve, 2026-11-18) -------------------------------
+
+/** Belt views the camera may start from: the home view, turned to one side, turned away. */
+const STARTS: [string, Pose][] = [
+  ["home", BELT],
+  ["turned", { position: new THREE.Vector3(70, 22, -38), target: new THREE.Vector3() }],
+  ["other side", { position: new THREE.Vector3(-75, 30, 25), target: new THREE.Vector3() }],
+  ["behind", { position: new THREE.Vector3(5, 20, -80), target: new THREE.Vector3() }],
+];
+
+/** How often the camera's turning direction flips (sway), and its fastest turn. */
+function yawMotion(r: Route) {
+  const n = 600;
+  let prevYaw: number | null = null;
+  let prevRate = 0;
+  let flips = 0;
+  let maxRate = 0;
+  for (let i = 0; i <= n; i++) {
+    const d = facing(r.sample((i / n) * r.duration));
+    const yaw = Math.atan2(d.x, d.z);
+    if (prevYaw !== null) {
+      let step = yaw - prevYaw;
+      step = Math.atan2(Math.sin(step), Math.cos(step));
+      maxRate = Math.max(maxRate, (Math.abs(step) * n) / r.duration);
+      if (Math.abs(step) > 2e-3) {
+        if (prevRate && Math.sign(step) !== Math.sign(prevRate)) flips++;
+        prevRate = step;
+      }
+    }
+    prevYaw = yaw;
+  }
+  return { flips, maxRate };
+}
+
+test("no side-to-side sway: flights in and out turn smoothly", () => {
+  for (const [name, start] of STARTS) {
+    for (const room of ["planner", "finance"] as const) {
+      const into = routeIn(room, start, { stopAtDoor: false });
+      const out = routeOut(room, into.sample(into.duration), start);
+      for (const [dir, r] of [
+        ["in", into],
+        ["out", out],
+      ] as const) {
+        const { flips, maxRate } = yawMotion(r);
+        assert.ok(
+          flips <= 2,
+          `${dir} ${room} from ${name}: turning direction flips ${flips} times`,
+        );
+        assert.ok(
+          maxRate < 1.6,
+          `${dir} ${room} from ${name}: turns at ${maxRate.toFixed(2)} rad/s`,
+        );
+      }
+    }
+  }
+});
+
+test("the camera lines up with the hatch on the way in, not by circling the station", () => {
+  for (const [name, start] of STARTS) {
+    const r = routeIn("planner", start, { stopAtDoor: false });
+    for (let i = 0; i <= 400; i++) {
+      const p = r.sample((i / 400) * r.duration).position;
+      const flat = Math.hypot(p.x, p.z);
+      if (flat < 9) break; // reached the station: only the approach counts
+      if (flat > 16) continue; // the ring just outside the station
+      const around = Math.abs(Math.atan2(p.x, p.z)); // 0 = straight out from the hatch
+      assert.ok(
+        around < THREE.MathUtils.degToRad(35),
+        `from ${name}: ${((around * 180) / Math.PI).toFixed(0)}° round the station when close`,
+      );
+    }
+  }
+});

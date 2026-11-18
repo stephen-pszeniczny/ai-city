@@ -1,4 +1,5 @@
-/* Level 3, the desktop screen: the approved prototype's monitor (10% bigger),
+/* Level 3, the desktop screen: a modern thin-bezel display on a slim aluminium stand
+   (Steve, 2026-11-18: about 12% bigger than before, more modern),
    floating over the live 3D room or asteroid. Colours with transparency use
    commas (the secret scanner's SIN rule). */
 
@@ -8,7 +9,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 64px 7vw 24px;
+  padding: 60px 5vw 16px;
   pointer-events: none; /* the space around the monitor stays the 3D view */
 }
 
@@ -35,7 +36,7 @@
   position: relative;
   z-index: 2;
   /* Width follows the available height too, so screen and chin always match. */
-  width: min(1210px, 100%, calc(66vh * 1.6)); /* 10% bigger than the first cut */
+  width: min(1355px, 100%, calc(74vh * 1.6)); /* 12% bigger than before */
 }
 
 .monitor__screen {
@@ -44,9 +45,9 @@
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
-  border: 14px solid var(--bezel);
-  border-bottom-width: 14px;
-  border-radius: 18px 18px 4px 4px;
+  border: 10px solid var(--bezel);
+  border-bottom-width: 12px;
+  border-radius: 20px;
   background:
     radial-gradient(120% 90% at 80% 110%, rgba(65, 105, 225, 0.55), transparent 60%),
     radial-gradient(60% 50% at 15% 10%, rgba(90, 60, 255, 0.25), transparent 70%), #060a18;
@@ -65,14 +66,41 @@
   background: linear-gradient(125deg, rgba(255, 255, 255, 0.06), transparent 35%);
 }
 
+/* The stand: a slim aluminium neck (::before) and a thin foot (::after). */
 .monitor__chin {
-  height: 26px;
-  margin: 0 auto;
-  background: linear-gradient(#15181f, #0b0d12);
-  border-radius: 0 0 14px 14px;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 0 0 1px #262a33;
+  position: relative;
+  width: 16%;
+  height: 34px;
+  margin: 0 auto 7px;
+}
+
+.monitor__chin::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #7b8392, #c9cfda 45%, #a3aab7 55%, #6c7482);
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+}
+
+.monitor__chin::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 210%;
+  height: 7px;
+  transform: translateX(-50%);
+  border-radius: 4px;
+  background: linear-gradient(#d4d9e2, #8e96a4);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
+}
+
+/* Power light: a tiny dot in the bottom bezel. */
+.monitor__chin .monitor__led {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .monitor__led {
@@ -147,7 +175,7 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto 1fr;
-  max-width: 760px;
+  max-width: 850px; /* 12% bigger than before */
   width: 100%;
   justify-self: center;
   border-radius: 12px;

@@ -44,10 +44,27 @@ const HULL = new THREE.Box3(
   v(MODULE_X.planner - ROOM_SIZE.width / 2, -2, ROOM_SIZE.back - 0.2),
   v(MODULE_X.finance + ROOM_SIZE.width / 2, 2.5, HATCH.z),
 );
+/** What the camera keeps centred while out in space: the hatch it's heading for. */
+const HATCH_POINT = v(0, EYE, HATCH.z);
 /** Where the outside speed blends into the inside speed (distance from the hull). */
 const BLEND = { from: 0.5, to: 40 } as const;
 /** How fast the camera may turn while blending its start direction (radians per second). */
 const START_TURN_RATE = 0.8;
+/** Share of a flight's progress the camera's heading is averaged over (each side), to stop sway. */
+const HEADING_SMOOTHING = 0.07;
+/** By this distance from the station, the approach has lined up with the hatch side. */
+const LINED_UP_AT = 22;
+/** Extra seconds for an approach that has to swing all the way round (half that for 90°). */
+const EXTRA_FOR_FULL_SWING = 0.75;
+
+/** How far round the station (radians, 0..π) a view at `p` is from the hatch side. */
+function swingFrom(p: THREE.Vector3): number {
+  if (Math.hypot(p.x, p.z) <= LINED_UP_AT) return 0;
+  return Math.abs(Math.atan2(p.x, p.z));
+}
+/** A flight's seconds, a little longer when the approach swings round the station. */
+const withSwing = (seconds: number, p: THREE.Vector3) =>
+  seconds + (EXTRA_FOR_FULL_SWING * swingFrom(p)) / Math.PI;
 
 /** The room view: behind the robot, looking at its screen (station coordinates). */
 export function roomPose(room: StationRoom): Pose {
@@ -189,15 +206,47 @@ function makeLeg(
   const startTurn = firstAhead.lengthSq() > 1e-9 ? startDir.angleTo(firstAhead.normalize()) : 0;
   const startBlend = Math.min(0.5, Math.max(0.2, startTurn / (START_TURN_RATE * duration)));
 
-  /** Where the camera is, and the way it looks ahead along the curve, at progress k (0..1). */
+  // The way the camera faces along the route: the direction a little ahead, then
+  // averaged over a short stretch of flying time, so small bends (round the hub,
+  // into a narrow hallway) never swing it side to side, and the faster outside
+  // stretch can't whip it round. A table by flight progress, worked out once.
+  const H = 800;
+  const heading: THREE.Vector3[] = [];
+  for (let i = 0; i <= H; i++) {
+    const along = len[Math.round(lookup(wsum, (i / H) * weighted) * N)]!;
+    const here = curve.getPoint(lookup(len, along));
+    const ahead = curve.getPoint(lookup(len, Math.min(total, along + LOOK.flights.lookAhead)));
+    const d = ahead.sub(here);
+    const along_ =
+      d.lengthSq() > 1e-9 ? d.normalize() : (heading[i - 1]?.clone() ?? endDir.clone());
+    // Out in space, keep the station's hatch centred (a film-style dolly round it);
+    // nearing the hatch, face along the route instead.
+    const out = smoothstep(BLEND.from, BLEND.to, HULL.distanceToPoint(here));
+    const toHatch = HATCH_POINT.clone().sub(here).normalize();
+    heading.push(along_.lerp(toHatch, out).normalize());
+  }
+  const reach = Math.max(1, Math.round(HEADING_SMOOTHING * H));
+  for (let pass = 0; pass < 3; pass++) {
+    const copy = heading.map((h) => h.clone());
+    for (let i = 0; i <= H; i++) {
+      const sum = new THREE.Vector3();
+      for (let j = Math.max(0, i - reach); j <= Math.min(H, i + reach); j++) sum.add(copy[j]!);
+      if (sum.lengthSq() > 1e-9) heading[i]!.copy(sum.normalize());
+    }
+  }
+  /** Heading at a share of the flight (0..1 of the weighted distance). */
+  const headingAt = (share: number) => {
+    const x = Math.min(1, Math.max(0, share)) * H;
+    const i = Math.min(H - 1, Math.floor(x));
+    return heading[i]!.clone()
+      .lerp(heading[i + 1]!, x - i)
+      .normalize();
+  };
+
+  /** Where the camera is, and the way it faces along the route, at progress k (0..1). */
   const forwardAt = (k: number) => {
     const u = lookup(wsum, smooth(k) * weighted);
-    const position = curve.getPoint(u);
-    const along = len[Math.round(u * N)]!;
-    const ahead = curve
-      .getPoint(lookup(len, Math.min(total, along + LOOK.flights.lookAhead)))
-      .sub(position);
-    return { position, forward: ahead.lengthSq() > 1e-6 ? ahead.normalize() : endDir.clone() };
+    return { position: curve.getPoint(u), forward: headingAt(smooth(k)) };
   };
   // Which way round each blend turns, decided once (see blendDir).
   const sideOf = (dy: number) => (dy >= 0 ? 1 : -1);
@@ -270,30 +319,45 @@ const outsideHatch = (room: StationRoom) => {
   return [v(off * 3.0, EYE + 0.9, 8.6), v(off * 1.1, EYE + 0.25, 5.2)] as const;
 };
 
-/** A point that swings the approach round the station when `p` is off to the side or behind. */
-function swingRound(p: THREE.Vector3): THREE.Vector3[] {
-  const flat = v(p.x, 0, p.z);
-  if (flat.lengthSq() < 1e-6) return [];
-  flat.normalize();
-  if (flat.angleTo(v(0, 0, 1)) <= THREE.MathUtils.degToRad(60)) return [];
-  const mid = flat.clone().add(v(0, 0, 1));
-  if (mid.lengthSq() < 1e-4) mid.set(1, 0, 0); // straight behind: go round the Vault end
-  mid.normalize();
-  return [mid.multiplyScalar(18).setY(EYE + 3)];
+/**
+ * The approach from a belt view at `p` to the hatch: one wide, gradual arc that
+ * lines up with the hatch side while closing in (finished by LINED_UP_AT), so the
+ * camera never circles the station once it's there. Ends with the two points just
+ * outside the hatch. Flying out uses the same points in reverse.
+ */
+function approachFrom(p: THREE.Vector3, room: StationRoom): THREE.Vector3[] {
+  const [far, near] = outsideHatch(room);
+  const r0 = Math.hypot(p.x, p.z);
+  if (r0 <= LINED_UP_AT) return [far, near];
+  const yaw0 = Math.atan2(p.x, p.z); // 0 = straight out from the hatch
+  let turn = Math.atan2(far.x, far.z) - yaw0;
+  turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+  // Straight behind: go round the Vault end, as before.
+  if (Math.abs(Math.abs(turn) - Math.PI) < 0.05) turn = Math.abs(turn);
+  const steps = Math.max(1, Math.ceil(Math.abs(turn) / 0.45)); // a point every ~25°
+  const arc: THREE.Vector3[] = [];
+  for (let i = 1; i <= steps; i++) {
+    const f = i / steps;
+    // Evenly, finished by 70% of the way in, so the last stretch already heads for the hatch.
+    const yaw = yaw0 + turn * Math.min(1, f / 1.0);
+    const r = THREE.MathUtils.lerp(r0, LINED_UP_AT, f);
+    const y = THREE.MathUtils.lerp(p.y, EYE + 4, f); // stays above the asteroid ring until close
+    arc.push(v(Math.sin(yaw) * r, y, Math.cos(yaw) * r));
+  }
+  return [...arc, far, near];
 }
 
 /** Into a control room from outside (the belt view). */
 export function routeIn(room: StationRoom, from: Pose, opts: { stopAtDoor: boolean }): Route {
   const stopAtDoor = opts.stopAtDoor && room === "finance";
   const path = hatchToRoom(room, { stopAtDoor });
-  const approach = inside(from.position)
-    ? []
-    : [...swingRound(from.position), ...outsideHatch(room)];
+  const approach = inside(from.position) ? [] : approachFrom(from.position, room);
   const first = fromPartway(from.position, [...approach, ...path.toHallway]);
   const end = roomPose(room);
   if (!path.stop) {
     const pts = [from.position.clone(), ...first, ...path.toRoom];
-    return route([makeLeg(pts, from, end, LOOK.flights.toStationSeconds, path.toRoom[0]!)], 0);
+    const seconds = withSwing(LOOK.flights.toStationSeconds, from.position);
+    return route([makeLeg(pts, from, end, seconds, path.toRoom[0]!)], 0);
   }
   return doorRoute(
     from,
@@ -301,7 +365,7 @@ export function routeIn(room: StationRoom, from: Pose, opts: { stopAtDoor: boole
     path.stop,
     path.toRoom,
     end,
-    LOOK.flights.toStationSeconds,
+    withSwing(LOOK.flights.toStationSeconds, from.position),
   );
 }
 
@@ -347,14 +411,14 @@ function upTo(end: THREE.Vector3, points: THREE.Vector3[]): THREE.Vector3[] {
  * backs out from wherever the camera is.
  */
 export function routeOut(room: StationRoom, from: Pose, to: Pose): Route {
-  const seconds = LOOK.flights.fromStationSeconds;
+  const seconds = withSwing(LOOK.flights.fromStationSeconds, to.position);
   if (!inside(from.position)) {
     // Still outside (Back pressed early in the flight in): just pull back to the belt view.
     const back = makeLeg([to.position.clone(), from.position.clone()], to, from, seconds, 0.3);
     return { duration: seconds, doorStop: null, sample: (t) => back.sample(seconds - t) };
   }
   const path = hatchToRoom(room, { stopAtDoor: false });
-  const approach = inside(to.position) ? [] : [...swingRound(to.position), ...outsideHatch(room)];
+  const approach = inside(to.position) ? [] : approachFrom(to.position, room);
   const station = [...path.toHallway, ...path.toRoom.slice(0, -1)];
   const pts = [
     to.position.clone(),
