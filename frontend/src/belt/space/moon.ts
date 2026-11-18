@@ -1,13 +1,13 @@
 // The moon: only out at night, drawn in tonight's real phase (worked out by the
-// backend from the date). It sits far off in the sky, upper right of the belt's
-// home view, well away from Earth below.
+// backend from the date). It sits far off in the sky, high on the right of the
+// belt's home view (above the building signs), well away from Earth below.
 import * as THREE from "three";
 
 import { LOOK } from "../look";
 import { noiseTexture, softGlow } from "./noise";
 
 /** Direction of the moon from the station (scene units, normalised). */
-export const MOON_DIR = new THREE.Vector3(0.31, -0.09, -0.946).normalize();
+export const MOON_DIR = new THREE.Vector3(0.22, -0.01, -0.975).normalize();
 const DISTANCE = 5200;
 const RADIUS = 70; // about 1.5° across: a little bigger than the real moon, so it reads
 

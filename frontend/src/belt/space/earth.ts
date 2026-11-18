@@ -214,7 +214,7 @@ export function createEarth(): Earth {
       void main(){ float i = pow(max(0.0, 0.68 - dot(vNV, vec3(0.0, 0.0, 1.0))), 3.2);
         float lit = 0.25 + 0.75 * smoothstep(-0.4, 0.5, dot(vNW, sunDir));
         float behind = smoothstep(0.3, 0.9, dot(normalize(vCentre - cameraPosition), sunDir));
-        vec3 col = vec3(0.28, 0.56, 1.0) * i * lit * 2.4 + vec3(1.0, 0.62, 0.38) * i * behind * 2.0;
+        vec3 col = vec3(0.28, 0.56, 1.0) * i * lit * 2.4 * (1.0 - 0.7 * behind) + vec3(1.0, 0.5, 0.22) * pow(i, 2.2) * behind * 1.2;
         gl_FragColor = vec4(col, 1.0); }`,
   });
   group.add(surface, clouds, new THREE.Mesh(atmoGeo, atmoMat));

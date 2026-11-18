@@ -15,6 +15,8 @@ import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
 import { ModeSwitch } from "./ModeSwitch";
+import { SkyToggle } from "./SkyToggle";
+import { useDayNight } from "./useDayNight";
 import "./belt.css";
 
 export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: BuildingId) => void }) {
@@ -23,6 +25,7 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
   const api = useRef<SceneApi | null>(null);
   const [reducedMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
   const sample = useSampleReminder();
+  const sky = useDayNight();
   const buildings = useQuery({
     queryKey: ["buildings"],
     queryFn: getBuildings,
@@ -39,7 +42,7 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
           gl={{ antialias: false, powerPreference: "high-performance" }}
           camera={{ fov: 38, near: 0.5, far: 20000, position: [...BELT_HOME.position] }}
         >
-          <BeltScene view={view} onOpen={onOpen} labels={labels} api={api} />
+          <BeltScene view={view} onOpen={onOpen} labels={labels} api={api} sky={sky} />
           <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
           <OrbitControls
             makeDefault
@@ -59,6 +62,7 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
         <span className="belt__brand">Asteroid Belt</span>
         {sample && <span className="belt__sample">Sample data</span>}
         {/* Switching is done from the belt only, never from inside a building. */}
+        {view.level === "belt" && <SkyToggle choice={sky.choice} onCycle={sky.cycle} />}
         {view.level === "belt" && <ModeSwitch />}
       </header>
 

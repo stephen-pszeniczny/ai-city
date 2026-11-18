@@ -329,3 +329,33 @@
     sans-serif;
   cursor: pointer;
 }
+
+/* The Sky button (day and night override), just left of the Sample | Personal switch. */
+.sky-toggle {
+  margin-left: auto;
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(16, 20, 32, 0.52);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  color: var(--text);
+  font:
+    600 13px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.sky-toggle:focus-visible {
+  outline: 2px solid #8aa4ff;
+  outline-offset: 2px;
+}
+
+/* The Sky button already pushes both to the right. */
+.sky-toggle + .mode-switch {
+  margin-left: 0;
+}

@@ -21,8 +21,11 @@ export type Space = {
   /** Radians per second the belt and asteroids move (slower with reduced motion). */
   orbitSpeed: number;
   update(t: number, camera: THREE.Camera): void;
-  /** Go to night or day: a slow fade, or at once (first load, reduced motion). */
-  setNight(night: boolean, opts: { instant: boolean }): void;
+  /**
+   * Go to night or day: a fade (LOOK.dayNight.fadeSeconds unless `seconds` is given),
+   * or at once (first load, reduced motion).
+   */
+  setNight(night: boolean, opts: { instant: boolean; seconds?: number }): void;
   /** Tonight's moon: 0 new, 0.5 full. */
   setMoonPhase(phase: number): void;
   /** How far into night the scene is right now: 0 day … 1 night. */
@@ -33,7 +36,12 @@ export type Space = {
 /** At night the sun is straight behind Earth as seen from the station. */
 const NIGHT_SUN_DIR = EARTH_POS.clone().normalize();
 const SUN_DAY = 3.4;
-const SUN_NIGHT = 0.15;
+const SUN_NIGHT = 0.3;
+/** At night the soft fill from the viewer's side brightens, so the asteroids' colours stay readable. */
+const FILL_DAY = 0.55;
+const FILL_NIGHT = 1.5;
+const SUN_DAY_COLOUR = new THREE.Color(0xfff1dc);
+const SUN_NIGHT_COLOUR = new THREE.Color(0x9fb6ff);
 
 export function createSpace(
   scene: THREE.Scene,
@@ -48,10 +56,10 @@ export function createSpace(
   scene.background = new THREE.Color(0x000000);
 
   // Light: the sun, a blue glow from Earth below, and a soft fill.
-  const sun = new THREE.DirectionalLight(0xfff1dc, SUN_DAY);
+  const sun = new THREE.DirectionalLight(SUN_DAY_COLOUR, SUN_DAY);
   sun.position.copy(SUN_DIR).multiplyScalar(60);
   const earthshine = new THREE.HemisphereLight(0x0b1124, 0x2a4fa8, 0.75);
-  const fill = new THREE.DirectionalLight(0x9fb6ff, 0.55);
+  const fill = new THREE.DirectionalLight(0x9fb6ff, FILL_DAY);
   fill.position.set(40, 25, 60);
   root.add(sun, earthshine, fill);
 
@@ -98,6 +106,8 @@ export function createSpace(
     sunDir.copy(SUN_DIR).lerp(NIGHT_SUN_DIR, a).normalize();
     sun.position.copy(sunDir).multiplyScalar(60);
     sun.intensity = SUN_DAY + (SUN_NIGHT - SUN_DAY) * a;
+    sun.color.copy(SUN_DAY_COLOUR).lerp(SUN_NIGHT_COLOUR, a);
+    fill.intensity = FILL_DAY + (FILL_NIGHT - FILL_DAY) * a;
     earth?.setSunDir(sunDir);
     sky.setNight(a);
     moon.setVisible(a);
@@ -132,12 +142,12 @@ export function createSpace(
       belt.update(t, orbitSpeed);
       earth?.update(t);
     },
-    setNight(night, { instant }) {
+    setNight(night, { instant, seconds }) {
       const target = night ? 1 : 0;
       if (target === toAmount && !instant) return;
       fromAmount = instant ? target : amount;
       toAmount = target;
-      fadeSeconds = instant ? 0 : LOOK.dayNight.fadeSeconds;
+      fadeSeconds = instant ? 0 : (seconds ?? LOOK.dayNight.fadeSeconds);
       fadeStart = instant ? lastT : null;
       if (instant) {
         amount = target;
