@@ -16,15 +16,24 @@ from collections.abc import Callable
 from datetime import datetime, tzinfo
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database
-from aicity.notifications import NotificationStore
+from aicity.notifications import Notification, NotificationStore
 
 log = logging.getLogger(__name__)
 
 Clock = Callable[[], datetime]
 
 
-def check_all_databases(clock: Clock, local_tz: tzinfo | None = None) -> dict[DbKind, int]:
-    """Run the reminder check on each database that exists. Returns how many each made."""
+def check_all_databases(
+    clock: Clock,
+    local_tz: tzinfo | None = None,
+    notify: Callable[[list[Notification]], None] | None = None,
+) -> dict[DbKind, int]:
+    """Run the reminder check on each database that exists. Returns how many each made.
+
+    notify, if given, is called with the Personal database's newly made
+    notifications (only when there are some), for Mac notifications. Sample's
+    made-up reminders never go to it. A failing notify is logged and ignored.
+    """
     made: dict[DbKind, int] = {}
     for kind in DbKind:
         path = db_path(kind)
@@ -39,7 +48,13 @@ def check_all_databases(clock: Clock, local_tz: tzinfo | None = None) -> dict[Db
             )
             continue
         try:
-            made[kind] = NotificationStore(conn, clock, local_tz).check_reminders()
+            store = NotificationStore(conn, clock, local_tz)
+            before = store.last_id()
+            made[kind] = store.check_reminders()
+            if notify is not None and kind is DbKind.PERSONAL:
+                new = store.created_after(before)
+                if new:
+                    _tell(notify, new)
         except (sqlite3.Error, ValueError) as exc:
             log.warning(
                 "Reminder check failed on the %s database (%s).", kind.value, type(exc).__name__
@@ -47,6 +62,14 @@ def check_all_databases(clock: Clock, local_tz: tzinfo | None = None) -> dict[Db
         finally:
             conn.close()
     return made
+
+
+def _tell(notify: Callable[[list[Notification]], None], new: list[Notification]) -> None:
+    try:
+        notify(new)
+    # Anything at all: a Mac notification problem must never stop reminders being made.
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Mac notification step failed (%s).", type(exc).__name__)
 
 
 class ReminderLoop:

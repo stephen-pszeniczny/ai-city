@@ -14,8 +14,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from aicity import config, notification_routes, page, task_routes
+from aicity import config, mac_notify, notification_routes, page, task_routes
 from aicity.db import DbKind
+from aicity.mac_messages import plan_mac_messages
 from aicity.mode import (
     ModeSwitcher,
     OwnerCheck,
@@ -25,8 +26,9 @@ from aicity.mode import (
     ask_owner,
     load_saved_mode,
 )
+from aicity.notifications import Notification
 from aicity.presence import Presence
-from aicity.reminder_loop import ReminderLoop
+from aicity.reminder_loop import ReminderLoop, check_all_databases
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
 from aicity.sky import daylight_at
@@ -37,6 +39,15 @@ class ModeChange(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     mode: Literal["sample", "personal"]
+
+
+def _mac_notify(app: FastAPI, new: list[Notification]) -> None:
+    """New Personal reminders: post a Mac notification unless the owner is looking (see mac_messages)."""
+    sample_mode = DbKind(app.state.db_kind) is DbKind.SAMPLE
+    for message in plan_mac_messages(
+        [n.title for n in new], sample_mode=sample_mode, looking=app.state.presence.looking()
+    ):
+        mac_notify.post(message)
 
 
 def create_app(
@@ -61,7 +72,12 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if background:
-            app.state.reminder_loop = ReminderLoop(lambda: app.state.clock())
+            app.state.reminder_loop = ReminderLoop(
+                lambda: app.state.clock(),
+                check=lambda clock: check_all_databases(
+                    clock, notify=lambda new: _mac_notify(app, new)
+                ),
+            )
             app.state.reminder_loop.start()
         try:
             yield
