@@ -37,6 +37,9 @@ const tag = (o: THREE.Object3D, id: StationModule) => {
   return o;
 };
 
+/** Ring angle (radians about x) that leaves its four spokes diagonal, clear of the hatch. */
+const RING_CLEAR_ANGLE = Math.PI / 4 - 0.4;
+
 export function createStation(kit: Kit): Station {
   const { mats, glow, addBlinker } = kit;
   const group = new THREE.Group();
@@ -76,6 +79,16 @@ export function createStation(kit: Kit): Station {
 
   // Hub and spinning habitat ring.
   const ring = new THREE.Group();
+  // Inside of the open hatch: dark, so the switch to the station's inside view happens
+  // unseen while the camera is in the tunnel.
+  const hatchMaterial = kit.keep(
+    new THREE.MeshStandardMaterial({
+      color: 0x9aa7c4,
+      roughness: 0.5,
+      metalness: 0.4,
+      side: THREE.DoubleSide,
+    }),
+  );
   {
     group.add(shadowed(new THREE.Mesh(new THREE.SphereGeometry(2.0, 48, 32), mats.hull)));
     for (const [x, y, z] of [
@@ -84,13 +97,28 @@ export function createStation(kit: Kit): Station {
       [0, 0, 1],
       [0, 0, -1],
     ] as const) {
-      const port = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 1.3, 32), mats.hull);
+      // The front port is the hatch you fly in through: open-ended, with a dark tunnel
+      // inside, so the camera visibly enters an opening rather than a closed door.
+      const front = z === 1;
+      const port = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.75, 0.75, 1.3, 32, 1, front),
+        front ? hatchMaterial : mats.hull,
+      );
       port.position.set(x * 2.3, y * 2.3, z * 2.3);
       if (z) port.rotation.x = Math.PI / 2;
       const rim = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.08, 8, 32), mats.darkMetal);
       rim.position.copy(port.position).multiplyScalar(1.28);
       if (!z) rim.rotation.x = Math.PI / 2;
       group.add(shadowed(port), shadowed(rim));
+      if (front) {
+        // The tunnel's far end: dark, like looking into the station from outside.
+        const end = new THREE.Mesh(
+          kit.keep(new THREE.CircleGeometry(0.74, 32)),
+          kit.keep(new THREE.MeshBasicMaterial({ color: 0x05070d })),
+        );
+        end.position.set(0, 0, 1.9);
+        group.add(end);
+      }
     }
     const torus = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.62, 28, 160), mats.hull);
     torus.rotation.y = Math.PI / 2;
@@ -269,7 +297,9 @@ export function createStation(kit: Kit): Station {
     },
     pickables: [planner, finance],
     update(t) {
-      ring.rotation.x = t * 0.07;
+      // The ring holds still at an angle where its spokes are diagonal, clear of the
+      // hatch's line of approach (a spinning ring could put a spoke in the camera's way).
+      ring.rotation.x = RING_CLEAR_ANGLE;
       wings.forEach((w) => (w.rotation.x = Math.sin(t * 0.05) * 0.25 + 0.2));
     },
   };
