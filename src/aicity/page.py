@@ -52,4 +52,5 @@ def register(app: FastAPI, dist: Path = DIST) -> None:
             return await http_exception_handler(request, exc)
         if not index.is_file():
             return PlainTextResponse(NOT_BUILT, status_code=503)
-        return FileResponse(index, media_type="text/html")
+        # Always re-check the page: after an update the old one would point at deleted files.
+        return FileResponse(index, media_type="text/html", headers={"Cache-Control": "no-cache"})

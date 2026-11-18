@@ -25,6 +25,24 @@ NOTIFIER_APP = REPO_ROOT / "build" / "Asteroid Belt Notifier.app"
 _warned_missing = False
 
 
+def clear(app: Path = NOTIFIER_APP, run: Callable[..., object] = subprocess.run) -> bool:
+    """Remove every Asteroid Belt notification still in Notification Centre (on switching to
+    Sample, so nothing real stays on screen during a demo). Never raises."""
+    if not app.is_dir():
+        return False
+    try:
+        run(
+            ["open", "-n", "-g", str(app), "--args", "--clear"],
+            check=False,
+            timeout=10,
+            capture_output=True,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        log.warning("Clearing Mac notifications failed (%s).", type(exc).__name__)
+        return False
+    return True
+
+
 def post(
     message: MacMessage,
     app: Path = NOTIFIER_APP,

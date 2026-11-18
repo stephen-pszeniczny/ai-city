@@ -29,9 +29,16 @@ COPY = login_item.APP_COPY
 HEALTH = f"http://{config.HOST}:{config.PORT}/api/health"
 
 
-def sh(args: list[str], cwd: Path | None = None) -> None:
+class StepFailed(Exception):
+    """One step of update failed; the message says which, in plain words."""
+
+
+def sh(args: list[str], step: str, cwd: Path | None = None) -> None:
     print("  $", " ".join(args))
-    subprocess.run(args, cwd=cwd, check=True)
+    try:
+        subprocess.run(args, cwd=cwd, check=True)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        raise StepFailed(step) from exc
 
 
 def answering() -> bool:
@@ -43,27 +50,48 @@ def answering() -> bool:
 
 
 def update() -> None:
+    try:
+        _update()
+    except StepFailed as failed:
+        sys.exit(
+            f"Stopped while {failed}. The app keeps running its previous version. "
+            "Read the message just above, fix that, then run update again."
+        )
+
+
+def _update() -> None:
     print("Fetching the latest merged code…")
-    sh(["git", "-C", str(REPO), "fetch", "origin"])
+    sh(["git", "-C", str(REPO), "fetch", "origin"], "fetching from GitHub (are you online?)")
     if not COPY.exists():
         print(f"Making the app's own copy at {COPY}…")
-        sh(["git", "-C", str(REPO), "worktree", "add", "--detach", str(COPY), "origin/main"])
+        # A copy deleted by hand leaves a stale record behind; tidy it first.
+        sh(["git", "-C", str(REPO), "worktree", "prune"], "tidying old copy records")
+        sh(
+            ["git", "-C", str(REPO), "worktree", "add", "--detach", str(COPY), "origin/main"],
+            "making the app's copy",
+        )
     else:
         if login_item.copy_has_changes(COPY):
             sys.exit(
                 f"Stopped: files in {COPY} were edited by hand. Nothing was changed. "
                 "Move or undo those edits (git -C ~/Projects/ai-city-app status), then run update again."
             )
-        sh(["git", "-C", str(COPY), "checkout", "--detach", "origin/main"])
+        sh(
+            ["git", "-C", str(COPY), "checkout", "--detach", "origin/main"],
+            "moving the app's copy to the latest code",
+        )
     modules = COPY / "frontend" / "node_modules"
     if not modules.exists():
         modules.symlink_to(REPO / "frontend" / "node_modules")
         print("  linked frontend/node_modules from this folder")
 
     print("Building the page and the helpers in the app's copy…")
-    sh(["npm", "run", "build"], cwd=COPY / "frontend")
-    sh([str(PYTHON), str(COPY / "scripts" / "build_touch_id_helper.py")])
-    sh([str(PYTHON), str(COPY / "scripts" / "build_notifier.py")])
+    sh(["npm", "run", "build"], "building the page", cwd=COPY / "frontend")
+    sh(
+        [str(PYTHON), str(COPY / "scripts" / "build_touch_id_helper.py")],
+        "building the Touch ID helper",
+    )
+    sh([str(PYTHON), str(COPY / "scripts" / "build_notifier.py")], "building the notifier")
 
     logs = config.data_dir() / "logs"
     logs.mkdir(parents=True, exist_ok=True)

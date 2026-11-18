@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from aicity import config, mac_notify, notification_routes, page, task_routes
 from aicity.db import DbKind
-from aicity.mac_messages import plan_mac_messages
+from aicity.mac_messages import MacMessage, plan_mac_messages
 from aicity.mode import (
     ModeSwitcher,
     OwnerCheck,
@@ -47,6 +47,9 @@ def _mac_notify(app: FastAPI, new: list[Notification]) -> None:
     for message in plan_mac_messages(
         [n.title for n in new], sample_mode=sample_mode, looking=app.state.presence.looking()
     ):
+        # The owner may have switched to Sample since planning: never post a title then.
+        if not sample_mode and DbKind(app.state.db_kind) is DbKind.SAMPLE and len(new) == 1:
+            message = MacMessage("Reminder", "You have a reminder")
         mac_notify.post(message)
 
 
@@ -130,6 +133,9 @@ def create_app(
         409 a switch is already waiting, 503 Touch ID can't run.
         """
         switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
+        if switched is DbKind.SAMPLE:
+            # Take any real reminder titles off the screen before a demo.
+            mac_notify.clear()
         return {"mode": switched.value}
 
     @app.exception_handler(SwitchRefused)

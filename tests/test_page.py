@@ -95,3 +95,9 @@ def test_missing_build_says_how_to_build(data_dir, tmp_path):
 
 def test_dev_mode_does_not_serve_the_page(data_dir, dist):
     assert client(dist, dev=True).get("/").status_code == 404
+
+
+def test_the_page_is_never_kept_stale(data_dir, dist):
+    # After an update the old page would point at deleted files: always re-check it.
+    r = client(dist).get("/b/planner")
+    assert r.headers.get("cache-control") == "no-cache"

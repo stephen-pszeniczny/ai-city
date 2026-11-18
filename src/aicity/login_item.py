@@ -11,6 +11,7 @@ arguments, so tests can use a fake and nothing ever goes through a shell.
 import os
 import plistlib
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -34,20 +35,34 @@ def plist_text(python: Path, app_copy: Path, logs: Path) -> str:
             "WorkingDirectory": str(app_copy),
             "RunAtLoad": True,
             "KeepAlive": True,
+            # If it can't start (say a dev backend holds port 8765), retry once a minute,
+            # not every 10 seconds, so the log doesn't fill with repeats.
+            "ThrottleInterval": 60,
             "StandardOutPath": str(logs / "app.log"),
             "StandardErrorPath": str(logs / "app.err.log"),
         }
     ).decode()
 
 
-def install(plist: Path, text: str, run: Run = subprocess.run, uid: int | None = None) -> str:
+def install(
+    plist: Path,
+    text: str,
+    run: Run = subprocess.run,
+    uid: int | None = None,
+    pause: float = 0.5,
+) -> str:
     """Write the agent's settings and (re)load it. Safe to run again."""
     uid = os.getuid() if uid is None else uid
     plist.parent.mkdir(parents=True, exist_ok=True)
     # An old copy may be loaded; unload it first. "Not loaded" is fine.
     _run(run, ["launchctl", "bootout", f"gui/{uid}/{LABEL}"])
     plist.write_text(text)
-    result = _run(run, ["launchctl", "bootstrap", f"gui/{uid}", str(plist)])
+    # Loading can fail for a moment while the old copy is still shutting down: retry.
+    for attempt in range(4):
+        result = _run(run, ["launchctl", "bootstrap", f"gui/{uid}", str(plist)])
+        if result.returncode == 0:
+            break
+        time.sleep(pause * (attempt + 1))
     if result.returncode != 0:
         return f"Wrote {plist}, but macOS didn't load it (launchctl said: {result.stderr.strip()})."
     return f"Installed and started the login item ({plist})."
@@ -83,6 +98,11 @@ def is_loaded(run: Run = subprocess.run, uid: int | None = None) -> bool:
 
 
 def copy_has_changes(app_copy: Path, run: Run = subprocess.run) -> bool:
-    """True if someone edited files in the stable copy (update then refuses to touch it)."""
-    out = _run(run, ["git", "-C", str(app_copy), "status", "--porcelain"]).stdout
+    """True if someone edited tracked files in the stable copy (update then refuses to touch it).
+
+    New untracked files don't count: update itself adds a frontend/node_modules link,
+    which git lists as untracked.
+    """
+    args = ["git", "-C", str(app_copy), "status", "--porcelain", "--untracked-files=no"]
+    out = _run(run, args).stdout
     return bool(out.strip())

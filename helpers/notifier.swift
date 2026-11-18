@@ -4,6 +4,7 @@
 // "Asteroid Belt" with the app's icon.
 //
 //   notifier --title T --body B   post a notification, then quit
+//   notifier --clear              remove all of this app's notifications, then quit
 //   notifier                      (macOS starts it like this when a notification is
 //                                  clicked) open the app, then quit
 //
@@ -45,6 +46,13 @@ final class ClickHandler: NSObject, UNUserNotificationCenterDelegate {
 
 let args = CommandLine.arguments
 let center = UNUserNotificationCenter.current()
+
+if args.contains("--clear") {
+    center.removeAllDeliveredNotifications()
+    center.removeAllPendingNotificationRequests()
+    Thread.sleep(forTimeInterval: 0.5)  // let the request reach Notification Centre
+    exit(0)
+}
 
 if let title = value(after: "--title", in: args), let body = value(after: "--body", in: args) {
     // Post one notification and quit.

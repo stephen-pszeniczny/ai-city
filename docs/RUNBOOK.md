@@ -36,7 +36,8 @@ run in Terminal from `~/Projects/ai-city`.
 **Is it running? Which version?** → `.venv/bin/python scripts/app.py status`.
 
 **Pause / resume it** → `.venv/bin/python scripts/app.py stop` / `start`. (Needed before a
-development session, which uses the same address.)
+development session, which uses the same address.) A pause lasts until you run `start` or log in
+again; logging in always starts it.
 
 **Remove the login item** → `.venv/bin/python scripts/app.py uninstall`. Your data and the app's
 copy stay; run `update` to put it back.

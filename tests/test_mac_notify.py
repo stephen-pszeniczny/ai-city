@@ -80,3 +80,39 @@ def test_app_posts_per_the_rule_using_mode_and_looking(monkeypatch, tmp_path):
     app.state.db_kind = DbKind.SAMPLE
     main_module._mac_notify(app, new)
     assert posted[-1] == MacMessage("Reminder", "You have a reminder")
+
+
+def test_clear_asks_the_notifier_to_remove_its_notifications(tmp_path):
+    from aicity.mac_notify import clear
+
+    app = tmp_path / "Asteroid Belt Notifier.app"
+    app.mkdir()
+    run = Recorder()
+    assert clear(app=app, run=run) is True
+    assert run.calls[0][0] == ["open", "-n", "-g", str(app), "--args", "--clear"]
+
+
+def test_a_switch_to_sample_between_planning_and_posting_still_hides_the_title(
+    monkeypatch, tmp_path
+):
+    from aicity import config, mac_notify
+    from aicity import main as main_module
+    from aicity.db import DbKind
+    from aicity.notifications import Notification
+
+    monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path))
+    posted = []
+    monkeypatch.setattr(mac_notify, "post", lambda m: posted.append(m))
+    app = main_module.create_app(dev=False)
+    app.state.db_kind = DbKind.PERSONAL
+    real_plan = main_module.plan_mac_messages
+
+    def plan_then_switch(*args, **kwargs):
+        planned = real_plan(*args, **kwargs)
+        app.state.db_kind = DbKind.SAMPLE  # the owner switches to Sample right now
+        return planned
+
+    monkeypatch.setattr(main_module, "plan_mac_messages", plan_then_switch)
+    new = [Notification(1, "reminder", 7, "Private real task", "2026-11-18T12:30", False)]
+    main_module._mac_notify(app, new)
+    assert posted == [MacMessage("Reminder", "You have a reminder")]

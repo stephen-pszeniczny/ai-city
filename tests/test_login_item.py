@@ -53,7 +53,7 @@ def test_plist_never_turns_on_dev_mode(tmp_path):
 def test_install_writes_the_plist_and_bootstraps(tmp_path):
     run = FakeRun(codes={"bootout": 3})  # nothing loaded yet: bootout fails, which is fine
     plist = tmp_path / "LaunchAgents" / "x.plist"
-    login_item.install(plist, "<plist/>", run=run, uid=501)
+    login_item.install(plist, "<plist/>", run=run, uid=501, pause=0)
     assert plist.read_text() == "<plist/>"
     assert run.calls == [
         ["launchctl", "bootout", f"gui/501/{login_item.LABEL}"],
@@ -89,5 +89,51 @@ def test_uninstall_unloads_and_deletes(tmp_path):
 def test_update_refuses_a_copy_with_uncommitted_changes(tmp_path):
     run = FakeRun(out=" M src/aicity/main.py\n")
     assert login_item.copy_has_changes(tmp_path, run=run) is True
-    assert run.calls == [["git", "-C", str(tmp_path), "status", "--porcelain"]]
+    assert run.calls == [
+        ["git", "-C", str(tmp_path), "status", "--porcelain", "--untracked-files=no"]
+    ]
     assert login_item.copy_has_changes(tmp_path, run=FakeRun(out="")) is False
+
+
+def test_a_symlinked_node_modules_is_not_an_edit(tmp_path):
+    """Real git: update links frontend/node_modules into the copy; that alone must not block the next update."""
+    import subprocess
+
+    repo = tmp_path / "copy"
+    (repo / "frontend").mkdir(parents=True)
+    (repo / ".gitignore").write_text("node_modules/\n")
+    (repo / "frontend" / "app.ts").write_text("x\n")
+    git = ["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t"]
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], check=True)
+    (tmp_path / "real_modules").mkdir()
+    (repo / "frontend" / "node_modules").symlink_to(tmp_path / "real_modules")
+
+    assert login_item.copy_has_changes(repo) is False
+    (repo / "frontend" / "app.ts").write_text("edited by hand\n")
+    assert login_item.copy_has_changes(repo) is True
+
+
+def test_plist_throttles_restarts(tmp_path):
+    assert plist_of(tmp_path)["ThrottleInterval"] == 60
+
+
+def test_install_retries_while_the_old_app_is_still_exiting(tmp_path):
+    class Flaky(FakeRun):
+        def __init__(self):
+            super().__init__()
+            self.bootstraps = 0
+
+        def __call__(self, args, **kwargs):
+            self.calls.append(list(args))
+            if args[1] == "bootstrap":
+                self.bootstraps += 1
+                code = 5 if self.bootstraps == 1 else 0  # "Input/output error" the first time
+                return SimpleNamespace(returncode=code, stdout="", stderr="")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    run = Flaky()
+    message = login_item.install(tmp_path / "x.plist", "<plist/>", run=run, uid=501, pause=0)
+    assert run.bootstraps == 2
+    assert "Installed" in message
