@@ -43,6 +43,8 @@ _The Dock app and automatic start (launchd) come later in Phase 1a. For now, sta
 
 **Day and night** → the **Sky** button next to the switch cycles Auto → Day → Night. Auto follows sunrise and sunset at the `[location]` in your settings file, worked out on this Mac. Day or Night stays until you set it back to Auto. The choice is remembered in this browser only.
 
+**Reminders (the shuttle and ticker)** → when a task's reminder time arrives, a small rocket flies across the belt towing a banner with the task's title, and the reminder joins the ticker at the bottom of the screen. Click its title to fly to the task; **Dismiss** takes it off the ticker; finishing the task clears it too. Reminders are checked every 30 seconds while the app is running, for both Personal and Sample (each shows only in its own mode). Reminders set before the very first run are skipped on purpose; ones that came due while the Mac was off or asleep show up as soon as the app is running again.
+
 **Fresh Sample data before a demo** → `.venv/bin/python scripts/reset_sample_data.py`, then type `reset`. It deletes only the file labelled Sample and refills it with made-up tasks; Personal is never opened. Fine to run while the app is running.
 
 ## 3. Back up
@@ -73,6 +75,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 **Switching to Personal says "Touch ID isn't available"** → run the one-time setup above, then try again. You stay in Sample until it works.
 
 **The belt is in the wrong mode for the time of day** → check the Sky button says Auto. Then check `[location]` in your settings file: latitude, longitude (west is negative) and `timezone`, which must be a name from the standard list, like `Europe/London`. No restart needed: reload the page to see the change. If the backend is down, Auto shows day.
+
+**A reminder didn't show** → check the app is running (reminders are only checked while it is). Check you're in the right mode: Personal reminders never show in Sample. If the reminder time was before the app's very first notification check, it's skipped on purpose. A reminder you just saved fires within 30 seconds; the shuttle waits while you're inside a building and flies when you're back on the belt.
 
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 

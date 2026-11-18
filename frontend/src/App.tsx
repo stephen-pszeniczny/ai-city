@@ -6,7 +6,7 @@
 //                One 3D canvas stays mounted across all three, so the camera
 //                flies between them instead of the page reloading.
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   createBrowserRouter,
   Navigate,
@@ -21,6 +21,10 @@ import { escapeAction, flightState } from "./belt/flightState";
 import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
 import { Desktop } from "./desktop/Desktop";
+import { stepsToTask } from "./notifications/journey";
+import { Ticker } from "./notifications/Ticker";
+import { useNotifications } from "./notifications/useNotifications";
+import { requestOpenTask, takeOpenTaskRequest } from "./todo/openRequest";
 import { TodoPanel } from "./todo/TodoPanel";
 
 export const router = createBrowserRouter([
@@ -45,11 +49,38 @@ function BeltHome() {
     staleTime: Infinity,
   });
   const nameOf = (id: BuildingId) => buildings.data?.find((b) => b.id === id)?.name ?? "";
+  const notifications = useNotifications(view.level === "belt");
+  const [reducedMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  // Opening a task from the ticker: the normal flights, one level at a time, each
+  // step waiting for the camera to finish the last one.
+  const [journey, setJourney] = useState<View[]>([]);
+  function openTask(taskId: number) {
+    const steps = stepsToTask(view);
+    if (steps.length === 0) return;
+    if (!confirmLeave()) return;
+    setDirty(false);
+    requestOpenTask(taskId);
+    setJourney(steps);
+  }
+  useEffect(() => {
+    if (journey.length === 0) return;
+    const id = window.setInterval(() => {
+      if (flightState.flying()) return;
+      const [next, ...rest] = journey;
+      if (next) navigate(toPath(next));
+      setJourney(rest);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [journey, navigate]);
 
   /** Leave the current level, asking first if there are unsaved edits. */
   const go = (next: View) => {
     if (!confirmLeave()) return;
     setDirty(false); // already confirmed: don't ask again on the way out
+    // Going somewhere yourself cancels a ticker trip still under way (and its task request).
+    setJourney([]);
+    takeOpenTaskRequest();
     navigate(toPath(next));
   };
 
@@ -101,7 +132,7 @@ function BeltHome() {
 
   return (
     <>
-      <BeltCanvas view={view} onOpen={open} />
+      <BeltCanvas view={view} onOpen={open} notifications={notifications} />
 
       {view.level !== "belt" && (
         <button type="button" className="belt__back" onClick={() => go(back(view))}>
@@ -134,6 +165,16 @@ function BeltHome() {
       )}
 
       {view.level === "screen" && <Desktop key={view.id} id={view.id} name={nameOf(view.id)} />}
+
+      {/* Reminders: on the belt and inside buildings, not on the computer screen. */}
+      {view.level !== "screen" && (
+        <Ticker
+          items={notifications.items}
+          reducedMotion={reducedMotion}
+          onOpen={openTask}
+          onDismiss={notifications.dismiss}
+        />
+      )}
     </>
   );
 }

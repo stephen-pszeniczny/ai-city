@@ -4,7 +4,9 @@
 // the same panel opens from a monitor inside the Mission Control scene.
 // Clicking a task swaps the list for that task's detail view in the same panel.
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { peekOpenTaskRequest, takeOpenTaskRequest } from "./openRequest";
 import { Link } from "react-router-dom";
 
 import { getHealth, type ListFilter, type Task, type TaskStatus } from "../api";
@@ -17,7 +19,11 @@ import "./todo.css";
 
 export function TodoPanel() {
   const [filter, setFilter] = useState<ListFilter>("open");
-  const [openId, setOpenId] = useState<number | null>(null);
+  // A reminder clicked in the ticker opens straight onto its task.
+  const [openId, setOpenId] = useState<number | null>(() => peekOpenTaskRequest());
+  useEffect(() => {
+    takeOpenTaskRequest(); // used: don't reopen it next time the panel appears
+  }, []);
   // The task to put keyboard focus back on when returning to the list.
   const [returnTo, setReturnTo] = useState<number | null>(null);
   const [archived, setArchived] = useState<Archived | null>(null);

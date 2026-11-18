@@ -36,7 +36,8 @@ def main() -> None:
     # Made-up tasks for Sample mode, added once (never touches the Personal file).
     if seed_sample_database():
         print("Added made-up tasks to the Sample database.")
-    uvicorn.run(create_app(), host=config.HOST, port=config.PORT)
+    # background=True: the reminder check runs every 30 seconds while the app is up.
+    uvicorn.run(create_app(background=True), host=config.HOST, port=config.PORT)
 
 
 if __name__ == "__main__":

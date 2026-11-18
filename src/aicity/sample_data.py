@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
+from aicity.notifications import SINCE_KEY
 from aicity.tasks import TaskStore, utc_now
 
 SEEDED_KEY = "sample_seeded"
@@ -32,6 +33,7 @@ class SampleTask:
     goal_in_days: int | None = None  # negative = overdue
     notes: str = ""
     reminder_in_days: int | None = None  # reminder at 9:00 that day
+    reminder_minutes_ago: int | None = None  # reminder this many minutes before seeding
     finished_days_ago: int | None = None  # set with status
     status: str = "open"  # open, done, archived
 
@@ -52,6 +54,8 @@ SAMPLE_TASKS: tuple[SampleTask, ...] = (
     SampleTask("Book dentist appointment", "personal", 4, goal_in_days=3),
     SampleTask("Renew library card", "personal", 1, goal_in_days=9),
     SampleTask("Plan a weekend hike", "personal", 2, notes="Pick a trail and check the weather."),
+    # Its reminder is just before seeding, so a demo shows the shuttle right after a reset.
+    SampleTask("Water the balcony plants", "personal", 1, reminder_minutes_ago=2),
     SampleTask(
         "Buy a birthday card",
         "personal",
@@ -137,11 +141,12 @@ def seed(conn: sqlite3.Connection, now: datetime) -> bool:
     for t in SAMPLE_TASKS:
         step.now = now - timedelta(days=t.created_days_ago)
         goal = None if t.goal_in_days is None else (today + timedelta(t.goal_in_days)).isoformat()
-        reminder = (
-            None
-            if t.reminder_in_days is None
-            else f"{(today + timedelta(t.reminder_in_days)).isoformat()}T09:00"
-        )
+        if t.reminder_minutes_ago is not None:
+            reminder = _local_minute(now - timedelta(minutes=t.reminder_minutes_ago))
+        elif t.reminder_in_days is not None:
+            reminder = f"{(today + timedelta(t.reminder_in_days)).isoformat()}T09:00"
+        else:
+            reminder = None
         task = store.create(
             title=t.title, category=t.category, notes=t.notes, goal_date=goal, reminder_at=reminder
         )
@@ -149,11 +154,22 @@ def seed(conn: sqlite3.Connection, now: datetime) -> bool:
             step.now = now - timedelta(days=t.finished_days_ago or 0)
             (store.complete if t.status == "done" else store.archive)(task.id)
 
-    with_transaction(
-        conn,
-        lambda: conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (SEEDED_KEY,)),
-    )
+    def mark_seeded() -> None:
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (SEEDED_KEY,))
+        # Notifications start 10 minutes back, so the demo reminder above fires on the
+        # first check while the other made-up reminders (days away) don't.
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+            (SINCE_KEY, _local_minute(now - timedelta(minutes=10))),
+        )
+
+    with_transaction(conn, mark_seeded)
     return True
+
+
+def _local_minute(moment: datetime) -> str:
+    """Local Mac time to the minute, the format reminders use."""
+    return moment.astimezone().strftime("%Y-%m-%dT%H:%M")
 
 
 def _already_seeded(conn: sqlite3.Connection) -> bool:
