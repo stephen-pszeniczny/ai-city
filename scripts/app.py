@@ -22,7 +22,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-from aicity import config, login_item  # noqa: E402
+from aicity import config, login_item
 
 PYTHON = REPO / ".venv" / "bin" / "python"
 COPY = login_item.APP_COPY
