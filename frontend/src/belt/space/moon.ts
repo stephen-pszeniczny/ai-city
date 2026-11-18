@@ -4,7 +4,8 @@
 import * as THREE from "three";
 
 import { LOOK } from "../look";
-import { noiseTexture, softGlow } from "./noise";
+import { softGlow } from "./noise";
+import { moonSurface } from "./moonSurface";
 
 /** Direction of the moon from the station (scene units, normalised). */
 export const MOON_DIR = new THREE.Vector3(0.22, -0.01, -0.975).normalize();
@@ -25,9 +26,11 @@ export function createMoon(): Moon {
   group.position.copy(MOON_DIR).multiplyScalar(DISTANCE);
   group.scale.setScalar(LOOK.dayNight.moonSize);
 
-  const surface = noiseTexture(256, 5, 1.4);
+  // The surface maps are built the first time the moon comes out (not by day).
   const uniforms = {
-    map: { value: surface },
+    map: { value: null as THREE.Texture | null },
+    heightMap: { value: null as THREE.Texture | null },
+    bump: { value: 2.2 },
     phaseAngle: { value: Math.PI }, // full until told otherwise
     amount: { value: 0 },
   };
@@ -36,17 +39,27 @@ export function createMoon(): Moon {
     uniforms,
     transparent: true,
     depthWrite: false,
-    vertexShader: `varying vec2 vUv; varying vec3 vNV;
-      void main(){ vUv = uv; vNV = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    vertexShader: `varying vec2 vUv; varying vec3 vNV; varying vec3 vPV;
+      void main(){ vUv = uv; vNV = normalize(normalMatrix * normal); vec4 p = modelViewMatrix * vec4(position, 1.0); vPV = p.xyz; gl_Position = projectionMatrix * p; }`,
     // The light comes from behind the moon at new moon and from the viewer at full,
     // swinging round from one side: the lit part grows and shrinks like the real one.
-    fragmentShader: `uniform sampler2D map; uniform float phaseAngle; uniform float amount;
-      varying vec2 vUv; varying vec3 vNV;
+    // Crater heights tilt the surface a little, so near the edge of the lit part
+    // rims catch the light and floors fall into shadow.
+    fragmentShader: `uniform sampler2D map; uniform sampler2D heightMap; uniform float bump;
+      uniform float phaseAngle; uniform float amount;
+      varying vec2 vUv; varying vec3 vNV; varying vec3 vPV;
       void main(){ vec3 light = vec3(sin(phaseAngle), 0.0, -cos(phaseAngle));
-        float lit = smoothstep(-0.04, 0.08, dot(normalize(vNV), light));
-        float tone = 0.62 + 0.38 * texture2D(map, vUv).r; // darker seas, lighter highlands
-        vec3 col = vec3(0.93, 0.92, 0.88) * tone * (lit + 0.025);
-        gl_FragColor = vec4(col * 1.4, amount); }`,
+        vec3 n0 = normalize(vNV);
+        float hh = texture2D(heightMap, vUv).r;
+        vec3 sx = dFdx(vPV); vec3 sy = dFdy(vPV);
+        vec3 r1 = cross(sy, n0); vec3 r2 = cross(n0, sx);
+        float det = dot(sx, r1);
+        vec3 grad = sign(det) * (dFdx(hh) * r1 + dFdy(hh) * r2);
+        vec3 n = normalize(abs(det) * n0 - grad * bump);
+        float side = smoothstep(-0.04, 0.08, dot(n0, light));      // the phase shape
+        float shade = pow(clamp(dot(n, light), 0.0, 1.0), 0.55);    // the moon looks evenly bright, not shaded like a ball
+        vec3 col = texture2D(map, vUv).rgb * (side * mix(0.35, 1.0, shade) + 0.02);
+        gl_FragColor = vec4(col * 1.5, amount); }`,
   });
   const ball = new THREE.Mesh(geo, mat);
 
@@ -72,6 +85,11 @@ export function createMoon(): Moon {
     },
     setVisible(amount) {
       const a = amount * LOOK.dayNight.moonBrightness;
+      if (a > 0.001 && !uniforms.map.value) {
+        const surface = moonSurface();
+        uniforms.map.value = surface.albedo;
+        uniforms.heightMap.value = surface.height;
+      }
       group.visible = a > 0.001;
       uniforms.amount.value = a;
       haloMat.opacity = a * 0.35 * litFraction;
@@ -80,7 +98,6 @@ export function createMoon(): Moon {
       geo.dispose();
       mat.dispose();
       haloMat.dispose();
-      surface.dispose();
     },
   };
 }

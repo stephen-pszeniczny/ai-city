@@ -57,8 +57,8 @@ export const LOOK = {
     stationLightGlow: 1.8,
     /** Moon brightness at night (0 = hidden, 1 = full). */
     moonBrightness: 1.0,
-    /** Moon size (1 = normal). */
-    moonSize: 1.0,
+    /** Moon size (1 = the original small moon; bigger shows its craters better). */
+    moonSize: 1.4,
   },
   notifications: {
     /** Seconds the shuttle takes to cross the screen. */
