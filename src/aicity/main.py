@@ -5,7 +5,8 @@ refuses anything but this Mac:
     .venv/bin/python scripts/run_app.py
 """
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from typing import Literal
 
 from fastapi import FastAPI, Request
@@ -23,6 +24,7 @@ from aicity.mode import (
     ask_owner,
     load_saved_mode,
 )
+from aicity.reminder_loop import ReminderLoop
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
 from aicity.sky import daylight_at
@@ -35,16 +37,35 @@ class ModeChange(BaseModel):
     mode: Literal["sample", "personal"]
 
 
-def create_app(*, dev: bool | None = None, ask: Callable[[], OwnerCheck] = ask_owner) -> FastAPI:
+def create_app(
+    *,
+    dev: bool | None = None,
+    ask: Callable[[], OwnerCheck] = ask_owner,
+    background: bool = False,
+) -> FastAPI:
     """Build the app.
 
     dev=None means: read AICITY_DEV from the environment.
     ask is the Touch ID check; tests pass a fake one.
+    background=True runs the reminder check every 30 seconds while the app is
+    up (scripts/run_app.py turns it on; tests leave it off).
     """
     if dev is None:
         dev = config.dev_mode()
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if background:
+            app.state.reminder_loop = ReminderLoop(lambda: app.state.clock())
+            app.state.reminder_loop.start()
+        try:
+            yield
+        finally:
+            if app.state.reminder_loop is not None:
+                app.state.reminder_loop.stop()
+
     app = FastAPI(
+        lifespan=lifespan,
         title="Asteroid Belt",
         # The auto-generated API docs pages aren't needed and would be one more
         # thing exposed; turn them off.
@@ -60,6 +81,7 @@ def create_app(*, dev: bool | None = None, ask: Callable[[], OwnerCheck] = ask_o
     app.state.mode_switcher = ModeSwitcher(app.state, ask)
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
+    app.state.reminder_loop = None
 
     task_routes.register(app)
 
