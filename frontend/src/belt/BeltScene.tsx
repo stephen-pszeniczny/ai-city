@@ -8,6 +8,7 @@ import * as THREE from "three";
 
 import { getBuildings, listTasks, type BuildingId } from "../api";
 import type { ScreenLine } from "../interior/Monitor";
+import { Shuttle } from "../notifications/Shuttle";
 import { statusNotes, type Tone } from "../todo/dates";
 import { BUILT } from "./built";
 import { flightState } from "./flightState";
@@ -44,6 +45,7 @@ export function BeltScene({
   labels,
   api,
   sky,
+  shuttle,
 }: {
   view: View;
   onOpen: (id: BuildingId) => void;
@@ -52,6 +54,8 @@ export function BeltScene({
   api: RefObject<SceneApi | null>;
   /** Day or night, and tonight's moon (from useDayNight). */
   sky: Pick<DayNight, "night" | "moonPhase" | "ready" | "choice">;
+  /** A notification shuttle to fly now (belt level only), with the banner it carries. */
+  shuttle: { key: string; banner: RefObject<HTMLDivElement | null>; onDone: () => void } | null;
 }) {
   const { scene, gl } = useThree();
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
@@ -222,6 +226,7 @@ export function BeltScene({
 
   return (
     <>
+      {shuttle && <Shuttle key={shuttle.key} banner={shuttle.banner} onDone={shuttle.onDone} />}
       <primitive object={world.station.group} {...events} />
       <group ref={interior} visible={false}>
         <StationInterior

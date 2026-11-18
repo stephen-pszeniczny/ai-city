@@ -1,6 +1,6 @@
 // Where the notification shuttle flies: a gentle arc across the camera's view,
-// from just off one side of the screen to just off the other, in the upper half
-// (below the top bar), worked out from the camera at launch so it crosses the
+// from just off one side of the screen to just off the other, in the clear band
+// under the top bar (above the building signs), worked out from the camera at launch so it crosses the
 // screen whatever way the belt has been turned or zoomed.
 import * as THREE from "three";
 
@@ -8,10 +8,11 @@ export type ShuttlePath = { from: THREE.Vector3; via: THREE.Vector3; to: THREE.V
 
 /** Distance out, as a share of the camera's distance to what it looks at. */
 const DEPTH = 0.4;
-/** Height on screen as a share of the half-height (0 middle, 1 top edge). */
-const HEIGHT = 0.38;
+/** Height on screen as a share of the half-height (0 middle, 1 top edge): the clear band
+ *  just under the top bar, above the building signs. */
+const HEIGHT = 0.6;
 /** How much higher the middle of the arc is, as a share of the half-height. */
-const ARC = 0.12;
+const ARC = 0.1;
 /** Wide enough to start off screen on any window up to this width:height. */
 const WIDEST_ASPECT = 2.4;
 const UP = new THREE.Vector3(0, 1, 0);

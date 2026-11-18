@@ -21,6 +21,7 @@ import { escapeAction, flightState } from "./belt/flightState";
 import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
 import { Desktop } from "./desktop/Desktop";
+import { useNotifications } from "./notifications/useNotifications";
 import { TodoPanel } from "./todo/TodoPanel";
 
 export const router = createBrowserRouter([
@@ -45,6 +46,7 @@ function BeltHome() {
     staleTime: Infinity,
   });
   const nameOf = (id: BuildingId) => buildings.data?.find((b) => b.id === id)?.name ?? "";
+  const notifications = useNotifications(view.level === "belt");
 
   /** Leave the current level, asking first if there are unsaved edits. */
   const go = (next: View) => {
@@ -101,7 +103,7 @@ function BeltHome() {
 
   return (
     <>
-      <BeltCanvas view={view} onOpen={open} />
+      <BeltCanvas view={view} onOpen={open} notifications={notifications} />
 
       {view.level !== "belt" && (
         <button type="button" className="belt__back" onClick={() => go(back(view))}>

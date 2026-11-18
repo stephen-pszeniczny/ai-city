@@ -5,7 +5,7 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useQuery } from "@tanstack/react-query";
-import { Component, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { getBuildings, type BuildingId } from "../api";
 import { useSampleReminder } from "../todo/useMode";
@@ -17,13 +17,43 @@ import { Labels, type LabelElements } from "./Labels";
 import { ModeSwitch } from "./ModeSwitch";
 import { SkyToggle } from "./SkyToggle";
 import { useDayNight } from "./useDayNight";
+import { bannerText, shortTitle, type ShuttleTrip } from "../notifications/rules";
+import type { Notifications } from "../notifications/useNotifications";
+import { LOOK } from "./look";
 import "./belt.css";
+import "../notifications/notifications.css";
 
-export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: BuildingId) => void }) {
+/** The banner's words: one reminder's title (cut to one line), or "+N more reminders". */
+function tripBanner(trip: ShuttleTrip | null): string {
+  if (!trip) return "";
+  const text =
+    trip.ids.length > 1 ? trip.text : shortTitle(trip.text, LOOK.notifications.bannerMaxChars);
+  return bannerText({ ids: trip.ids, text });
+}
+
+export function BeltCanvas({
+  view,
+  onOpen,
+  notifications,
+}: {
+  view: View;
+  onOpen: (id: BuildingId) => void;
+  notifications: Notifications;
+}) {
   const hidden = usePageHidden();
   const labels = useRef<LabelElements>(new Map());
   const api = useRef<SceneApi | null>(null);
   const [reducedMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const banner = useRef<HTMLDivElement>(null);
+  const { trip, tripDone } = notifications;
+  const flying = !!trip && view.level === "belt" && !reducedMotion;
+  const still = !!trip && view.level === "belt" && reducedMotion;
+  // Reduced motion: no flight; the banner shows still at the top, then counts as flown.
+  useEffect(() => {
+    if (!still) return;
+    const t = window.setTimeout(tripDone, LOOK.notifications.reducedMotionBannerSeconds * 1000);
+    return () => window.clearTimeout(t);
+  }, [still, tripDone]);
   const sample = useSampleReminder();
   const sky = useDayNight();
   const buildings = useQuery({
@@ -42,7 +72,14 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
           gl={{ antialias: false, powerPreference: "high-performance" }}
           camera={{ fov: 38, near: 0.5, far: 20000, position: [...BELT_HOME.position] }}
         >
-          <BeltScene view={view} onOpen={onOpen} labels={labels} api={api} sky={sky} />
+          <BeltScene
+            view={view}
+            onOpen={onOpen}
+            labels={labels}
+            api={api}
+            sky={sky}
+            shuttle={flying ? { key: trip.ids.join(","), banner, onDone: tripDone } : null}
+          />
           <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
           <OrbitControls
             makeDefault
@@ -56,6 +93,22 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
         </Canvas>
         {/* Inside the boundary: if 3D fails, the labels go with it. */}
         <Labels elements={labels} onOpen={onOpen} hidden={view.level !== "belt"} />
+        {(flying || still) && (
+          <div
+            ref={banner}
+            className={still ? "shuttle-banner shuttle-banner--still" : "shuttle-banner"}
+            style={
+              still
+                ? ({
+                    "--still-seconds": `${LOOK.notifications.reducedMotionBannerSeconds}s`,
+                  } as CSSProperties)
+                : undefined
+            }
+            role="status"
+          >
+            {tripBanner(trip)}
+          </div>
+        )}
       </ThreeErrorBoundary>
 
       <header className="belt__top">

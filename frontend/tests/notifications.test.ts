@@ -111,7 +111,7 @@ test("the shuttle path starts and ends off screen on opposite sides, from any ca
       assert.ok(Math.abs(from.x) > 1 && Math.abs(to.x) > 1, `ends off screen (turn ${turn})`);
       assert.ok(Math.sign(from.x) !== Math.sign(to.x), "opposite sides");
       assert.ok(Math.abs(mid.x) < 0.3, "crosses the middle");
-      assert.ok(mid.y > 0.15 && mid.y < 0.75, `upper half, below the top bar (y ${mid.y})`);
+      assert.ok(mid.y > 0.55 && mid.y < 0.8, `the band under the top bar (y ${mid.y})`);
       assert.ok(from.z < 1 && to.z < 1 && mid.z < 1, "in front of the camera");
     }
   }
