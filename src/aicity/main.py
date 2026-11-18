@@ -25,6 +25,7 @@ from aicity.mode import (
     ask_owner,
     load_saved_mode,
 )
+from aicity.presence import Presence
 from aicity.reminder_loop import ReminderLoop
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
@@ -86,6 +87,8 @@ def create_app(
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
     app.state.reminder_loop = None
+    # Whether the owner is looking at the app (the page reports it; memory only).
+    app.state.presence = Presence(lambda: app.state.clock())
 
     task_routes.register(app)
     notification_routes.register(app)

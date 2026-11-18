@@ -114,7 +114,9 @@ export type NotificationItem = {
 /** The list comes with the mode it belongs to; seen and dismiss send that mode back. */
 export type NotificationList = { mode: Mode; items: NotificationItem[] };
 
-export const getNotifications = () => request<NotificationList>("GET", "/api/notifications");
+/** looking: this window has focus (the backend skips Mac notifications while you're looking). */
+export const getNotifications = (looking: boolean) =>
+  request<NotificationList>("GET", `/api/notifications?looking=${looking ? 1 : 0}`);
 
 export const markSeen = (id: number, mode: Mode) =>
   request<{ ok: boolean }>("POST", `/api/notifications/${id}/seen`, { mode });
