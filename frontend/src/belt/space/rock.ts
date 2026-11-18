@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 import { fbm, perlin } from "./noise";
+import { fingerprint, geometryToArrays, rememberRock, setVersions, storedRock } from "./stored";
 import { mulberry32 } from "../../interior/robotBrain";
 
 /** Where the flat top starts (rock units, before scaling). */
@@ -40,7 +41,12 @@ export function rockGeometry(seed: number, tint: string, detail = 38): THREE.Buf
   const key = `${seed}:${tint}:${detail}`;
   let geo = rockCache.get(key);
   if (!geo) {
-    geo = buildRock(seed, tint, detail);
+    // Kept from a previous open if possible (see stored.ts); otherwise built and kept.
+    geo = storedRock(seed, tint, detail);
+    if (!geo) {
+      geo = buildRock(seed, tint, detail);
+      rememberRock(seed, tint, detail, geometryToArrays(geo));
+    }
     rockCache.set(key, geo);
   }
   return geo.clone();
@@ -116,3 +122,6 @@ export function pebbleGeometry(seed: number, detail = 2): THREE.BufferGeometry {
   geo.computeVertexNormals();
   return geo;
 }
+
+// Stored rocks from older versions of this code are ignored (see stored.ts).
+setVersions({ rock: fingerprint(buildRock, makeCraters, fbm, perlin.noise) });

@@ -15,6 +15,7 @@ import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
 import { ModeSwitch } from "./ModeSwitch";
+import { prepareStoredScene } from "./space/stored";
 import { SkyToggle } from "./SkyToggle";
 import { useDayNight } from "./useDayNight";
 import { bannerText, shortTitle, type ShuttleTrip } from "../notifications/rules";
@@ -44,6 +45,7 @@ export function BeltCanvas({
   const labels = useRef<LabelElements>(new Map());
   const api = useRef<SceneApi | null>(null);
   const [reducedMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const sceneReady = useStoredScene();
   const banner = useRef<HTMLDivElement>(null);
   const { trip, tripDone } = notifications;
   const flying = !!trip && view.level === "belt" && !reducedMotion;
@@ -65,32 +67,34 @@ export function BeltCanvas({
   return (
     <main className="belt" onPointerDown={() => flightState.skip()}>
       <ThreeErrorBoundary>
-        <Canvas
-          className="belt__canvas"
-          frameloop={hidden ? "never" : "always"}
-          dpr={[1, 2]}
-          gl={{ antialias: false, powerPreference: "high-performance" }}
-          camera={{ fov: 38, near: 0.5, far: 20000, position: [...BELT_HOME.position] }}
-        >
-          <BeltScene
-            view={view}
-            onOpen={onOpen}
-            labels={labels}
-            api={api}
-            sky={sky}
-            shuttle={flying ? { key: trip.ids.join(","), banner, onDone: tripDone } : null}
-          />
-          <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
-          <OrbitControls
-            makeDefault
-            enableDamping
-            dampingFactor={0.06}
-            enablePan={false}
-            minDistance={24}
-            maxDistance={320}
-            maxPolarAngle={1.5}
-          />
-        </Canvas>
+        {sceneReady && (
+          <Canvas
+            className="belt__canvas"
+            frameloop={hidden ? "never" : "always"}
+            dpr={[1, 2]}
+            gl={{ antialias: false, powerPreference: "high-performance" }}
+            camera={{ fov: 38, near: 0.5, far: 20000, position: [...BELT_HOME.position] }}
+          >
+            <BeltScene
+              view={view}
+              onOpen={onOpen}
+              labels={labels}
+              api={api}
+              sky={sky}
+              shuttle={flying ? { key: trip.ids.join(","), banner, onDone: tripDone } : null}
+            />
+            <CameraRig view={view} api={api} reducedMotion={reducedMotion} />
+            <OrbitControls
+              makeDefault
+              enableDamping
+              dampingFactor={0.06}
+              enablePan={false}
+              minDistance={24}
+              maxDistance={320}
+              maxPolarAngle={1.5}
+            />
+          </Canvas>
+        )}
         {/* Inside the boundary: if 3D fails, the labels go with it. */}
         <Labels elements={labels} onOpen={onOpen} hidden={view.level !== "belt"} />
         {(flying || still) && (
@@ -166,4 +170,23 @@ class ThreeErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
       </div>
     );
   }
+}
+
+/** Waits (briefly) for the parts of the scene kept from a previous open; see space/stored.ts. */
+let storedSceneLoad: Promise<void> | null = null;
+function useStoredScene(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    storedSceneLoad ??= prepareStoredScene();
+    // Never wait long: if storage is slow, build the scene as before.
+    const giveUp = new Promise<void>((resolve) => setTimeout(resolve, 1500));
+    void Promise.race([storedSceneLoad, giveUp]).then(() => {
+      if (live) setReady(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  return ready;
 }
