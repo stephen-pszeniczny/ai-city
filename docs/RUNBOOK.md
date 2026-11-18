@@ -99,6 +99,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **No Mac notifications** → check `scripts/app.py status` says it's running; check System Settings → Notifications → Asteroid Belt is allowed; if the app was never built, `scripts/app.py update` builds the notifier.
 
+**Notifications only say "Asteroid Belt / Notification", no text** → macOS is hiding previews. System Settings → Notifications → **Show previews**: set it to **Always** (or When Unlocked), and under Asteroid Belt set its own **Show previews** to Always.
+
 **The app doesn't open from the Dock** → run `scripts/app.py status`. Not loaded → `scripts/app.py start`. Loaded but not answering → look at the end of `~/AI-City-Data/logs/app.err.log`; a message about port 8765 means a development backend is still running (Ctrl+C it, then `start`). "The page isn't built yet" → `scripts/app.py update`.
 
 **A reminder didn't show** → check the app is running (reminders are only checked while it is). Check you're in the right mode: Personal reminders never show in Sample. If the reminder time was before the app's very first notification check, it's skipped on purpose. A reminder you just saved fires within 30 seconds; the shuttle waits while you're inside a building and flies when you're back on the belt.
