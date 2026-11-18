@@ -6,6 +6,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import type { BuildingId } from "../api";
 import type { RobotBrain } from "./robotBrain";
@@ -236,6 +237,18 @@ export function Monitor({
     [texture, screenMat, bezelMat, standMat],
   );
 
+  // The display's shapes (rounded, so it looks like a current monitor, not a box).
+  const shapes = useMemo(() => {
+    const { width, height } = SCREEN;
+    return {
+      bezel: new RoundedBoxGeometry(width + 0.03, height + 0.03, 0.022, 4, 0.012),
+      back: new RoundedBoxGeometry(width * 0.96, height * 0.96, 0.026, 4, 0.02),
+      arm: new RoundedBoxGeometry(0.1, 0.26, 0.014, 2, 0.006),
+      base: new RoundedBoxGeometry(0.3, 0.012, 0.19, 3, 0.005),
+    };
+  }, []);
+  useEffect(() => () => Object.values(shapes).forEach((g) => g.dispose()), [shapes]);
+
   const last = useRef({ key: "", at: 0 });
   // Redraw straight away when the content (title, tasks) changes.
   useEffect(() => {
@@ -257,24 +270,21 @@ export function Monitor({
   const { width, height } = SCREEN;
   return (
     <group>
-      <mesh material={bezelMat} castShadow>
-        <boxGeometry args={[width + 0.05, height + 0.05, 0.035]} />
-      </mesh>
+      {/* A modern display: thin rounded bezel, slim aluminium back, flat arm and base. */}
+      <mesh material={bezelMat} castShadow geometry={shapes.bezel} />
       {/* Faces the robot (toward -z). */}
-      <mesh position={[0, 0, -0.018]} rotation={[0, Math.PI, 0]} material={screenMat}>
+      <mesh position={[0, 0, -0.012]} rotation={[0, Math.PI, 0]} material={screenMat}>
         <planeGeometry args={[width, height]} />
       </mesh>
-      {/* Back housing and power light. */}
-      <mesh position={[0, -0.02, 0.035]} material={bezelMat}>
-        <boxGeometry args={[width * 0.6, height * 0.6, 0.04]} />
-      </mesh>
-      {/* Stand: arm and a flat oval foot. */}
-      <mesh position={[0, -height / 2 - 0.1, 0.07]} rotation={[-0.15, 0, 0]} material={standMat}>
-        <boxGeometry args={[0.08, 0.24, 0.03]} />
-      </mesh>
-      <mesh position={[0, -height / 2 - 0.2, 0.08]} scale={[1.5, 1, 1]} material={standMat}>
-        <cylinderGeometry args={[0.12, 0.13, 0.015, 32]} />
-      </mesh>
+      <mesh position={[0, 0, 0.018]} material={standMat} geometry={shapes.back} />
+      {/* Stand: a flat angled arm and a rounded base plate. */}
+      <mesh
+        position={[0, -height / 2 - 0.1, 0.09]}
+        rotation={[-0.25, 0, 0]}
+        material={standMat}
+        geometry={shapes.arm}
+      />
+      <mesh position={[0, -height / 2 - 0.215, 0.12]} material={standMat} geometry={shapes.base} />
     </group>
   );
 }
