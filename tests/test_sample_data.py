@@ -6,7 +6,7 @@ list they make has the mix a demo needs (due soon, overdue, stale, done, archive
 
 import importlib.util
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -174,3 +174,32 @@ def test_script_reports_a_refusal_without_crashing():
     open_database(db_path(DbKind.SAMPLE).with_name("other.db"), DbKind.PERSONAL).close()
     db_path(DbKind.SAMPLE).with_name("other.db").rename(db_path(DbKind.SAMPLE))
     assert reset_script.main(ask=lambda _prompt: "reset") == 2
+
+
+# --- Notifications: a demo reminder fires right after seeding ------------------------
+
+
+def test_seed_sets_a_start_date_ten_minutes_back():
+    from aicity.notifications import SINCE_KEY
+
+    seed_sample_database(clock=lambda: NOW)
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (SINCE_KEY,)).fetchone()
+    finally:
+        conn.close()
+    expected = (NOW.astimezone() - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M")
+    assert row == (expected,)
+
+
+def test_first_check_after_seeding_makes_exactly_the_demo_notification():
+    from aicity.notifications import NotificationStore
+
+    seed_sample_database(clock=lambda: NOW)
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        store = NotificationStore(conn, clock=lambda: NOW)  # the Mac's own zone, like seeding
+        store.check_reminders()
+        assert [n.title for n in store.list_active()] == ["Water the balcony plants"]
+    finally:
+        conn.close()
