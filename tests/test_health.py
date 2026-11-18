@@ -14,5 +14,10 @@ def test_health_says_ok():
 
 
 def test_auto_generated_api_docs_are_off():
+    # Unknown addresses now get the app's own page (or the "build it" note), so the
+    # check is that FastAPI's generated API docs never come back, not a bare 404.
     for path in ("/docs", "/redoc", "/openapi.json"):
-        assert client.get(path).status_code == 404, path
+        response = client.get(path)
+        text = response.text.lower()
+        assert "swagger" not in text and "redoc" not in text and '"openapi"' not in text, path
+        assert "application/json" not in response.headers.get("content-type", ""), path

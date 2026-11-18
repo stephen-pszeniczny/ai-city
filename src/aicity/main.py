@@ -7,13 +7,14 @@ refuses anything but this Mac:
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from aicity import config, notification_routes, task_routes
+from aicity import config, notification_routes, page, task_routes
 from aicity.db import DbKind
 from aicity.mode import (
     ModeSwitcher,
@@ -42,6 +43,7 @@ def create_app(
     dev: bool | None = None,
     ask: Callable[[], OwnerCheck] = ask_owner,
     background: bool = False,
+    dist: Path | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -49,6 +51,8 @@ def create_app(
     ask is the Touch ID check; tests pass a fake one.
     background=True runs the reminder check every 30 seconds while the app is
     up (scripts/run_app.py turns it on; tests leave it off).
+    dist is the built page to serve in normal mode (default frontend/dist);
+    in dev mode the Vite dev server serves the page instead.
     """
     if dev is None:
         dev = config.dev_mode()
@@ -147,6 +151,10 @@ def create_app(
             "next_change": d.next_change.isoformat(),
             "moon_phase": round(d.moon_phase, 4),
         }
+
+    # The page for addresses no route answers (never /api); see page.py.
+    if not dev:
+        page.register(app, dist if dist is not None else page.DIST)
 
     return app
 
