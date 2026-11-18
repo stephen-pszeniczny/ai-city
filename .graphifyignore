@@ -1,0 +1,4 @@
+SPEC.md
+.env*
+.playwright-mcp/
+.superpowers/

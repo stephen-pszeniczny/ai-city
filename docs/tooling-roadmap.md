@@ -16,6 +16,7 @@ Third-party marketplace auto-update stays off.
 | Data-protection hook | Project `.claude/settings.json` (PreToolUse) | `.claude/hooks/protect-data.py`. Denies file and search tools (Read, Edit, Write, NotebookEdit, Grep, Glob) on the private data folder and any `.env` file; asks before editing the private spec or running shell commands that mention either. Fails closed (any error means ask). Applies to subagents too. Tests: `/usr/bin/python3 .claude/hooks/test_protect_data.py`. |
 | Auto-format hook (ruff + prettier) | Project `.claude/settings.json` (PostToolUse) | `.claude/hooks/format-file.py`. After Edit/MultiEdit/Write, runs `ruff format` on Python files in the repo and `prettier --write` on frontend files, using the pinned local copies. Layout only, no lint fixes. Skips files outside the repo (links resolved), `.venv`, `node_modules`, `dist`, `.git`, the private spec and `.env` files. Never blocks an edit; no network. Tests: `/usr/bin/python3 .claude/hooks/test_format_file.py`. |
 | Playwright MCP | `microsoft/playwright-mcp` (npm `@playwright/mcp@0.0.84`), project `.mcp.json` | Lets Claude open the local page, click through it and take screenshots during verification. Isolated in-memory browser profile, headless, browser requests limited to `http://127.0.0.1:5173` and `http://127.0.0.1:8765`. Version pinned; same 14-day rule as libraries. |
+| Graphify | `Graphify-Labs/graphify` (PyPI `graphifyy==0.9.101`, pinned by the 14-day rule) | Code map I query before searching files. Installed 2026-11-17 in its own Python 3.13 environment (`~/.local/share/graphify-venv`, linked at `~/.local/bin/graphify`), separate from the app. Project-only setup: skill in `.claude/skills/graphify/`, a section in `CLAUDE.md`, and two PreToolUse hooks (`graphify hook-guard`) that only nudge toward the map and fail open. Maps code only and offline (`GRAPHIFY_BACKEND=none graphify extract . --code-only`; refresh with `graphify update .`); no semantic pass, so nothing leaves the Mac. `graphify-out/` is git-ignored; `.graphifyignore` also excludes the private spec, `.env` files and screenshots. Remove with `graphify uninstall --purge` and delete the venv. |
 
 ## Install later
 
@@ -23,7 +24,6 @@ Each item waits for its trigger. Check triggers at the start of each session and
 
 | Trigger | Tool | Notes |
 |---|---|---|
-| Codebase has real structure after the first Phase 1a build sessions | Graphify | Official repo only. PyPI name is `graphifyy`; watch for typosquats. Add `graphify-out/` to `.gitignore` before the first run. |
 | Code starts feeling bloated | ponytail (`DietrichGebert/ponytail`) | |
 | A skill is needed that isn't on this list | find-skills (`vercel-labs/skills`) | Always review the source and `SKILL.md` first. |
 | First building agent is working | eval-harness from `affaan-m/everything-claude-code` | That one skill only. |

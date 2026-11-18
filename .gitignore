@@ -69,3 +69,4 @@ logs/
 # ── Exceptions (must stay last) ─────────────────────────────
 # Test fixtures: generated FAKE statement CSVs only. Never real data.
 !tests/fixtures/**/*.csv
+graphify-out/

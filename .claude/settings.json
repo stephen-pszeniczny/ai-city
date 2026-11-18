@@ -9,6 +9,26 @@
             "command": "/usr/bin/python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/protect-data.py\""
           }
         ]
+      },
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "graphify hook-guard search",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "graphify hook-guard read",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
