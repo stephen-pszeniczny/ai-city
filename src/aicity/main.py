@@ -5,17 +5,41 @@ refuses anything but this Mac:
     .venv/bin/python scripts/run_app.py
 """
 
+from collections.abc import Callable
+from typing import Literal
+
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from aicity import config, task_routes
 from aicity.db import DbKind
+from aicity.mode import (
+    ModeSwitcher,
+    OwnerCheck,
+    SwitchBusy,
+    SwitchRefused,
+    SwitchUnavailable,
+    ask_owner,
+    load_saved_mode,
+)
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
 from aicity.tasks import utc_now
 
 
-def create_app(*, dev: bool | None = None) -> FastAPI:
-    """Build the app. dev=None means: read AICITY_DEV from the environment."""
+class ModeChange(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    mode: Literal["sample", "personal"]
+
+
+def create_app(*, dev: bool | None = None, ask: Callable[[], OwnerCheck] = ask_owner) -> FastAPI:
+    """Build the app.
+
+    dev=None means: read AICITY_DEV from the environment.
+    ask is the Touch ID check; tests pass a fake one.
+    """
     if dev is None:
         dev = config.dev_mode()
 
@@ -30,9 +54,9 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
     # The front door lock runs before anything else sees the request.
     app.add_middleware(FrontDoorMiddleware, dev=dev)
 
-    # Which database the routes use. Always Sample until the Personal / Sample
-    # switch (with Touch ID) is built, so unfinished features never touch real data.
-    app.state.db_kind = DbKind.SAMPLE
+    # Which database the routes use: the mode saved last time (Sample if none).
+    app.state.db_kind = load_saved_mode()
+    app.state.mode_switcher = ModeSwitcher(app.state, ask)
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
 
@@ -48,9 +72,30 @@ def create_app(*, dev: bool | None = None) -> FastAPI:
         """Which database the routes use ('sample' or 'personal').
 
         The page shows its "Sample mode, don't add real tasks" banner from this.
-        Read-only: switching modes comes with Touch ID in a later session.
         """
         return {"mode": DbKind(request.app.state.db_kind).value}
+
+    @app.put("/api/mode")
+    def change_mode(request: Request, body: ModeChange) -> dict[str, str]:
+        """Switch modes. Going to Personal waits for Touch ID (or the Mac password).
+
+        Answers: 200 the mode now in use, 403 Touch ID didn't confirm,
+        409 a switch is already waiting, 503 Touch ID can't run.
+        """
+        switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
+        return {"mode": switched.value}
+
+    @app.exception_handler(SwitchRefused)
+    def _refused(_request: Request, exc: SwitchRefused) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=403)
+
+    @app.exception_handler(SwitchBusy)
+    def _busy(_request: Request, exc: SwitchBusy) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(SwitchUnavailable)
+    def _unavailable(_request: Request, exc: SwitchUnavailable) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=503)
 
     @app.get("/api/buildings")
     def buildings() -> list[dict[str, str]]:

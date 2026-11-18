@@ -14,6 +14,7 @@ import { BELT_HOME, CameraRig, type SceneApi } from "./CameraRig";
 import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
+import { ModeSwitch } from "./ModeSwitch";
 import "./belt.css";
 
 export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: BuildingId) => void }) {
@@ -57,6 +58,8 @@ export function BeltCanvas({ view, onOpen }: { view: View; onOpen: (id: Building
       <header className="belt__top">
         <span className="belt__brand">Asteroid Belt</span>
         {sample && <span className="belt__sample">Sample data</span>}
+        {/* Switching is done from the belt only, never from inside a building. */}
+        {view.level === "belt" && <ModeSwitch />}
       </header>
 
       {buildings.isError && (

@@ -13,8 +13,8 @@ can be reopened. GET routes never change data (a test checks every one).
 Answers: 404 no such task, 409 change not allowed in the task's current
 state, 422 bad input, 503 settings file missing or invalid.
 
-Which database is used comes from app.state.db_kind. Until the Personal /
-Sample switch is built it's always the Sample database.
+Which database is used comes from app.state.db_kind, set by the Personal /
+Sample switch (src/aicity/mode.py).
 """
 
 import sqlite3

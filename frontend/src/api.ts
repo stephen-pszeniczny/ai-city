@@ -82,6 +82,10 @@ export const getHealth = () => request<Health>("GET", "/api/health");
 export const getMode = async (): Promise<Mode> =>
   (await request<{ mode: Mode }>("GET", "/api/mode")).mode;
 
+/** Switch modes. Going to Personal waits for Touch ID; a refusal throws ApiError. */
+export const setMode = async (mode: Mode): Promise<Mode> =>
+  (await request<{ mode: Mode }>("PUT", "/api/mode", { mode })).mode;
+
 export const getBuildings = () => request<Building[]>("GET", "/api/buildings");
 
 export const listTasks = (filter: ListFilter = "open") =>

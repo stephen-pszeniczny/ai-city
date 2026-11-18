@@ -35,7 +35,11 @@ _The Dock app and automatic start (launchd) come later in Phase 1a. For now, sta
 
 **If it says `address already in use`** → it's already running somewhere. Find that window and press Ctrl+C. Can't find it? Run `lsof -nP -iTCP:8765 -sTCP:LISTEN`, note the number in the PID column, then run `kill <that number>` and start again.
 
-**Which data it uses:** the to-do list uses the Sample database until the Personal/Sample switch is built.
+**Which data it uses:** the Sample | Personal switch at the top right of the belt. The app opens in whichever mode you used last (Sample the very first time). Going to Personal asks for Touch ID, or your Mac password.
+
+**One-time setup for the switch** → `.venv/bin/python scripts/build_touch_id_helper.py`. It compiles the small Touch ID program into `build/confirm-owner`. Re-run it after a fresh clone or after changing `helpers/confirm_owner.swift`.
+
+**Made-up Sample tasks** → added once, the first time the app starts with a Sample database that doesn't have them yet. They only ever go into the Sample file.
 
 ## 3. Back up
 
@@ -61,6 +65,8 @@ _To be filled in when the first AI feature is built._
 _Added as problems come up. Format: **Symptom** → what to do._
 
 **After any fresh clone** → run `git config core.hooksPath .githooks` inside the repo. That setting isn't copied with the repo, and without it the gitleaks secret check won't run on commits. Needs `brew install gitleaks` first.
+
+**Switching to Personal says "Touch ID isn't available"** → run the one-time setup above, then try again. You stay in Sample until it works.
 
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 

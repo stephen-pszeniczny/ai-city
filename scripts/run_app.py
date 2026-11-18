@@ -22,6 +22,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from aicity import config
 from aicity.main import create_app
+from aicity.sample_data import seed_sample_database
 
 LOOPBACK = "127.0.0.1"
 
@@ -32,6 +33,9 @@ def main() -> None:
             f"Refusing to start: HOST must be {LOOPBACK} (this Mac only). "
             "Check src/aicity/config.py."
         )
+    # Made-up tasks for Sample mode, added once (never touches the Personal file).
+    if seed_sample_database():
+        print("Added made-up tasks to the Sample database.")
     uvicorn.run(create_app(), host=config.HOST, port=config.PORT)
 
 
