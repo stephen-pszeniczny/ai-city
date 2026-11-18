@@ -11,6 +11,8 @@ import { LOOK } from "../look";
 import { SUN_DIR } from "./sky";
 
 export const EARTH_R = 1091;
+/** Where Earth sits, far below the station (scene units). */
+export const EARTH_POS = new THREE.Vector3(248, -1466, -450);
 
 type EarthTextures = {
   day: THREE.CanvasTexture;
@@ -136,12 +138,18 @@ function earthTextures(): EarthTextures {
   return cached;
 }
 
-export type Earth = { group: THREE.Group; update(t: number): void; dispose(): void };
+export type Earth = {
+  group: THREE.Group;
+  update(t: number): void;
+  /** Point the sunlight (day side, clouds, atmosphere) along this direction. */
+  setSunDir(dir: THREE.Vector3): void;
+  dispose(): void;
+};
 
 export function createEarth(): Earth {
   const tx = earthTextures();
   const group = new THREE.Group();
-  group.position.set(248, -1466, -450);
+  group.position.copy(EARTH_POS);
   group.rotation.set(0.25, 0, 1.2);
   const sunDir = { value: SUN_DIR.clone() };
 
@@ -200,11 +208,14 @@ export function createEarth(): Earth {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     vertexShader:
-      "varying vec3 vNV; varying vec3 vNW; void main(){ vNV = normalize(normalMatrix * normal); vNW = normalize(mat3(modelMatrix) * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform vec3 sunDir; varying vec3 vNV; varying vec3 vNW;
+      "varying vec3 vNV; varying vec3 vNW; varying vec3 vCentre; void main(){ vNV = normalize(normalMatrix * normal); vNW = normalize(mat3(modelMatrix) * normal); vCentre = modelMatrix[3].xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    // When the sun is behind Earth (night), the edge of the air lights up as a warm ring.
+    fragmentShader: `uniform vec3 sunDir; varying vec3 vNV; varying vec3 vNW; varying vec3 vCentre;
       void main(){ float i = pow(max(0.0, 0.68 - dot(vNV, vec3(0.0, 0.0, 1.0))), 3.2);
         float lit = 0.25 + 0.75 * smoothstep(-0.4, 0.5, dot(vNW, sunDir));
-        gl_FragColor = vec4(vec3(0.28, 0.56, 1.0) * i * lit * 2.4, 1.0); }`,
+        float behind = smoothstep(0.3, 0.9, dot(normalize(vCentre - cameraPosition), sunDir));
+        vec3 col = vec3(0.28, 0.56, 1.0) * i * lit * 2.4 * (1.0 - 0.7 * behind) + vec3(1.0, 0.5, 0.22) * pow(i, 2.2) * behind * 1.2;
+        gl_FragColor = vec4(col, 1.0); }`,
   });
   group.add(surface, clouds, new THREE.Mesh(atmoGeo, atmoMat));
 
@@ -213,6 +224,9 @@ export function createEarth(): Earth {
     update(t) {
       surface.rotation.y = t * 0.0035;
       clouds.rotation.y = t * (0.0035 + 0.0017 * LOOK.earth.cloudSpeed);
+    },
+    setSunDir(dir) {
+      sunDir.value.copy(dir);
     },
     dispose() {
       // Textures stay cached for the session; only per-scene pieces are freed.

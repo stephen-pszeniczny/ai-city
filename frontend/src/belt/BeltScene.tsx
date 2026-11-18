@@ -19,9 +19,12 @@ import type { SceneApi } from "./CameraRig";
 import type { View } from "./levels";
 import { tintOf } from "./tints";
 import type { LabelElements } from "./Labels";
+import { fadeSecondsFor } from "./dayNight";
+import { LOOK } from "./look";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
 import { createStation } from "./station";
+import type { DayNight } from "./useDayNight";
 
 const TONE_COLOURS: Record<Tone, string> = {
   bad: "#ff453a",
@@ -40,12 +43,15 @@ export function BeltScene({
   onOpen,
   labels,
   api,
+  sky,
 }: {
   view: View;
   onOpen: (id: BuildingId) => void;
   labels: RefObject<LabelElements>;
   /** Filled in for the camera rig: where each building is, this frame. */
   api: RefObject<SceneApi | null>;
+  /** Day or night, and tonight's moon (from useDayNight). */
+  sky: Pick<DayNight, "night" | "moonPhase" | "ready" | "choice">;
 }) {
   const { scene, gl } = useThree();
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
@@ -72,6 +78,24 @@ export function BeltScene({
     setSpace(s);
     return () => s.dispose();
   }, [scene, gl, reducedMotion]);
+
+  // Day or night: the first known answer for each new space is shown at once;
+  // later changes fade (quicker after the Sky button), or jump with reduced motion.
+  const shownFor = useRef<Space | null>(null);
+  const lastChoice = useRef(sky.choice);
+  useEffect(() => {
+    if (!space || !sky.ready) return;
+    const first = shownFor.current !== space;
+    shownFor.current = space;
+    space.setNight(sky.night, {
+      instant: first || reducedMotion,
+      seconds: fadeSecondsFor(lastChoice.current, sky.choice, LOOK.dayNight),
+    });
+    lastChoice.current = sky.choice;
+  }, [space, sky.ready, sky.night, sky.choice, reducedMotion]);
+  useEffect(() => {
+    space?.setMoonPhase(sky.moonPhase);
+  }, [space, sky.moonPhase]);
 
   const anchors = useMemo(
     () => [
@@ -159,6 +183,7 @@ export function BeltScene({
       world.station.update(t);
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
       world.kit.updateBlinkers(t);
+      world.kit.setStationLights(space.nightAmount());
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
     const c = state.camera.position;

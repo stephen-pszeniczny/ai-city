@@ -25,6 +25,7 @@ from aicity.mode import (
 )
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
+from aicity.sky import daylight_at
 from aicity.tasks import utc_now
 
 
@@ -106,6 +107,23 @@ def create_app(*, dev: bool | None = None, ask: Callable[[], OwnerCheck] = ask_o
         """
         names = load_settings().buildings
         return [{"id": bid, "name": names[bid]} for bid in BUILDING_IDS]
+
+    @app.get("/api/daylight")
+    def daylight(request: Request) -> dict[str, object]:
+        """Day or night at the settings' location, for the belt's day and night mode.
+
+        Worked out on this Mac (no feed). The page asks again at next_change.
+        The location itself is never sent back, only the answer. A missing or
+        invalid settings file answers 503.
+        """
+        d = daylight_at(request.app.state.clock(), load_settings().location)
+        return {
+            "is_night": d.is_night,
+            "sunrise": d.sunrise.isoformat() if d.sunrise else None,
+            "sunset": d.sunset.isoformat() if d.sunset else None,
+            "next_change": d.next_change.isoformat(),
+            "moon_phase": round(d.moon_phase, 4),
+        }
 
     return app
 

@@ -41,6 +41,8 @@ _The Dock app and automatic start (launchd) come later in Phase 1a. For now, sta
 
 **Made-up Sample tasks** → added once, the first time the app starts with a Sample database that doesn't have them yet. They only ever go into the Sample file.
 
+**Day and night** → the **Sky** button next to the switch cycles Auto → Day → Night. Auto follows sunrise and sunset at the `[location]` in your settings file, worked out on this Mac. Day or Night stays until you set it back to Auto. The choice is remembered in this browser only.
+
 **Fresh Sample data before a demo** → `.venv/bin/python scripts/reset_sample_data.py`, then type `reset`. It deletes only the file labelled Sample and refills it with made-up tasks; Personal is never opened. Fine to run while the app is running.
 
 ## 3. Back up
@@ -69,6 +71,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 **After any fresh clone** → run `git config core.hooksPath .githooks` inside the repo. That setting isn't copied with the repo, and without it the gitleaks secret check won't run on commits. Needs `brew install gitleaks` first.
 
 **Switching to Personal says "Touch ID isn't available"** → run the one-time setup above, then try again. You stay in Sample until it works.
+
+**The belt is in the wrong mode for the time of day** → check the Sky button says Auto. Then check `[location]` in your settings file: latitude, longitude (west is negative) and `timezone`, which must be a name from the standard list, like `Europe/London`. No restart needed: reload the page to see the change. If the backend is down, Auto shows day.
 
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
