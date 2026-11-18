@@ -112,6 +112,15 @@ class NotificationStore:
         ).fetchall()
         return [Notification(r[0], r[1], r[2], r[3], r[4], bool(r[5])) for r in rows]
 
+    def last_id(self) -> int:
+        """The newest notification's ID (0 if none): note it before a check."""
+        row = self._conn.execute("SELECT COALESCE(MAX(id), 0) FROM notifications").fetchone()
+        return int(row[0])
+
+    def created_after(self, nid: int) -> list[Notification]:
+        """Active notifications made after the one with ID nid, oldest first."""
+        return [n for n in self.list_active() if n.id > nid]
+
     def mark_seen(self, nid: int) -> None:
         """The shuttle has flown for it. Marking twice is fine."""
         self._row(nid)

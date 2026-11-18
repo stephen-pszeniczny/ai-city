@@ -248,3 +248,15 @@ def test_reopened_after_90_days_does_not_fire_again(tasks, started, clock):
     started.check_reminders()
     tasks.reopen(t.id)
     assert started.check_reminders() == 0
+
+
+def test_created_after_lists_only_the_new_ones(tasks, started, clock):
+    add(tasks, "Earlier", "2026-11-18T12:30")
+    clock.at(12, 31)
+    started.check_reminders()
+    before = started.last_id()
+    add(tasks, "Later", "2026-11-18T12:40")
+    clock.at(12, 41)
+    started.check_reminders()
+    assert [n.title for n in started.created_after(before)] == ["Later"]
+    assert started.created_after(started.last_id()) == []
