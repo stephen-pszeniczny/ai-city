@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from aicity import config, task_routes
+from aicity import config, notification_routes, task_routes
 from aicity.db import DbKind
 from aicity.mode import (
     ModeSwitcher,
@@ -84,6 +84,7 @@ def create_app(
     app.state.reminder_loop = None
 
     task_routes.register(app)
+    notification_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
