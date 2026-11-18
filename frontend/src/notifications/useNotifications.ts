@@ -38,11 +38,24 @@ export function useNotifications(atBelt: boolean): Notifications {
   const queryClient = useQueryClient();
   const list = useQuery({
     queryKey: ["notifications"],
-    queryFn: getNotifications,
+    // Says whether this window has focus, so a Mac notification comes when you're elsewhere.
+    queryFn: () => getNotifications(document.hasFocus()),
     retry: false,
     refetchInterval: POLL_MS,
     refetchOnWindowFocus: true,
   });
+  // Re-ask straight away when the window gains or loses focus, so the backend knows.
+  const { refetch } = list;
+  useEffect(() => {
+    const tell = () => void refetch();
+    window.addEventListener("focus", tell);
+    window.addEventListener("blur", tell);
+    return () => {
+      window.removeEventListener("focus", tell);
+      window.removeEventListener("blur", tell);
+    };
+  }, [refetch]);
+
   const mode = list.data?.mode;
   const items = list.data?.items ?? [];
 

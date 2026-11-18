@@ -89,3 +89,29 @@ def test_background_app_starts_and_stops_the_loop(data_dir):
         assert loop is not None
         assert loop._thread is not None and loop._thread.is_alive()
     assert not loop._thread.is_alive()
+
+
+def test_loop_hands_personal_new_notifications_to_notify(data_dir):
+    database_with_a_due_reminder(DbKind.PERSONAL)
+    database_with_a_due_reminder(DbKind.SAMPLE)
+    got = []
+    check_all_databases(clock, LOCAL, notify=got.append)
+    assert len(got) == 1
+    assert [n.title for n in got[0]] == ["Made-up reminder"]
+
+
+def test_loop_does_not_call_notify_when_nothing_is_new(data_dir):
+    database_with_a_due_reminder(DbKind.PERSONAL)
+    check_all_databases(clock, LOCAL)
+    got = []
+    check_all_databases(clock, LOCAL, notify=got.append)
+    assert got == []
+
+
+def test_loop_survives_a_failing_notify(data_dir):
+    database_with_a_due_reminder(DbKind.PERSONAL)
+
+    def broken(_items):
+        raise RuntimeError("notifier fell over")
+
+    assert check_all_databases(clock, LOCAL, notify=broken) == {DbKind.PERSONAL: 1}

@@ -235,3 +235,15 @@ def test_helper_that_never_answers_counts_as_declined(tmp_path):
     helper.write_text("#!/bin/sh\nsleep 5\n")
     helper.chmod(0o700)
     assert ask_owner(helper=helper, timeout=0.2) == OwnerCheck.DECLINED
+
+
+def test_switching_to_sample_clears_mac_notifications(monkeypatch):
+    # Titles posted while in Personal mode must not stay on screen during a demo.
+    from aicity import mac_notify
+
+    cleared = []
+    monkeypatch.setattr(mac_notify, "clear", lambda: cleared.append(True))
+    client = make_client(FakeOwner())
+    client.app.state.db_kind = DbKind.PERSONAL
+    switch(client, "sample")
+    assert cleared == [True]

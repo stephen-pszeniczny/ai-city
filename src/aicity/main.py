@@ -7,14 +7,16 @@ refuses anything but this Mac:
 
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from aicity import config, notification_routes, task_routes
+from aicity import config, mac_notify, notification_routes, page, task_routes
 from aicity.db import DbKind
+from aicity.mac_messages import MacMessage, plan_mac_messages
 from aicity.mode import (
     ModeSwitcher,
     OwnerCheck,
@@ -24,7 +26,9 @@ from aicity.mode import (
     ask_owner,
     load_saved_mode,
 )
-from aicity.reminder_loop import ReminderLoop
+from aicity.notifications import Notification
+from aicity.presence import Presence
+from aicity.reminder_loop import ReminderLoop, check_all_databases
 from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
 from aicity.sky import daylight_at
@@ -37,11 +41,24 @@ class ModeChange(BaseModel):
     mode: Literal["sample", "personal"]
 
 
+def _mac_notify(app: FastAPI, new: list[Notification]) -> None:
+    """New Personal reminders: post a Mac notification unless the owner is looking (see mac_messages)."""
+    sample_mode = DbKind(app.state.db_kind) is DbKind.SAMPLE
+    for message in plan_mac_messages(
+        [n.title for n in new], sample_mode=sample_mode, looking=app.state.presence.looking()
+    ):
+        # The owner may have switched to Sample since planning: never post a title then.
+        if not sample_mode and DbKind(app.state.db_kind) is DbKind.SAMPLE and len(new) == 1:
+            message = MacMessage("Reminder", "You have a reminder")
+        mac_notify.post(message)
+
+
 def create_app(
     *,
     dev: bool | None = None,
     ask: Callable[[], OwnerCheck] = ask_owner,
     background: bool = False,
+    dist: Path | None = None,
 ) -> FastAPI:
     """Build the app.
 
@@ -49,6 +66,8 @@ def create_app(
     ask is the Touch ID check; tests pass a fake one.
     background=True runs the reminder check every 30 seconds while the app is
     up (scripts/run_app.py turns it on; tests leave it off).
+    dist is the built page to serve in normal mode (default frontend/dist);
+    in dev mode the Vite dev server serves the page instead.
     """
     if dev is None:
         dev = config.dev_mode()
@@ -56,7 +75,12 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if background:
-            app.state.reminder_loop = ReminderLoop(lambda: app.state.clock())
+            app.state.reminder_loop = ReminderLoop(
+                lambda: app.state.clock(),
+                check=lambda clock: check_all_databases(
+                    clock, notify=lambda new: _mac_notify(app, new)
+                ),
+            )
             app.state.reminder_loop.start()
         try:
             yield
@@ -82,6 +106,8 @@ def create_app(
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
     app.state.reminder_loop = None
+    # Whether the owner is looking at the app (the page reports it; memory only).
+    app.state.presence = Presence(lambda: app.state.clock())
 
     task_routes.register(app)
     notification_routes.register(app)
@@ -107,6 +133,9 @@ def create_app(
         409 a switch is already waiting, 503 Touch ID can't run.
         """
         switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
+        if switched is DbKind.SAMPLE:
+            # Take any real reminder titles off the screen before a demo.
+            mac_notify.clear()
         return {"mode": switched.value}
 
     @app.exception_handler(SwitchRefused)
@@ -147,6 +176,10 @@ def create_app(
             "next_change": d.next_change.isoformat(),
             "moon_phase": round(d.moon_phase, 4),
         }
+
+    # The page for addresses no route answers (never /api); see page.py.
+    if not dev:
+        page.register(app, dist if dist is not None else page.DIST)
 
     return app
 

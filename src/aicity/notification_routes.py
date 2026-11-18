@@ -1,6 +1,8 @@
 """Web routes for the notification list (the shuttle and the ticker).
 
-    GET  /api/notifications                 {mode, items}: active ones, oldest first
+    GET  /api/notifications?looking=0|1     {mode, items}: active ones, oldest first.
+                                            looking: the page's window has focus (kept
+                                            in memory for Mac notifications, never saved)
     POST /api/notifications/{id}/seen       the shuttle has flown for it  (body: {mode})
     POST /api/notifications/{id}/dismiss    take it off the ticker        (body: {mode})
 
@@ -62,7 +64,8 @@ def _store(
 
 
 @router.get("")
-def list_notifications(request: Request) -> dict:
+def list_notifications(request: Request, looking: bool = False) -> dict:
+    request.app.state.presence.report(looking)
     with _store(request) as (store, kind):
         return {"mode": kind.value, "items": [asdict(n) for n in store.list_active()]}
 

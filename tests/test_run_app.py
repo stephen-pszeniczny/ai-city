@@ -22,6 +22,7 @@ def started(monkeypatch):
     """Replace uvicorn.run with a recorder; returns the list of calls."""
     calls = []
     monkeypatch.setattr(run_app.uvicorn, "run", lambda app, **kw: calls.append((app, kw)))
+    monkeypatch.setattr(run_app, "port_in_use", lambda host, port: False)
     return calls
 
 
@@ -54,3 +55,21 @@ def test_refuses_to_start_on_anything_but_this_mac(started, monkeypatch, host):
     with pytest.raises(SystemExit, match="this Mac only"):
         run_app.main()
     assert started == []
+
+
+def test_port_already_taken_gives_one_clear_line(started, monkeypatch):
+    monkeypatch.setattr(run_app, "port_in_use", lambda host, port: True)
+    with pytest.raises(SystemExit, match="already in use"):
+        run_app.main()
+    assert started == []
+
+
+def test_port_in_use_really_checks_the_port():
+    import socket
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        s.listen()
+        taken = s.getsockname()[1]
+        assert run_app.port_in_use("127.0.0.1", taken) is True
+    assert run_app.port_in_use("127.0.0.1", taken) is False

@@ -174,3 +174,16 @@ def test_list_names_the_database_it_actually_read_even_if_the_mode_switches_mean
     body = client.get("/api/notifications").json()
     assert body["mode"] == "sample"
     assert [i["title"] for i in body["items"]] == ["First", "Second"]
+
+
+def test_route_records_looking_flag(client):
+    client.get("/api/notifications?looking=1")
+    assert client.app.state.presence.looking() is True
+    client.get("/api/notifications?looking=0")
+    assert client.app.state.presence.looking() is False
+
+
+def test_route_without_flag_counts_as_not_looking(client):
+    client.get("/api/notifications?looking=1")
+    client.get("/api/notifications")
+    assert client.app.state.presence.looking() is False

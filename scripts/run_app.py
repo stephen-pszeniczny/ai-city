@@ -11,6 +11,7 @@ It refuses to start unless HOST is 127.0.0.1: the app is for this Mac only
 and must never be reachable from a network. Stop it with Ctrl+C.
 """
 
+import socket
 import sys
 from pathlib import Path
 
@@ -27,11 +28,25 @@ from aicity.sample_data import seed_sample_database
 LOOPBACK = "127.0.0.1"
 
 
+def port_in_use(host: str, port: int) -> bool:
+    """True if something already answers on host:port (e.g. a dev backend, or the app itself)."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
 def main() -> None:
     if config.HOST != LOOPBACK:
         raise SystemExit(
             f"Refusing to start: HOST must be {LOOPBACK} (this Mac only). "
             "Check src/aicity/config.py."
+        )
+    # One clear line instead of a long error when the address is taken. The login item
+    # then tries again a minute later (ThrottleInterval), so this never floods the log.
+    if port_in_use(config.HOST, config.PORT):
+        raise SystemExit(
+            f"Port {config.PORT} is already in use (another copy of the app, or a development "
+            "backend). Stop that one first, or use: .venv/bin/python scripts/app.py stop"
         )
     # Made-up tasks for Sample mode, added once (never touches the Personal file).
     if seed_sample_database():

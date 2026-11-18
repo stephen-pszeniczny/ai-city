@@ -17,19 +17,38 @@ If something here is out of date, tell Claude Code: "the runbook is wrong about 
 
 ## 2. Start and stop the app
 
-_The Dock app and automatic start (launchd) come later in Phase 1a. For now, start it by hand._
+The app starts by itself when you log in (a login item) and runs from its own copy of the
+latest merged code at `~/Projects/ai-city-app`. You open it from the Dock. All commands below
+run in Terminal from `~/Projects/ai-city`.
 
-**Start the backend**
-1. Open Terminal.
-2. `cd ~/Projects/ai-city`
-3. `.venv/bin/python scripts/run_app.py`
-4. Leave that window open. Check it's alive: open http://127.0.0.1:8765/api/health — it should say `{"status":"ok"}`.
+**First-time setup** (once, in this order)
+1. `.venv/bin/python scripts/app.py update` → makes the app's copy, builds it, installs the
+   login item and starts it. It ends with "Answering … yes".
+2. Open **Safari** and go to http://127.0.0.1:8765 → menu **File → Add to Dock…** → name it
+   exactly **Asteroid Belt** → **Add**. (Clicking a reminder notification opens this.)
+3. The first reminder notification makes macOS ask about notifications from "Asteroid Belt":
+   click **Allow**. Changed your mind? System Settings → Notifications → Asteroid Belt.
 
-**While building the page** (two Terminal windows):
-1. Window 1: `cd ~/Projects/ai-city && AICITY_DEV=1 .venv/bin/python scripts/run_app.py`
-2. Window 2: `cd ~/Projects/ai-city/frontend && npm run dev`, then open http://127.0.0.1:5173
+**Every day** → click **Asteroid Belt** in the Dock. Nothing else to start.
 
-**Stop** → click the Terminal window and press Ctrl+C.
+**After merging a pull request** → `.venv/bin/python scripts/app.py update`.
+
+**Is it running? Which version?** → `.venv/bin/python scripts/app.py status`.
+
+**Pause / resume it** → `.venv/bin/python scripts/app.py stop` / `start`. (Needed before a
+development session, which uses the same address.) A pause lasts until you run `start` or log in
+again; logging in always starts it.
+
+**Remove the login item** → `.venv/bin/python scripts/app.py uninstall`. Your data and the app's
+copy stay; run `update` to put it back.
+
+**Logs** → `~/AI-City-Data/logs/app.log` and `app.err.log`.
+
+**While building the page** (development, two Terminal windows):
+1. `.venv/bin/python scripts/app.py stop` first (it uses port 8765).
+2. Window 1: `cd ~/Projects/ai-city && AICITY_DEV=1 .venv/bin/python scripts/run_app.py`
+3. Window 2: `cd ~/Projects/ai-city/frontend && npm run dev`, then open http://127.0.0.1:5173
+4. Done: Ctrl+C in both windows, then `.venv/bin/python scripts/app.py start`.
 
 **If it says "Refusing to start: HOST must be 127.0.0.1"** → someone changed `HOST` in `src/aicity/config.py`. Change it back to `"127.0.0.1"`. The app is for this Mac only.
 
@@ -58,7 +77,8 @@ _To be filled in when the external drive is set up (Phase 0)._
 ## 5. Update
 
 ### Code
-_To be filled in during Phase 1a._
+After a pull request is merged on GitHub: `cd ~/Projects/ai-city && git checkout main && git pull`, then
+`.venv/bin/python scripts/app.py update` (refreshes the app's own copy, rebuilds it, restarts it).
 
 ### Libraries (Python and Node packages)
 _To be filled in during Phase 1a._
@@ -75,6 +95,14 @@ _Added as problems come up. Format: **Symptom** → what to do._
 **Switching to Personal says "Touch ID isn't available"** → run the one-time setup above, then try again. You stay in Sample until it works.
 
 **The belt is in the wrong mode for the time of day** → check the Sky button says Auto. Then check `[location]` in your settings file: latitude, longitude (west is negative) and `timezone`, which must be a name from the standard list, like `Europe/London`. No restart needed: reload the page to see the change. If the backend is down, Auto shows day.
+
+**Mac notifications** → when a Personal reminder comes due and you're not looking at the app (window closed, or behind other windows), a Mac notification from "Asteroid Belt" appears; click it to open the app. While the app is in Sample mode it only says "You have a reminder" (never the task), so nothing real shows during a demo. Several at once come as one ("3 reminders came due"). Sample's made-up reminders never make Mac notifications. The shuttle still flies when you next look at the app.
+
+**No Mac notifications** → check `scripts/app.py status` says it's running; check System Settings → Notifications → Asteroid Belt is allowed; if the app was never built, `scripts/app.py update` builds the notifier.
+
+**Notifications only say "Asteroid Belt / Notification", no text** → macOS is hiding previews. System Settings → Notifications → **Show previews**: set it to **Always** (or When Unlocked), and under Asteroid Belt set its own **Show previews** to Always.
+
+**The app doesn't open from the Dock** → run `scripts/app.py status`. Not loaded → `scripts/app.py start`. Loaded but not answering → look at the end of `~/AI-City-Data/logs/app.err.log`; a message about port 8765 means a development backend is still running (Ctrl+C it, then `start`). "The page isn't built yet" → `scripts/app.py update`.
 
 **A reminder didn't show** → check the app is running (reminders are only checked while it is). Check you're in the right mode: Personal reminders never show in Sample. If the reminder time was before the app's very first notification check, it's skipped on purpose. A reminder you just saved fires within 30 seconds; the shuttle waits while you're inside a building and flies when you're back on the belt.
 
