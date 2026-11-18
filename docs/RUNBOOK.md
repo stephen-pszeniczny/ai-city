@@ -41,6 +41,8 @@ _The Dock app and automatic start (launchd) come later in Phase 1a. For now, sta
 
 **Made-up Sample tasks** → added once, the first time the app starts with a Sample database that doesn't have them yet. They only ever go into the Sample file.
 
+**Fresh Sample data before a demo** → `.venv/bin/python scripts/reset_sample_data.py`, then type `reset`. It deletes only the file labelled Sample and refills it with made-up tasks; Personal is never opened. Fine to run while the app is running.
+
 ## 3. Back up
 
 _To be filled in when the external drive is set up (Phase 0)._

@@ -4,14 +4,16 @@ What matters: they only ever go into the Sample database, only once, and the
 list they make has the mix a demo needs (due soon, overdue, stale, done, archived).
 """
 
+import importlib.util
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from aicity import config
 from aicity.db import DatabaseError, DbKind, db_path, open_database
-from aicity.sample_data import SAMPLE_TASKS, seed, seed_sample_database
+from aicity.sample_data import SAMPLE_TASKS, reset_sample_database, seed, seed_sample_database
 from aicity.tasks import TaskStore
 
 NOW = datetime(2026, 11, 17, 15, 0, tzinfo=UTC)
@@ -83,3 +85,92 @@ def test_tasks_already_in_the_sample_database_are_kept():
     titles = [t.title for t in sample_store().list_tasks("all")]
     assert "A task added by hand" in titles
     assert len(titles) == len(SAMPLE_TASKS) + 1
+
+
+# --- Resetting --------------------------------------------------------------------------
+
+SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "reset_sample_data.py"
+_spec = importlib.util.spec_from_file_location("reset_sample_data", SCRIPT)
+reset_script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(reset_script)
+
+
+def titles() -> list[str]:
+    return [t.title for t in sample_store().list_tasks("all")]
+
+
+def test_reset_replaces_everything_with_fresh_sample_tasks():
+    seed_sample_database(clock=lambda: NOW)
+    sample_store().create(title="A task added by hand", category="personal")
+    reset_sample_database(clock=lambda: NOW)
+    assert sorted(titles()) == sorted(t.title for t in SAMPLE_TASKS)
+
+
+def test_reset_with_no_sample_database_just_makes_one():
+    assert not db_path(DbKind.SAMPLE).exists()
+    reset_sample_database(clock=lambda: NOW)
+    assert len(titles()) == len(SAMPLE_TASKS)
+
+
+def test_reset_never_touches_the_personal_database():
+    conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
+    TaskStore(conn, stale_after_days=7, clock=lambda: NOW).create(
+        title="Keep me", category="personal"
+    )
+    conn.close()
+    before = db_path(DbKind.PERSONAL).read_bytes()
+    reset_sample_database(clock=lambda: NOW)
+    assert db_path(DbKind.PERSONAL).read_bytes() == before
+
+
+def test_reset_refuses_a_personal_file_at_the_sample_path_and_keeps_it():
+    other = db_path(DbKind.SAMPLE).with_name("other.db")
+    open_database(other, DbKind.PERSONAL).close()
+    other.rename(db_path(DbKind.SAMPLE))
+    before = db_path(DbKind.SAMPLE).read_bytes()
+    with pytest.raises(DatabaseError):
+        reset_sample_database(clock=lambda: NOW)
+    assert db_path(DbKind.SAMPLE).read_bytes() == before
+
+
+@pytest.mark.parametrize("contents", [b"", b"not a database at all"])
+def test_reset_refuses_an_unlabelled_or_broken_file_and_keeps_it(contents):
+    db_path(DbKind.SAMPLE).parent.mkdir(parents=True, exist_ok=True)
+    db_path(DbKind.SAMPLE).write_bytes(contents)
+    with pytest.raises(DatabaseError):
+        reset_sample_database(clock=lambda: NOW)
+    assert db_path(DbKind.SAMPLE).read_bytes() == contents
+
+
+def test_reset_removes_sqlite_side_files(monkeypatch):
+    seed_sample_database(clock=lambda: NOW)
+    sides = [Path(f"{db_path(DbKind.SAMPLE)}{s}") for s in ("-wal", "-shm", "-journal")]
+    for side in sides:
+        side.write_bytes(b"old")
+    # Look straight after the delete, before a new database is made (SQLite
+    # would otherwise tidy some side files itself and hide a missed delete).
+    monkeypatch.setattr("aicity.sample_data.seed_sample_database", lambda _clock: None)
+    reset_sample_database(clock=lambda: NOW)
+    assert not db_path(DbKind.SAMPLE).exists()
+    assert [s.name for s in sides if s.exists()] == []
+
+
+def test_script_does_nothing_unless_reset_is_typed():
+    seed_sample_database(clock=lambda: NOW)
+    sample_store().create(title="A task added by hand", category="personal")
+    for answer in ("", "yes", "RESET", "y"):
+        assert reset_script.main(ask=lambda _prompt, a=answer: a) == 1
+    assert "A task added by hand" in titles()
+
+
+def test_script_resets_when_reset_is_typed():
+    seed_sample_database(clock=lambda: NOW)
+    sample_store().create(title="A task added by hand", category="personal")
+    assert reset_script.main(ask=lambda _prompt: "reset") == 0
+    assert "A task added by hand" not in titles()
+
+
+def test_script_reports_a_refusal_without_crashing():
+    open_database(db_path(DbKind.SAMPLE).with_name("other.db"), DbKind.PERSONAL).close()
+    db_path(DbKind.SAMPLE).with_name("other.db").rename(db_path(DbKind.SAMPLE))
+    assert reset_script.main(ask=lambda _prompt: "reset") == 2

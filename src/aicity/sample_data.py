@@ -16,6 +16,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
 from aicity.tasks import TaskStore, utc_now
@@ -82,6 +83,43 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         return seed(conn, clock())
     finally:
         conn.close()
+
+
+def reset_sample_database(clock: Callable[[], datetime] = utc_now) -> None:
+    """Delete the Sample database and make it again with fresh made-up tasks.
+
+    Before deleting, the file's own label is read (read-only) and must say
+    'sample'. A file labelled anything else, or with no label, is refused and
+    left exactly as it was. The Personal database is never opened.
+    """
+    path = db_path(DbKind.SAMPLE)
+    if path == db_path(DbKind.PERSONAL):  # can't happen; checked anyway
+        raise DatabaseError("The Sample and Personal paths are the same. Refusing to reset.")
+    if path.exists():
+        if _read_label(path) != DbKind.SAMPLE.value:
+            raise DatabaseError("That file isn't labelled Sample. Nothing was deleted.")
+        # SQLite's side files go too, or the old data could come back.
+        for suffix in ("", "-wal", "-shm", "-journal"):
+            Path(f"{path}{suffix}").unlink(missing_ok=True)
+    seed_sample_database(clock)
+
+
+def _read_label(path: Path) -> str | None:
+    """The db_kind label of a database file, read without changing it. None if unreadable."""
+    try:
+        # immutable=1: read the file alone, ignoring leftover side files (-wal,
+        # -journal) that would otherwise stop a read-only open. The label is
+        # written once when the file is made, so side files can't change it.
+        conn = sqlite3.connect(f"{path.as_uri()}?mode=ro&immutable=1", uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+    return None if row is None else row[0]
 
 
 def seed(conn: sqlite3.Connection, now: datetime) -> bool:
