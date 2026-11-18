@@ -41,6 +41,19 @@ export const LOOK = {
   },
 
   earth: { cityLights: 1.0, cloudSpeed: 1.0 },
+
+  dayNight: {
+    /** Seconds the sunset/sunrise fade takes when it switches while you watch. */
+    fadeSeconds: 20,
+    /** How much brighter the stars are at night (1 = same as day). */
+    nightStarBrightness: 1.6,
+    /** How much brighter the station's windows glow at night (1 = same as day). */
+    stationLightGlow: 1.8,
+    /** Moon brightness at night (0 = hidden, 1 = full). */
+    moonBrightness: 1.0,
+    /** Moon size (1 = normal). */
+    moonSize: 1.0,
+  },
   /** Gap between shooting stars, in seconds. */
   shootingStars: { minSeconds: 20, maxSeconds: 60 },
 } as const;

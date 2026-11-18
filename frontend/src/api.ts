@@ -88,6 +88,18 @@ export const setMode = async (mode: Mode): Promise<Mode> =>
 
 export const getBuildings = () => request<Building[]>("GET", "/api/buildings");
 
+/** Day or night where the settings say; times are ISO 8601 with their offset. */
+export type Daylight = {
+  is_night: boolean;
+  sunrise: string | null;
+  sunset: string | null;
+  next_change: string;
+  /** 0 new moon, 0.5 full. */
+  moon_phase: number;
+};
+
+export const getDaylight = () => request<Daylight>("GET", "/api/daylight");
+
 export const listTasks = (filter: ListFilter = "open") =>
   request<Task[]>("GET", `/api/tasks?status=${filter}`);
 
