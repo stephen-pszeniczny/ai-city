@@ -1,6 +1,7 @@
 // The far sky: stars (twinkling), the Milky Way band, coloured nebulae and the sun.
 import * as THREE from "three";
 
+import { LOOK } from "../look";
 import { context2d, fbm, makeCanvas, softGlow } from "./noise";
 
 /** Direction of the sun (also used for lighting and Earth's day side). */
@@ -12,8 +13,12 @@ export type Sky = {
   /** The sun stays put (it lights the scene). */
   sun: THREE.Group;
   update(t: number): void;
+  /** 0 day … 1 night: stars brighten and the sun fades out behind Earth. */
+  setNight(amount: number): void;
   dispose(): void;
 };
+
+const DAY_STARS = 0.75;
 
 export function createSky(pixelRatio: number): Sky {
   const far = new THREE.Group();
@@ -21,7 +26,7 @@ export function createSky(pixelRatio: number): Sky {
   const disposables: { dispose(): void }[] = [];
   const uniforms = {
     time: { value: 0 },
-    bright: { value: 0.75 },
+    bright: { value: DAY_STARS },
     pixelRatio: { value: pixelRatio },
   };
 
@@ -137,6 +142,7 @@ export function createSky(pixelRatio: number): Sky {
     }
   });
 
+  const sunMats: [THREE.SpriteMaterial, number][] = [];
   const sunPos = SUN_DIR.clone().multiplyScalar(6000);
   const sprite = (k: THREE.Color, scale: number) => {
     const m = new THREE.SpriteMaterial({
@@ -147,6 +153,7 @@ export function createSky(pixelRatio: number): Sky {
       depthWrite: false,
     });
     disposables.push(m);
+    sunMats.push([m, m.opacity]);
     const sp = new THREE.Sprite(m);
     sp.position.copy(sunPos);
     sp.scale.setScalar(scale);
@@ -160,6 +167,11 @@ export function createSky(pixelRatio: number): Sky {
     sun,
     update(t) {
       uniforms.time.value = t;
+    },
+    setNight(amount) {
+      uniforms.bright.value = DAY_STARS * (1 + (LOOK.dayNight.nightStarBrightness - 1) * amount);
+      for (const [m, dayOpacity] of sunMats) m.opacity = dayOpacity * (1 - amount);
+      sun.visible = amount < 0.999;
     },
     dispose() {
       disposables.forEach((d) => d.dispose());

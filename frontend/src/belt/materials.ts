@@ -2,6 +2,7 @@
 // Made once per canvas through createKit(); dispose() frees them all.
 import * as THREE from "three";
 
+import { LOOK } from "./look";
 import { context2d, makeCanvas, noiseTexture, softGlow } from "./space/noise";
 
 type Blinker = {
@@ -13,6 +14,9 @@ type Blinker = {
 };
 
 export type Kit = ReturnType<typeof createKit>;
+
+/** The station's window glow by day; night multiplies it by LOOK.dayNight.stationLightGlow. */
+const WINDOW_GLOW = 1.6;
 
 export function createKit() {
   const owned: { dispose(): void }[] = [];
@@ -46,7 +50,7 @@ export function createKit() {
       emissiveIntensity: 0.3,
     }),
     radiator: std({ color: 0xf6f7fa, roughness: 0.25, metalness: 0.1 }),
-    window: std({ color: 0x111111, emissive: 0xffc77a, emissiveIntensity: 1.6 }),
+    window: std({ color: 0x111111, emissive: 0xffc77a, emissiveIntensity: WINDOW_GLOW }),
   };
 
   /** A flat glowing colour (bright enough to bloom). */
@@ -97,6 +101,11 @@ export function createKit() {
     glow,
     keep,
     addBlinker,
+    /** 0 day … 1 night: the station's windows glow brighter in Earth's shadow. */
+    setStationLights(amount: number) {
+      mats.window.emissiveIntensity =
+        WINDOW_GLOW * (1 + (LOOK.dayNight.stationLightGlow - 1) * amount);
+    },
     updateBlinkers(t: number) {
       for (const b of blinkers) {
         const ph = ((t + b.offset) % b.period) / b.period;
