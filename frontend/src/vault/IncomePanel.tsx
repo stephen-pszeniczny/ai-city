@@ -68,7 +68,7 @@ function ThisMonth({ v }: { v: IncomeView }) {
         <strong>{formatCad(m.net_cents)}</strong>
         {m.employer_match_cents > 0 && (
           <span className="sw-tile__label">
-            + {formatCad(m.employer_match_cents)} employer RRSP (not in the goal)
+            + {formatCad(m.employer_match_cents)} employer contributions (not in the goal)
           </span>
         )}
       </div>
@@ -159,7 +159,7 @@ function PayRow({ row }: { row: IncomeView["main_job_pay"][number] }) {
       </span>
       {row.rrsp_cents ? <span className="sw-dim">RRSP {formatCad(row.rrsp_cents)}</span> : null}
       {row.match_cents ? (
-        <span className="sw-dim">+ match {formatCad(row.match_cents)}</span>
+        <span className="sw-dim">+ employer {formatCad(row.match_cents)}</span>
       ) : null}
       {row.deductions_cents !== null && (
         <span className="sw-dim">tax and deductions {formatCad(row.deductions_cents)}</span>
@@ -182,7 +182,7 @@ function PayRow({ row }: { row: IncomeView["main_job_pay"][number] }) {
             <input inputMode="decimal" value={rrsp} onChange={(e) => setRrsp(e.target.value)} />
           </label>
           <label>
-            Employer match
+            Employer contributions (match + flex)
             <input inputMode="decimal" value={match} onChange={(e) => setMatch(e.target.value)} />
           </label>
           <label className="sw-notes">

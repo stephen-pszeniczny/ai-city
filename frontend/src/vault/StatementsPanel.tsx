@@ -258,7 +258,7 @@ function Review({
                       />
                     </label>
                     <label>
-                      Employer match
+                      Employer contributions (match + flex)
                       <input
                         inputMode="decimal"
                         value={c.match}
