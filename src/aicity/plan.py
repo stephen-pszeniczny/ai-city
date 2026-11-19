@@ -74,6 +74,35 @@ class Week:
     days: list[tuple[str, list[Block]]]
 
 
+@dataclass(frozen=True)
+class CheckinStatus:
+    """Which week the Sunday check-in is for, and whether it's due.
+
+    reminder_at is local wall-clock time (no time zone): the Sunday before week_start
+    at the check-in reminder time.
+    """
+
+    week_start: date
+    due: bool
+    checked_in: bool
+    reminder_at: datetime
+
+
+def checkin_target(now_local: datetime, opens: time, this_week_checked_in: bool) -> date:
+    """The week the check-in plans.
+
+    Sunday from the opening time: next week. Otherwise: this week if it isn't
+    checked in yet, else next week.
+    """
+    today = now_local.date()
+    this_monday = monday_of(today)
+    next_monday = this_monday + timedelta(days=7)
+    sunday_open = today.weekday() == 6 and now_local.time() >= opens
+    if sunday_open or this_week_checked_in:
+        return next_monday
+    return this_monday
+
+
 def monday_of(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
@@ -147,6 +176,30 @@ class PlanStore:
         return Week(
             week_start=start, checked_in=checked_in_at is not None, days=list(by_day.items())
         )
+
+    def checkin_status(self, now_local: datetime, rules: PlanSettings) -> CheckinStatus:
+        """Reads only. An unsaved week counts as not checked in.
+
+        Due: the target week isn't checked in, and it's Sunday from the opening time
+        or the target is this week (a check-in that was missed).
+        """
+        now_local = now_local.replace(tzinfo=None)
+        this_monday = monday_of(now_local.date())
+        target = checkin_target(now_local, rules.checkin_opens, self._checked_in(this_monday))
+        checked_in = self._checked_in(target)
+        sunday_open = now_local.weekday() == 6 and now_local.time() >= rules.checkin_opens
+        return CheckinStatus(
+            week_start=target,
+            due=not checked_in and (sunday_open or target == this_monday),
+            checked_in=checked_in,
+            reminder_at=datetime.combine(target - timedelta(days=1), rules.checkin_reminder),
+        )
+
+    def _checked_in(self, week_start: date) -> bool:
+        row = self._conn.execute(
+            "SELECT checked_in_at FROM plan_weeks WHERE week_start = ?", (week_start.isoformat(),)
+        ).fetchone()
+        return row is not None and row[0] is not None
 
     def get_block(self, block_id: int) -> Block:
         row = self._conn.execute(
