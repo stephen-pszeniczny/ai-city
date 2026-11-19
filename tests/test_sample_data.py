@@ -13,7 +13,13 @@ import pytest
 
 from aicity import config
 from aicity.db import DatabaseError, DbKind, db_path, open_database
-from aicity.sample_data import SAMPLE_TASKS, reset_sample_database, seed, seed_sample_database
+from aicity.sample_data import (
+    SAMPLE_TASKS,
+    last_seeded_payday,
+    reset_sample_database,
+    seed,
+    seed_sample_database,
+)
 from aicity.tasks import TaskStore
 
 NOW = datetime(2026, 11, 17, 15, 0, tzinfo=UTC)
@@ -321,3 +327,12 @@ def test_sample_income_is_seeded_once():
     first = income_view_now()
     seed_sample_database(clock=lambda: NOW)
     assert income_view_now() == first
+
+
+def test_sample_has_one_unconfirmed_typed_pay():
+    seed_sample_database(clock=lambda: NOW)
+    today = NOW.astimezone().date()
+    waiting = [r for r in income_view_now()["main_job_pay"] if not r["confirmed"]]
+    assert [r["day"] for r in waiting] == [
+        (last_seeded_payday(today) + timedelta(days=14)).isoformat()
+    ]

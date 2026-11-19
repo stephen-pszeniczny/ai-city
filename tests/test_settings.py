@@ -170,6 +170,23 @@ def test_placeholder_flag_must_be_true_or_false(example_data):
     assert "tax_set_aside_is_placeholder" in msg
 
 
+def test_statement_due_day_is_optional_and_defaults_to_8(example_data):
+    example_data["income"].pop("statement_due_day", None)
+    assert parse_settings(example_data).income.statement_due_day == 8
+
+
+def test_statement_due_day_is_read(example_data):
+    example_data["income"]["statement_due_day"] = 10
+    assert parse_settings(example_data).income.statement_due_day == 10
+
+
+@pytest.mark.parametrize("value", [0, 29, "8", 8.5, True])
+def test_statement_due_day_out_of_range_is_refused(example_data, value):
+    example_data["income"]["statement_due_day"] = value
+    msg = error_for(example_data)
+    assert "income.statement_due_day must be a whole number from 1 to 28" in msg
+
+
 # --- Privacy ---------------------------------------------------------------
 
 

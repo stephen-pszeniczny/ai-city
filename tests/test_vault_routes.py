@@ -156,6 +156,9 @@ LOCKED_CALLS = [
     ),
     ("post", "/api/vault/side-work/rates/refresh", None),
     ("put", "/api/vault/side-work/rates/2026-03-10", {"rate": "1.37"}),
+    ("post", "/api/vault/income/main-job", {"paid_on": "2026-03-20", "net": "2100"}),
+    ("patch", "/api/vault/income/main-job/1", {"notes": "x"}),
+    ("post", "/api/vault/income/main-job/1/archive", None),
 ]
 
 
@@ -515,41 +518,94 @@ def test_record_extra_income_by_hand(unlocked):
     assert [x["notes"] for x in view(unlocked)["extras"]] == ["One-off"]
 
 
-def test_edit_main_job_stub_details(app, unlocked):
+def add_pay(client, **body):
+    return client.post(
+        "/api/vault/income/main-job", json={"paid_on": "2026-03-20", "net": "2100"} | body
+    )
+
+
+def test_add_main_job_pay_route(unlocked):
+    r = add_pay(unlocked, gross="3000", rrsp="150", match="75", notes="Payday")
+    assert r.status_code == 201, r.text
+    made = r.json()
+    assert (made["day"], made["net_cents"], made["confirmed"]) == ("2026-03-20", 210000, False)
+    [row] = unlocked.get("/api/vault/income").json()["main_job_pay"]
+    assert row == made
+    assert row["deductions_cents"] == 75000
+
+
+def test_add_main_job_pay_needs_net(unlocked):
+    assert (
+        unlocked.post("/api/vault/income/main-job", json={"paid_on": "2026-03-20"}).status_code
+        == 422
+    )
+    assert add_pay(unlocked, net="0").status_code == 422
+
+
+def test_add_main_job_pay_gross_below_net(unlocked):
+    r = add_pay(unlocked, gross="1000")
+    assert r.status_code == 422
+    assert "Gross" in r.json()["detail"]
+    assert unlocked.get("/api/vault/income").json()["main_job_pay"] == []
+
+
+def test_edit_main_job_pay_route_by_pay_id(unlocked):
+    pay_id = add_pay(unlocked).json()["id"]
+    r = unlocked.patch(
+        f"/api/vault/income/main-job/{pay_id}",
+        json={"paid_on": "2026-03-19", "net": "2110", "gross": "3000", "notes": "Fixed typo"},
+    )
+    assert r.status_code == 200, r.text
+    assert (r.json()["day"], r.json()["net_cents"], r.json()["notes"]) == (
+        "2026-03-19",
+        211000,
+        "Fixed typo",
+    )
+    bad = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"gross": "1000"})
+    assert bad.status_code == 422  # gross below net
+
+
+def test_edit_unknown_pay_is_404(unlocked):
+    assert unlocked.patch("/api/vault/income/main-job/99", json={}).status_code == 404
+
+
+def test_edit_confirmed_net_is_refused(app, unlocked):
     from aicity.db import db_path, open_database
     from aicity.income import IncomeStore
 
+    pay_id = add_pay(unlocked).json()["id"]
     conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
     try:
         store = IncomeStore(conn, clock=lambda: NOW)
         imp = store.record_import(
-            first_day=date(2026, 3, 6),
-            last_day=date(2026, 3, 6),
+            first_day=date(2026, 3, 19),
+            last_day=date(2026, 3, 19),
             kept=1,
             duplicates=0,
             skipped=0,
             spending=0,
         )
         d = store.add_deposit(
-            posted_on=date(2026, 3, 6),
+            posted_on=date(2026, 3, 19),
             amount_cents=210000,
             kind="main_job",
             source="main_job",
             row_key="a" * 64,
             import_id=imp,
         )
+        store.link_main_job_pay(pay_id, d)
     finally:
         conn.close()
-    r = unlocked.patch(
-        f"/api/vault/income/main-job/{d.id}",
-        json={"gross": "3000", "rrsp": "150", "match": "75", "notes": "From the stub"},
-    )
+    r = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"net": "2000"})
+    assert r.status_code == 422
+    assert "confirmed by the statement" in r.json()["detail"]
+    ok = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"gross": "3000"})
+    assert ok.status_code == 200 and ok.json()["confirmed"] is True
+
+
+def test_archive_typed_pay_route(unlocked):
+    pay_id = add_pay(unlocked).json()["id"]
+    r = unlocked.post(f"/api/vault/income/main-job/{pay_id}/archive")
     assert r.status_code == 200, r.text
-    [row] = unlocked.get("/api/vault/income").json()["main_job_pay"]
-    assert (row["gross_cents"], row["deductions_cents"], row["notes"]) == (
-        300000,
-        75000,
-        "From the stub",
-    )
-    bad = unlocked.patch(f"/api/vault/income/main-job/{d.id}", json={"gross": "1000"})
-    assert bad.status_code == 422  # gross below net
+    assert unlocked.get("/api/vault/income").json()["main_job_pay"] == []
+    assert unlocked.post("/api/vault/income/main-job/999/archive").status_code == 404

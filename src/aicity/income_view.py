@@ -7,10 +7,10 @@ never counts toward the goal. The badge shows counts only, never amounts.
 """
 
 import sqlite3
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
-from aicity.income import IncomeStore
+from aicity.income import IncomeStore, MainJobPayRow
 from aicity.settings import IncomeSettings, PaySchedule
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import hourly_rate_cents, is_overdue, set_aside_cents, to_cad_cents
@@ -18,7 +18,6 @@ from aicity.statement_import import open_weeks
 
 MONTHS_SHOWN = 6
 PLATFORM_MONTHS = 3
-STATEMENT_DUE_DAY = 5
 
 
 def _month(d: date) -> str:
@@ -68,7 +67,7 @@ def income_view(
 
     pay_rows = income.main_job_pay()
     for row in pay_rows:
-        m = _month(row.posted_on)
+        m = _month(row.paid_on)  # the typed date, even when the deposit came a day early
         if row.gross_cents is None:
             missing_gross.add(m)
         add(m, "main_job", row.gross_cents if row.gross_cents is not None else row.net_cents)
@@ -154,34 +153,36 @@ def income_view(
             "percent": format(settings.tax_set_aside_percent.normalize(), "f"),
             "is_placeholder": settings.tax_set_aside_is_placeholder,
         },
-        "main_job_pay": [
-            {
-                "deposit_id": r.deposit_id,
-                "day": r.posted_on.isoformat(),
-                "net_cents": r.net_cents,
-                "gross_cents": r.gross_cents,
-                "rrsp_cents": r.rrsp_cents,
-                "match_cents": r.match_cents,
-                "deductions_cents": r.deductions_cents,
-                "notes": r.notes,
-            }
-            for r in reversed(pay_rows)
-        ],
+        "main_job_pay": [main_job_pay_json(r) for r in reversed(pay_rows)],
+    }
+
+
+def main_job_pay_json(r: MainJobPayRow) -> dict:
+    return {
+        "id": r.id,
+        "day": r.paid_on.isoformat(),
+        "net_cents": r.net_cents,
+        "gross_cents": r.gross_cents,
+        "rrsp_cents": r.rrsp_cents,
+        "match_cents": r.match_cents,
+        "deductions_cents": r.deductions_cents,
+        "notes": r.notes,
+        "confirmed": r.confirmed,
     }
 
 
 def vault_badge(
-    side: SideWorkStore, income: IncomeStore, schedules: dict[str, PaySchedule], today: date
+    side: SideWorkStore,
+    income: IncomeStore,
+    schedules: dict[str, PaySchedule],
+    today: date,
+    due_day: int,
 ) -> str | None:
-    """'N overdue', else 'Statement due', else nothing. Counts only, never amounts."""
+    """'N overdue', else 'Statement due' (from due_day until last month is imported), else
+    nothing. Counts only, never amounts."""
     overdue = sum(1 for w in open_weeks(side, schedules) if is_overdue(w.window, False, today))
     if overdue:
         return f"{overdue} overdue"
-    if today.day < STATEMENT_DUE_DAY:
+    if today.day < due_day or income.covers_month_before(today):
         return None
-    last_month_end = today.replace(day=1) - timedelta(days=1)
-    last_month_start = last_month_end.replace(day=1)
-    covered = any(
-        i.first_day <= last_month_end and i.last_day >= last_month_start for i in income.imports()
-    )
-    return None if covered else "Statement due"
+    return "Statement due"

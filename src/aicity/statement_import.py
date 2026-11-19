@@ -16,8 +16,16 @@ from datetime import date, datetime, timedelta
 
 from aicity.db import DbKind, with_transaction
 from aicity.fx import rate_on
-from aicity.income import IncomeStore
-from aicity.income_match import WINDOW_SLACK_DAYS, HandPayment, OpenWeek, Proposal, propose
+from aicity.income import IncomeStore, MainJobPayTaken
+from aicity.income_match import (
+    WINDOW_SLACK_DAYS,
+    HandPayment,
+    OpenWeek,
+    Proposal,
+    TypedPay,
+    propose,
+    propose_main_job,
+)
 from aicity.settings import PaySchedule
 from aicity.side_work import SideWorkConflict, SideWorkError, SideWorkStore
 from aicity.side_work_math import arrival_window, expected_cents, pay_period, to_cad_cents
@@ -185,6 +193,26 @@ def build_preview(
         lambda d: found[0] if (found := rate_on(conn, d)) else None,
     )
     hand = {p.id: p for p in side.payments()}
+    typed = income.unconfirmed_main_job_pay()
+    typed_by_id = {t.id: t for t in typed}
+    main_proposals = {
+        id(mp.row): mp
+        for mp in propose_main_job(main, [TypedPay(t.id, t.paid_on, t.net_cents) for t in typed])
+    }
+
+    def main_json(r: StatementRow) -> dict:
+        mp = main_proposals[id(r)]
+        pay = typed_by_id.get(mp.pay_id) if mp.pay_id is not None else None
+        return brief(r) | {
+            "proposal": {
+                "kind": mp.kind,
+                "pay_id": mp.pay_id,
+                "pay": None
+                if pay is None
+                else {"paid_on": pay.paid_on.isoformat(), "net_cents": pay.net_cents},
+                "check_amount": mp.check_amount,
+            }
+        }
 
     def proposal_json(p: Proposal) -> dict:
         out = {
@@ -227,7 +255,10 @@ def build_preview(
     body = {
         "first_day": pending.first_day.isoformat(),
         "last_day": pending.last_day.isoformat(),
-        "main_job": [brief(r) for r in main],
+        "main_job": [main_json(r) for r in main],
+        "typed_pay": [
+            {"id": t.id, "paid_on": t.paid_on.isoformat(), "net_cents": t.net_cents} for t in typed
+        ],
         "platform": [
             brief(p.row)
             | {"schedule_id": pending.platform[ref[id(p.row)]], "proposal": proposal_json(p)}
@@ -266,6 +297,8 @@ def build_preview(
 @dataclass(frozen=True)
 class MainJobChoice:
     ref: str
+    action: str  # new | link | skip
+    pay_id: int | None
     gross_cents: int | None
     rrsp_cents: int | None
     match_cents: int | None
@@ -315,6 +348,11 @@ def confirm_import(
     )
     if unknown:
         raise SideWorkError("Some decisions don't belong to this preview.")
+    linked = [c.pay_id for c in main_choices if c.action == "link"]
+    if None in linked:
+        raise SideWorkError("Pick which typed-in pay this deposit confirms.")
+    if len(linked) != len(set(linked)):
+        raise SideWorkError("One typed-in pay can only be confirmed by one deposit.")
 
     def work() -> dict:
         if income.existing_row_keys(set(pending.keys.values())):
@@ -343,18 +381,31 @@ def confirm_import(
             )
 
         for ref in pending.main_job:
-            d = deposit(ref, "main_job", "main_job")
             c = main_by_ref.get(ref)
-            if c and any(
-                v is not None for v in (c.gross_cents, c.rrsp_cents, c.match_cents, c.notes)
-            ):
-                income.set_main_job_pay(
-                    d.id,
-                    gross_cents=c.gross_cents,
-                    rrsp_cents=c.rrsp_cents,
-                    match_cents=c.match_cents,
-                    notes=c.notes,
+            action = c.action if c else "new"
+            if action == "skip":
+                skipped += 1
+                continue
+            d = deposit(ref, "main_job", "main_job")
+            if action == "link":
+                try:
+                    income.link_main_job_pay(c.pay_id, d)
+                except MainJobPayTaken:
+                    raise ImportConflict(
+                        "That pay was confirmed meanwhile. Upload the statement again."
+                    ) from None
+            elif action == "new":
+                income.add_main_job_pay(
+                    paid_on=d.posted_on,
+                    net_cents=d.amount_cents,
+                    gross_cents=c.gross_cents if c else None,
+                    rrsp_cents=c.rrsp_cents if c else None,
+                    match_cents=c.match_cents if c else None,
+                    notes=c.notes if c else None,
+                    deposit_id=d.id,
                 )
+            else:
+                raise SideWorkError("Each main-job deposit is new, link or skip.")
 
         weeks = {(w.schedule_id, w.start): w for w in open_weeks(side, schedules)}
         for ref, sid in pending.platform.items():

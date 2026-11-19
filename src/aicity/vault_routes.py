@@ -33,8 +33,8 @@ from starlette.concurrency import run_in_threadpool
 from aicity import sample_data
 from aicity.db import DbKind, db_path, open_database
 from aicity.fx import rate_on, refresh_rates, save_manual_rate, valet_fetcher
-from aicity.income import IncomeError, IncomeStore
-from aicity.income_view import income_view, vault_badge
+from aicity.income import IncomeError, IncomeStore, MainJobPayNotFound
+from aicity.income_view import income_view, main_job_pay_json, vault_badge
 from aicity.settings import MainJob, PaySchedule, load_settings
 from aicity.side_work import (
     SideWorkConflict,
@@ -148,7 +148,18 @@ class PaymentEdit(_Body):
     notes: Notes = None
 
 
+class MainJobAdd(_Body):
+    paid_on: Day
+    net: Amount
+    gross: Money = None
+    rrsp: Money = None
+    match: Money = None
+    notes: Notes = None
+
+
 class MainJobEdit(_Body):
+    paid_on: Day | None = None
+    net: Money = None
     gross: Money = None
     rrsp: Money = None
     match: Money = None
@@ -365,6 +376,8 @@ async def preview_statement(request: Request) -> dict:
 
 class MainJobIn(_Body):
     ref: str
+    action: Literal["new", "link", "skip"] = "new"
+    pay_id: int | None = None
     gross: Money = None
     rrsp: Money = None
     match: Money = None
@@ -407,7 +420,10 @@ def confirm_statement(request: Request, body: ConfirmIn) -> dict:
             IncomeStore(conn, clock=request.app.state.clock),
             pending,
             schedules,
-            [MainJobChoice(m.ref, m.gross, m.rrsp, m.match, m.notes) for m in body.main_job],
+            [
+                MainJobChoice(m.ref, m.action, m.pay_id, m.gross, m.rrsp, m.match, m.notes)
+                for m in body.main_job
+            ],
             [
                 PlatformChoice(
                     p.ref, p.action, p.week_start, p.payment_id, p.includes_bonus, p.bonus, p.notes
@@ -447,28 +463,57 @@ def get_income(request: Request) -> dict:
         )
 
 
-@income_router.patch("/main-job/{deposit_id}")
-def edit_main_job(request: Request, deposit_id: int, body: MainJobEdit) -> dict:
-    """Set a main-job pay's stub details (gross, RRSP, employer match, notes)."""
+@income_router.post("/main-job", status_code=201)
+def add_main_job(request: Request, body: MainJobAdd) -> dict:
+    """Main-job pay typed in on payday ("not yet confirmed" until a statement confirms it)."""
     with _open(request) as (_side, conn):
-        row = IncomeStore(conn, clock=request.app.state.clock).set_main_job_pay(
-            deposit_id,
+        row = IncomeStore(conn, clock=request.app.state.clock).add_main_job_pay(
+            paid_on=body.paid_on,
+            net_cents=body.net,
             gross_cents=body.gross,
             rrsp_cents=body.rrsp,
             match_cents=body.match,
             notes=body.notes,
         )
-        return {"deposit_id": row.deposit_id, "deductions_cents": row.deductions_cents}
+        return main_job_pay_json(row)
+
+
+@income_router.patch("/main-job/{pay_id}")
+def edit_main_job(request: Request, pay_id: int, body: MainJobEdit) -> dict:
+    """Replace a main-job pay's stub details; date and net change only before confirmation."""
+    with _open(request) as (_side, conn):
+        row = IncomeStore(conn, clock=request.app.state.clock).edit_main_job_pay(
+            pay_id,
+            paid_on=body.paid_on,
+            net_cents=body.net,
+            gross_cents=body.gross,
+            rrsp_cents=body.rrsp,
+            match_cents=body.match,
+            notes=body.notes,
+        )
+        return main_job_pay_json(row)
+
+
+@income_router.post("/main-job/{pay_id}/archive")
+def archive_main_job(request: Request, pay_id: int) -> dict[str, bool]:
+    """Remove a typed-in pay (a typo or a duplicate) that no statement has confirmed."""
+    with _open(request) as (_side, conn):
+        IncomeStore(conn, clock=request.app.state.clock).archive_main_job_pay(pay_id)
+    return {"archived": True}
 
 
 @unlock_router.get("/badge")
 def badge(request: Request) -> dict[str, str | None]:
     """The Vault's belt badge. No Touch ID needed: counts only, never amounts."""
-    schedules, _income = _settings_for(request)
+    schedules, income = _settings_for(request)
     with _open(request) as (side, conn):
         return {
             "text": vault_badge(
-                side, IncomeStore(conn, clock=request.app.state.clock), schedules, _today(request)
+                side,
+                IncomeStore(conn, clock=request.app.state.clock),
+                schedules,
+                _today(request),
+                income.statement_due_day,
             )
         }
 
@@ -530,6 +575,10 @@ def register(app: FastAPI) -> None:
     @app.exception_handler(NoDeposits)
     def _no_deposits(_request: Request, exc: NoDeposits) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=422)
+
+    @app.exception_handler(MainJobPayNotFound)
+    def _no_pay(_request: Request, exc: MainJobPayNotFound) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=404)
 
     @app.exception_handler(IncomeError)
     def _income(_request: Request, exc: IncomeError) -> JSONResponse:

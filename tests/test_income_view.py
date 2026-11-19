@@ -33,23 +33,29 @@ def stores(conn):
     return SideWorkStore(conn, clock=lambda: NOW), IncomeStore(conn, clock=lambda: NOW)
 
 
-def main_pay(income, day, net, gross=None, rrsp=None, match=None, ch="a"):
+def main_pay(income, day, net, gross=None, rrsp=None, match=None):
+    return income.add_main_job_pay(
+        paid_on=day,
+        net_cents=net,
+        gross_cents=gross,
+        rrsp_cents=rrsp,
+        match_cents=match,
+        notes=None,
+    )
+
+
+def deposit(income, day, cents, ch="a"):
     imp = income.record_import(
         first_day=day, last_day=day, kept=1, duplicates=0, skipped=0, spending=0
     )
-    d = income.add_deposit(
+    return income.add_deposit(
         posted_on=day,
-        amount_cents=net,
+        amount_cents=cents,
         kind="main_job",
         source="main_job",
         row_key=ch * 64,
         import_id=imp,
     )
-    if gross is not None:
-        income.set_main_job_pay(
-            d.id, gross_cents=gross, rrsp_cents=rrsp, match_cents=match, notes=None
-        )
-    return d
 
 
 def side_pay(side, day, cents, hundredths=None, company="platform_a"):
@@ -111,6 +117,38 @@ def test_main_job_pay_list_has_deductions(conn, stores):
     assert (row["net_cents"], row["deductions_cents"], row["match_cents"]) == (210000, 75000, 7500)
 
 
+def test_view_typed_pay_counts_and_is_unconfirmed(conn, stores):
+    _side, income = stores
+    pay = main_pay(income, date(2026, 3, 20), 210000, gross=300000)
+    v = view(conn, stores)
+    assert v["month"]["gross_cents"] == 300000  # counts toward the goal at once
+    assert v["main_job_pay"] == [
+        {
+            "id": pay.id,
+            "day": "2026-03-20",
+            "net_cents": 210000,
+            "gross_cents": 300000,
+            "rrsp_cents": None,
+            "match_cents": None,
+            "deductions_cents": 90000,
+            "notes": None,
+            "confirmed": False,
+        }
+    ]
+
+
+def test_view_counts_linked_pay_in_the_typed_month(conn, stores):
+    _side, income = stores
+    pay = main_pay(income, date(2026, 3, 1), 210000)
+    income.link_main_job_pay(pay.id, deposit(income, date(2026, 2, 28), 210000))
+    v = view(conn, stores)
+    assert v["month"]["gross_cents"] == 210000
+    feb = next(m for m in v["months"] if m["month"] == "2026-02")
+    assert feb["total_cents"] == 0
+    assert v["main_job_pay"][0]["confirmed"] is True
+    assert v["main_job_pay"][0]["day"] == "2026-03-01"
+
+
 def test_six_months_oldest_first_with_empty_months(conn, stores):
     side, _income = stores
     side_pay(side, date(2026, 1, 15), 5000, hundredths=100)
@@ -150,12 +188,44 @@ def test_platform_hours_and_effective_rate(conn, stores):
 
 def badge(conn, stores, today):
     side, income = stores
-    return vault_badge(side, income, SCHED, today)
+    return vault_badge(side, income, SCHED, today, 8)
 
 
-def test_badge_statement_due_from_the_fifth(conn, stores):
-    assert badge(conn, stores, date(2026, 3, 4)) is None
-    assert badge(conn, stores, date(2026, 3, 5)) == "Statement due"
+def test_badge_statement_due_from_the_due_day(conn, stores):
+    _side, income = stores
+    assert badge(conn, stores, date(2026, 3, 7)) is None
+    assert badge(conn, stores, date(2026, 3, 8)) == "Statement due"
+    income.record_import(
+        first_day=date(2026, 2, 28),
+        last_day=date(2026, 2, 28),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert badge(conn, stores, date(2026, 3, 8)) is None
+
+
+def test_covers_month_before_handles_january(stores):
+    _side, income = stores
+    income.record_import(
+        first_day=date(2027, 1, 1),
+        last_day=date(2027, 1, 5),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert income.covers_month_before(date(2027, 1, 9)) is False
+    income.record_import(
+        first_day=date(2026, 12, 31),
+        last_day=date(2026, 12, 31),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert income.covers_month_before(date(2027, 1, 9)) is True
 
 
 def test_badge_clears_once_last_month_is_imported(conn, stores):

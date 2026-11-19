@@ -63,6 +63,8 @@ class TaskDefaults:
 class IncomeSettings:
     tax_set_aside_percent: Decimal
     tax_set_aside_is_placeholder: bool
+    # Day of the month the chequing statement is due (badge and reminder from then).
+    statement_due_day: int = 8
 
 
 @dataclass(frozen=True)
@@ -193,14 +195,25 @@ def _tasks(t: dict) -> TaskDefaults:
 
 
 def _income(t: dict) -> IncomeSettings:
-    _exact_keys(t, "income", {"tax_set_aside_percent", "tax_set_aside_is_placeholder"})
+    required = {"tax_set_aside_percent", "tax_set_aside_is_placeholder"}
+    _only_keys(t, "[income]", required | {"statement_due_day"})  # due day is optional
+    missing = sorted(required - set(t))
+    if missing:
+        raise SettingsError(f"Missing setting(s) in [income]: {', '.join(missing)}.")
     percent = _decimal(t, "income", "tax_set_aside_percent")
     if not Decimal(0) <= percent <= Decimal(100):
         raise SettingsError("income.tax_set_aside_percent must be from 0 to 100.")
     flag = t["tax_set_aside_is_placeholder"]
     if type(flag) is not bool:
         raise SettingsError("income.tax_set_aside_is_placeholder must be true or false.")
-    return IncomeSettings(tax_set_aside_percent=percent, tax_set_aside_is_placeholder=flag)
+    due_day = t.get("statement_due_day", 8)
+    if type(due_day) is not int or not 1 <= due_day <= 28:
+        raise SettingsError("income.statement_due_day must be a whole number from 1 to 28.")
+    return IncomeSettings(
+        tax_set_aside_percent=percent,
+        tax_set_aside_is_placeholder=flag,
+        statement_due_day=due_day,
+    )
 
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")

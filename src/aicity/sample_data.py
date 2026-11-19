@@ -37,7 +37,9 @@ SAMPLE_PAY_SCHEDULES: dict[str, PaySchedule] = {
 }
 SAMPLE_MAIN_JOB = MainJob(name="Day job", deposit_match="DAY JOB PAY")
 SAMPLE_GOAL_CENTS = 650000
-SAMPLE_INCOME = IncomeSettings(tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True)
+SAMPLE_INCOME = IncomeSettings(
+    tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
+)
 
 
 @dataclass(frozen=True)
@@ -332,7 +334,8 @@ def last_seeded_payday(today: date) -> date:
 
 
 def seed_income(conn: sqlite3.Connection, now: datetime) -> bool:
-    """Made-up main-job pay and the deposits behind Sample's paid side work, once."""
+    """Made-up main-job pay (plus one typed in and not yet confirmed) and the deposits
+    behind Sample's paid side work, once."""
     label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
     if label is None or label[0] != DbKind.SAMPLE.value:
         raise DatabaseError("Sample income only goes into the Sample database.")
@@ -359,14 +362,26 @@ def seed_income(conn: sqlite3.Connection, now: datetime) -> bool:
                 row_key=_sample_key(f"pay-{day}"),
                 import_id=imp,
             )
-            if day != newest:  # the newest stub isn't typed in yet
-                income.set_main_job_pay(
-                    d.id,
-                    gross_cents=_PAY_GROSS,
-                    rrsp_cents=_PAY_RRSP,
-                    match_cents=_PAY_MATCH,
-                    notes="Holiday pay included" if i == 3 else None,
-                )
+            stub = day != newest  # the newest stub isn't typed in yet
+            income.add_main_job_pay(
+                paid_on=day,
+                net_cents=_PAY_NET,
+                gross_cents=_PAY_GROSS if stub else None,
+                rrsp_cents=_PAY_RRSP if stub else None,
+                match_cents=_PAY_MATCH if stub else None,
+                notes="Holiday pay included" if i == 3 else None,
+                deposit_id=d.id,
+            )
+        # The next payday, typed in by hand and waiting for the statement ("not yet
+        # confirmed"); the demo statement's deposit confirms it.
+        income.add_main_job_pay(
+            paid_on=newest + timedelta(days=14),
+            net_cents=_PAY_NET,
+            gross_cents=_PAY_GROSS,
+            rrsp_cents=_PAY_RRSP,
+            match_cents=_PAY_MATCH,
+            notes=None,
+        )
         for p in payments:
             cad = to_cad_cents(p.amount_cents, p.currency, p.rate)
             d = income.add_deposit(
@@ -391,14 +406,15 @@ def seed_income(conn: sqlite3.Connection, now: datetime) -> bool:
 def build_sample_statement(conn: sqlite3.Connection, side: SideWorkStore, today: date) -> bytes:
     """A made-up chequing statement for demonstrating the import (never stored as a file).
 
-    It holds the next main-job pay, the pay and bonus for Sample's oldest overdue
+    It holds the next main-job pay (a day early; it confirms the typed-in one), the pay and bonus for Sample's oldest overdue
     week, two purchases, a refund (other money in) and one USD row.
     """
     from aicity.statement_import import open_weeks  # avoids a circular import at load
 
     rows: list[tuple[date, str, str, int, str]] = []
     payday = last_seeded_payday(today) + timedelta(days=14)
-    rows.append((payday, "Deposit", "DAY JOB PAY", _PAY_NET, "CAD"))
+    # Posted a day before payday, as banks do, to show the link keeps the typed date.
+    rows.append((payday - timedelta(days=1), "Deposit", "DAY JOB PAY", _PAY_NET, "CAD"))
     due = [w for w in open_weeks(side, SAMPLE_PAY_SCHEDULES) if w.window[0] <= today]
     if due:
         week = due[0]

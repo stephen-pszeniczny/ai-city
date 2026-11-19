@@ -2,7 +2,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatMonth, goalProgress, stackSegments } from "../src/vault/income.ts";
+import {
+  formatMonth,
+  goalProgress,
+  linkNote,
+  matchChip,
+  payStatus,
+  stackSegments,
+} from "../src/vault/income.ts";
 
 test("goal progress shows the real percent", () => {
   assert.deepEqual(goalProgress(375000, 750000), { percent: 50, fill: 0.5, label: "50% of goal" });
@@ -34,4 +41,33 @@ test("stacked bar pieces sit on top of each other and share the height", () => {
 test("months read as short names", () => {
   assert.equal(formatMonth("2026-11"), "Nov");
   assert.equal(formatMonth("2027-01"), "Jan");
+});
+
+test("main-job pay says whether the statement has confirmed it", () => {
+  assert.equal(payStatus(true), "✓ confirmed by statement");
+  assert.equal(payStatus(false), "not yet confirmed");
+});
+
+test("linking: nothing to say when the statement matches what was typed", () => {
+  assert.equal(linkNote(210000, 210000), null);
+});
+
+test("linking: a different statement amount is shown, and it wins", () => {
+  assert.equal(
+    linkNote(210050, 209900),
+    "The statement says $2,100.50; you typed $2,099.00. The statement's amount will be used.",
+  );
+});
+
+test("review chip: an exact match, a near one to check, or nothing", () => {
+  const pay = { paid_on: "2026-03-20", net_cents: 210000 };
+  assert.equal(
+    matchChip({ kind: "link", pay_id: 7, pay, check_amount: false }),
+    "Matches the pay you typed in (Mar 20, $2,100.00)",
+  );
+  assert.equal(
+    matchChip({ kind: "link", pay_id: 7, pay, check_amount: true }),
+    "Might be the pay you typed in (Mar 20, $2,100.00): check the amount",
+  );
+  assert.equal(matchChip({ kind: "new", pay_id: null, pay: null, check_amount: false }), null);
 });
