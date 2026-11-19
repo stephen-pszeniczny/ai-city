@@ -11,7 +11,8 @@
 
     GET   /api/plan/checkin                     which week the Sunday check-in plans, and
                                                 whether it's due; reads only
-    POST  /api/plan/checkin/open                that week (created if needed) + usual events
+    POST  /api/plan/checkin/open[?start=…]      that week (created if needed) + usual events;
+                                                start keeps a week the panel already shows
     POST  /api/plan/week/{start}/grocery-day    set or clear the week's grocery day
     POST  /api/plan/week/{start}/checkin        finish the check-in (first time is kept)
 
@@ -35,7 +36,7 @@ from fastapi.responses import JSONResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, model_validator
 
 from aicity import sample_data
-from aicity.checkin_reminder import check_checkin_reminder, clear_checkin_reminders
+from aicity.checkin_reminder import clear_checkin_reminders
 from aicity.db import DbKind, db_path, open_database, with_transaction
 from aicity.plan import BLOCK_KINDS, Block, BlockNotFound, PlanError, PlanStore, Week, monday_of
 from aicity.settings import PlanSettings, load_settings
@@ -303,14 +304,16 @@ def checkin_status(request: Request) -> dict:
 
 
 @router.post("/checkin/open")
-def open_checkin(request: Request) -> dict:
+def open_checkin(request: Request, start: str | None = None) -> dict:
+    """The week the check-in plans; or, with start, that week (a panel keeps its week)."""
     now = _now(request)
     today = now.date()
+    pinned = _week_start(start) if start is not None else None
     rules = _rules(request)
     if rules is None:
         return _week_json(monday_of(today), today, None, configured=False) | {"usual_events": []}
     with _store(request) as store:
-        target = store.checkin_status(now, rules).week_start
+        target = pinned or store.checkin_status(now, rules).week_start
         week = store.ensure_week(target, rules, today)
     return _week_json(target, today, week) | {"usual_events": _usual_events_json(rules, target)}
 
@@ -331,10 +334,7 @@ def finish_checkin(request: Request, start: str) -> dict:
         return _week_json(week_start, now.date(), None, configured=False)
     with _open(request) as conn:
         week = PlanStore(conn, clock=request.app.state.clock).finish_checkin(week_start)
-        # Clear the reminder now rather than at the next background check. Sample mode
-        # only clears (its one notification is ready-made; it never gets new ones).
-        if request.app.state.db_kind == DbKind.PERSONAL:
-            check_checkin_reminder(conn, now, rules, now.astimezone(UTC))
-        else:
-            with_transaction(conn, lambda: clear_checkin_reminders(conn, now.astimezone(UTC)))
+        # Clear its reminder now rather than at the next background check. Only clear:
+        # making reminders is the background check's job (it also posts the Mac notification).
+        with_transaction(conn, lambda: clear_checkin_reminders(conn, now.astimezone(UTC)))
     return _week_json(week_start, now.date(), week)

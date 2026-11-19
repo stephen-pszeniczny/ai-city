@@ -219,8 +219,12 @@ export const setGym = (id: number, status: GymStatus) =>
   request<PlanBlock>("POST", `/api/plan/blocks/${id}/gym`, { status });
 
 export const getCheckin = () => request<CheckinStatus>("GET", "/api/plan/checkin");
-/** Opens (creates if needed) the week the check-in plans. */
-export const openCheckin = () => request<CheckinWeek>("POST", "/api/plan/checkin/open");
+/** Opens (creates if needed) the week the check-in plans; with start, that week instead. */
+export const openCheckin = (start?: string) =>
+  request<CheckinWeek>(
+    "POST",
+    start ? `/api/plan/checkin/open?start=${start}` : "/api/plan/checkin/open",
+  );
 export const setGroceryDay = (weekStart: string, day: string | null) =>
   request<PlanWeek>("POST", `/api/plan/week/${weekStart}/grocery-day`, { day });
 export const finishCheckin = (weekStart: string) =>

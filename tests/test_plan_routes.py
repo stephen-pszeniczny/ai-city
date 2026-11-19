@@ -386,3 +386,34 @@ def test_finishing_in_sample_mode_clears_its_checkin_notification(tmp_path, monk
             "SELECT count(*) FROM notifications WHERE kind = 'checkin' AND cleared_at IS NULL"
         ).fetchone()[0]
     assert active == 0
+
+
+# --- Final review fixes -------------------------------------------------------------
+
+
+def test_open_checkin_can_stay_on_the_week_it_opened(sunday):
+    # Wednesday: this week is planned and checked in.
+    sunday.app.state.clock.now = datetime(2026, 11, 25, 12, 0).astimezone()
+    sunday.post("/api/plan/week/2026-11-23/open")
+    sunday.post("/api/plan/week/2026-11-23/checkin")
+    # Without a start the check-in moves on to next week (the design's rule) ...
+    assert sunday.post("/api/plan/checkin/open").json()["week_start"] == "2026-11-30"
+    # ... but a panel already showing this week can keep it.
+    week = sunday.post("/api/plan/checkin/open?start=2026-11-23").json()
+    assert (week["week_start"], week["checked_in"]) == ("2026-11-23", True)
+    assert week["usual_events"][0]["day"] == "2026-11-26"
+
+
+def test_open_checkin_bad_start_is_422(sunday):
+    assert sunday.post("/api/plan/checkin/open?start=2026-11-24").status_code == 422
+
+
+def test_finishing_never_makes_a_reminder(sunday):
+    # Sunday 17:00: next week isn't planned and its reminder moment has passed,
+    # but finishing *this* week must only clear, never make (the loop makes them).
+    sunday.app.state.clock.now = datetime(2026, 11, 29, 17, 0).astimezone()
+    sunday.post("/api/plan/week/2026-11-23/open")
+    sunday.post("/api/plan/week/2026-11-23/checkin")
+    with sqlite3.connect(db_path(DbKind.PERSONAL)) as conn:
+        made = conn.execute("SELECT count(*) FROM notifications WHERE kind = 'checkin'").fetchone()
+    assert made == (0,)

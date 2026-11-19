@@ -31,9 +31,20 @@ export function CheckinPanel() {
   const [saved, setSaved] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  // The week this panel plans: whichever the server picks on first open, then kept, so
+  // finishing (which makes the server look ahead to next week) doesn't switch weeks.
+  const [pinned, setPinned] = useState<string | null>(null);
   // Opening is a POST (it creates the week if needed) but safe to repeat: the same
   // week comes back each time, so it's fine for the query to refetch.
-  const week = useQuery({ queryKey: ["plan", "checkin"], queryFn: openCheckin });
+  const week = useQuery({
+    queryKey: ["plan", "checkin", pinned],
+    queryFn: async () => {
+      const w = await openCheckin(pinned ?? undefined);
+      if (pinned === null && w.exists) setPinned(w.week_start);
+      return w;
+    },
+    placeholderData: (previous) => previous, // no "Opening…" flash when the week is pinned
+  });
   const tasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
 
   const refresh = () => {
