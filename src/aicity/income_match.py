@@ -1,6 +1,6 @@
-"""Proposing what each imported side-work deposit settles.
+"""Proposing what each imported deposit settles.
 
-One pure function, so every rule is tested on its own. Nothing is stored here:
+Pure functions, so every rule is tested on its own. Nothing is stored here:
 the import's review screen shows these proposals and Steve confirms them.
 
 Rules (design: docs/superpowers/specs/2026-11-18-vault-income-import-design.md):
@@ -15,6 +15,11 @@ Rules (design: docs/superpowers/specs/2026-11-18-vault-income-import-design.md):
   3. bonus: within 3 days of a deposit proposed as a week's pay, or of a
             payment typed in by hand.
   4. Otherwise unmatched: Steve chooses at review.
+
+Main-job deposits (design: docs/superpowers/specs/2026-11-19-hand-entered-pay-design.md):
+  link within 3 days and 1% of a pay typed in by hand (the bank posts direct deposits
+  about a day early). Closest amount wins, then closest day; each typed pay is used
+  once; oldest deposits go first. Otherwise "new".
 """
 
 from collections.abc import Callable
@@ -30,6 +35,8 @@ WINDOW_SLACK_DAYS = 2
 AMOUNT_TOLERANCE = Decimal("0.05")
 BONUS_DAYS = 3
 LINK_DAYS = 7
+MAIN_LINK_DAYS = 3
+MAIN_LINK_TOLERANCE = Decimal("0.01")
 
 
 @dataclass(frozen=True)
@@ -143,3 +150,49 @@ def propose(
                 continue
             proposals.append(Proposal(row, "unmatched"))
     return proposals
+
+
+# --- Main-job pay ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TypedPay:
+    pay_id: int
+    paid_on: date
+    net_cents: int
+
+
+@dataclass(frozen=True)
+class MainJobProposal:
+    row: StatementRow
+    kind: Literal["link", "new"]
+    pay_id: int | None = None
+
+
+def propose_main_job(rows: list[StatementRow], typed: list[TypedPay]) -> list[MainJobProposal]:
+    """For each main-job deposit: link to a typed-in pay, or add as new. Same order as rows."""
+    chosen: dict[int, int] = {}  # id(row) -> pay_id
+    used: set[int] = set()
+    for r in sorted(rows, key=lambda r: (r.day, r.line)):
+        fits = [
+            p
+            for p in typed
+            if p.pay_id not in used
+            and abs((r.day - p.paid_on).days) <= MAIN_LINK_DAYS
+            and abs(r.amount_cents - p.net_cents) <= MAIN_LINK_TOLERANCE * p.net_cents
+        ]
+        if fits:
+            best = min(
+                fits,
+                key=lambda p: (
+                    abs(r.amount_cents - p.net_cents),
+                    abs((r.day - p.paid_on).days),
+                    p.pay_id,
+                ),
+            )
+            used.add(best.pay_id)
+            chosen[id(r)] = best.pay_id
+    return [
+        MainJobProposal(r, "link", chosen[id(r)]) if id(r) in chosen else MainJobProposal(r, "new")
+        for r in rows
+    ]

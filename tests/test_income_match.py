@@ -7,7 +7,7 @@ so with 2 days' slack a deposit from Mar 19 to Mar 25 fits. Values are invented.
 from datetime import date, timedelta
 from decimal import Decimal
 
-from aicity.income_match import HandPayment, OpenWeek, propose
+from aicity.income_match import HandPayment, OpenWeek, TypedPay, propose, propose_main_job
 from aicity.statement_csv import StatementRow
 
 WEEK1 = date(2026, 3, 7)  # Sat; window Mar 21-23
@@ -147,3 +147,61 @@ def test_hand_payment_typed_with_the_paid_day_still_links():
     later = week(WEEK2, cad=5000, entry_ids=(9,))
     [p] = run([row(date(2026, 3, 22), 19100)], [later], paid)
     assert (p.kind, p.payment_id) == ("link", 7)
+
+
+# --- Main-job pay: link to pay typed in by hand (3 days, 1%) --------------------------------
+
+PAYDAY = date(2026, 3, 20)
+
+
+def kinds(proposals):
+    return [(p.kind, p.pay_id) for p in proposals]
+
+
+def test_main_job_deposit_a_day_early_links():
+    out = propose_main_job([row(PAYDAY - timedelta(days=1), 150000)], [TypedPay(7, PAYDAY, 150000)])
+    assert kinds(out) == [("link", 7)]
+
+
+def test_main_job_link_edges():
+    typed = [TypedPay(7, PAYDAY, 150000)]
+    assert kinds(propose_main_job([row(PAYDAY + timedelta(days=3), 150000)], typed)) == [
+        ("link", 7)
+    ]
+    assert kinds(propose_main_job([row(PAYDAY - timedelta(days=4), 150000)], typed)) == [
+        ("new", None)
+    ]
+    assert kinds(propose_main_job([row(PAYDAY, 151500)], typed)) == [("link", 7)]  # exactly 1%
+    assert kinds(propose_main_job([row(PAYDAY, 151501)], typed)) == [("new", None)]
+    assert kinds(propose_main_job([row(PAYDAY, 148500)], typed)) == [("link", 7)]
+    assert kinds(propose_main_job([row(PAYDAY, 148499)], typed)) == [("new", None)]
+
+
+def test_main_job_two_paydays_each_link_once():
+    later = PAYDAY + timedelta(days=14)
+    typed = [TypedPay(8, later, 150000), TypedPay(7, PAYDAY, 150000)]
+    out = propose_main_job(
+        [row(later - timedelta(days=1), 150000, line=3), row(PAYDAY, 150000, line=2)], typed
+    )
+    assert kinds(out) == [("link", 8), ("link", 7)]  # same order as the rows given
+
+
+def test_main_job_one_typed_pay_links_one_deposit():
+    out = propose_main_job(
+        [row(PAYDAY, 150000, line=2), row(PAYDAY, 150000, line=3)], [TypedPay(7, PAYDAY, 150000)]
+    )
+    assert kinds(out) == [("link", 7), ("new", None)]
+
+
+def test_main_job_closest_amount_wins():
+    typed = [TypedPay(7, PAYDAY, 150000), TypedPay(8, PAYDAY, 151000)]
+    assert kinds(propose_main_job([row(PAYDAY, 150900)], typed)) == [("link", 8)]
+
+
+def test_main_job_closest_day_breaks_an_amount_tie():
+    typed = [TypedPay(7, PAYDAY - timedelta(days=2), 150000), TypedPay(8, PAYDAY, 150000)]
+    assert kinds(propose_main_job([row(PAYDAY, 150000)], typed)) == [("link", 8)]
+
+
+def test_main_job_no_typed_pay_is_new():
+    assert kinds(propose_main_job([row(PAYDAY, 150000)], [])) == [("new", None)]
