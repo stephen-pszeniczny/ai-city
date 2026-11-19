@@ -312,6 +312,39 @@ def test_missing_pay_schedule_key_is_refused(example_data):
     assert "pay_schedules.platform_a" in error_for(data)
 
 
+def name_only(example_data: dict, **block) -> dict:
+    data = copy.deepcopy(example_data)
+    data["pay_schedules"] = {"platform_b": {"name": "Platform B"} | block}
+    return data
+
+
+def test_name_only_schedule_is_untimed(example_data):
+    p = parse_settings(name_only(example_data)).pay_schedules["platform_b"]
+    assert (p.name, p.timed, p.week_starts, p.release_after, p.arrive_after) == (
+        "Platform B",
+        False,
+        None,
+        None,
+        None,
+    )
+
+
+def test_timed_schedule_says_so(example_data):
+    assert parse_settings(with_schedule(example_data)).pay_schedules["platform_a"].timed is True
+
+
+def test_name_only_schedule_keeps_deposit_match(example_data):
+    p = parse_settings(name_only(example_data, deposit_match="ACME TASKS")).pay_schedules
+    assert p["platform_b"].deposit_match == "ACME TASKS"
+
+
+def test_partial_timing_is_refused(example_data):
+    msg = error_for(name_only(example_data, week_starts="saturday"))
+    assert "pay_schedules.platform_b" in msg
+    for key in ("period", "released_days_after_period_end", "arrives_days_after_release"):
+        assert key in msg
+
+
 @pytest.mark.parametrize("bad_id", ["Platform", "1abc", "a-b", "x" * 32])
 def test_bad_pay_schedule_id_is_refused(example_data, bad_id):
     data = copy.deepcopy(example_data)

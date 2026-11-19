@@ -425,9 +425,9 @@ def side_work_view(
     buckets: dict[tuple, list[Entry]] = {}
     for e in store.entries():
         schedule = schedules.get(e.company or "")
-        if schedule is None:
-            # No schedule: one group per company (and per payment), so one deposit
-            # can cover several sessions.
+        if schedule is None or not schedule.timed:
+            # No schedule, or a company with no pay timing yet: one group per company
+            # (and per payment), so one deposit can cover several sessions.
             key = ("company", e.company, e.payment_id)
         else:
             key = ("week", e.company, pay_period(e.worked_on, schedule)[0], e.payment_id)

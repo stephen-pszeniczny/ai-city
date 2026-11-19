@@ -63,6 +63,11 @@ tax_set_aside_is_placeholder = true
 
 # Optional: the main job's pay as it appears in a chequing statement (for the Vault's import).
 # Example values only.
+# A company whose pay timing isn't known yet can be just a name (add all four
+# timing settings later, or none):
+# [pay_schedules.platform_b]
+# name = "Platform B"
+
 # [main_job]
 # name = "Day job"
 # deposit_match = "DAY JOB PAY"          # text found in the pay deposit's description

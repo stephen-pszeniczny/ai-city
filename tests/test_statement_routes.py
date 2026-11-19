@@ -610,3 +610,27 @@ def test_identical_rows_with_no_balance_are_both_kept(app, client):
     confirm(client, decisions(p))
     again = preview(client, body).json()
     assert again["main_job"] == [] and again["already_imported"] == 2
+
+
+def test_untimed_company_deposit_has_no_week(data_dir, client):
+    path = data_dir / "settings" / "settings.toml"
+    path.write_text(
+        path.read_text() + '\n[pay_schedules.platform_b]\nname = "Platform B"\n'
+        'deposit_match = "ACME TASKS"\n'
+    )
+    body = statement("2026-03-21,Deposit,ACME TASKS PAYOUT,40.00,500.00,CAD")
+    p = preview(client, body).json()
+    [row] = p["platform"]
+    assert row["schedule_id"] == "platform_b"
+    assert row["proposal"]["kind"] != "week"
+    assert [w for w in p["weeks"] if w["schedule_id"] == "platform_b"] == []
+    r = confirm(
+        client,
+        {
+            "token": p["token"],
+            "main_job": [],
+            "platform": [{"ref": row["ref"], "action": "bonus"}],
+            "other_income": [],
+        },
+    )
+    assert r.status_code == 200, r.text

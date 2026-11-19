@@ -75,16 +75,27 @@ class PaySchedule:
     """When one side-work platform pays: weekly periods, release and arrival windows.
 
     week_starts uses date.weekday() numbering (Monday = 0). The two pairs are
-    (earliest, latest) day counts.
+    (earliest, latest) day counts. A company can also be just a name, with no timing
+    yet (all three None): it's offered in the dropdowns and counted as its own income
+    source, but has no pay weeks, arrival windows or "overdue".
     """
 
     id: str
     name: str
-    week_starts: int
-    release_after: tuple[int, int]
-    arrive_after: tuple[int, int]
+    week_starts: int | None
+    release_after: tuple[int, int] | None
+    arrive_after: tuple[int, int] | None
     # Text found in a statement deposit's description from this platform (optional).
     deposit_match: str | None = None
+
+    @property
+    def timed(self) -> bool:
+        """It has pay timing (weekly periods and windows), not just a name."""
+        return (
+            self.week_starts is not None
+            and self.release_after is not None
+            and self.arrive_after is not None
+        )
 
 
 @dataclass(frozen=True)
@@ -244,13 +255,13 @@ def _income(t: dict) -> IncomeSettings:
 
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
-_SCHEDULE_KEYS = {
-    "name",
+_SCHEDULE_TIMING = {
     "period",
     "week_starts",
     "released_days_after_period_end",
     "arrives_days_after_release",
 }
+_SCHEDULE_KEYS = {"name"} | _SCHEDULE_TIMING
 _SCHEDULE_OPTIONAL = {"deposit_match"}
 
 
@@ -278,9 +289,22 @@ def _pay_schedules(t) -> dict[str, PaySchedule]:
         if not isinstance(block, dict):
             raise SettingsError(f"{where} must be a section.")
         _only_keys(block, f"[{where}]", _SCHEDULE_KEYS | _SCHEDULE_OPTIONAL)
-        missing = sorted(_SCHEDULE_KEYS - set(block))
+        # Just a name (no timing yet), or the name and all four timing settings.
+        needed = _SCHEDULE_KEYS if _SCHEDULE_TIMING & set(block) else {"name"}
+        missing = sorted(needed - set(block))
         if missing:
             raise SettingsError(f"Missing setting(s) in [{where}]: {', '.join(missing)}.")
+        deposit_match = _text(block, where, "deposit_match") if "deposit_match" in block else None
+        if not _SCHEDULE_TIMING & set(block):
+            schedules[schedule_id] = PaySchedule(
+                id=schedule_id,
+                name=_text(block, where, "name"),
+                week_starts=None,
+                release_after=None,
+                arrive_after=None,
+                deposit_match=deposit_match,
+            )
+            continue
         if block["period"] != "weekly":
             raise SettingsError(f'{where}.period must be "weekly".')
         start = block["week_starts"]
@@ -292,9 +316,7 @@ def _pay_schedules(t) -> dict[str, PaySchedule]:
             week_starts=WEEKDAYS.index(start.strip().lower()),
             release_after=_day_pair(block, where, "released_days_after_period_end"),
             arrive_after=_day_pair(block, where, "arrives_days_after_release"),
-            deposit_match=_text(block, where, "deposit_match")
-            if "deposit_match" in block
-            else None,
+            deposit_match=deposit_match,
         )
     return schedules
 

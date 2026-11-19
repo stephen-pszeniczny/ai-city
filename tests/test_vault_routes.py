@@ -618,3 +618,64 @@ def test_sample_income_has_its_own_goal_split(data_dir):
     month = client.get("/api/vault/income").json()["month"]
     assert month["goal_split"] == {"main_job_cents": 550000, "side_income_cents": 100000}
     assert month["goal_cents"] == 650000
+
+
+# --- A company with no pay timing (just a name) ----------------------------------------------
+
+UNTIMED = """
+[pay_schedules.platform_b]
+name = "Platform B"
+"""
+
+
+@pytest.fixture
+def untimed(data_dir, unlocked):
+    path = data_dir / "settings" / "settings.toml"
+    path.write_text(path.read_text() + UNTIMED)
+    return unlocked
+
+
+def test_untimed_company_is_in_the_dropdown(untimed):
+    ids = [s["id"] for s in view(untimed)["schedules"]]
+    assert ids == ["platform_a", "platform_b"]
+
+
+def test_untimed_company_is_never_overdue(untimed):
+    add(untimed, worked_on="2026-01-20", company="platform_b", hours="2", rate="30")
+    [g] = [g for g in view(untimed)["groups"] if g["company"] == "platform_b"]
+    assert (g["status"], g["period"], g["window"], g["company_name"]) == (
+        "no_schedule",
+        None,
+        None,
+        "Platform B",
+    )
+    assert untimed.get("/api/vault/badge").json()["text"] != "1 overdue"
+    assert "overdue" not in (untimed.get("/api/vault/badge").json()["text"] or "")
+
+
+def test_untimed_company_entries_can_be_paid(untimed):
+    e = add(untimed, worked_on="2026-03-02", company="platform_b", hours="2", rate="30")
+    record(
+        untimed,
+        kind="pay",
+        company="platform_b",
+        received_on="2026-03-20",
+        amount="60",
+        currency="USD",
+        entry_ids=[e["id"]],
+    )
+    [g] = [g for g in view(untimed)["groups"] if g["company"] == "platform_b"]
+    assert (g["status"], g["company_name"]) == ("paid", "Platform B")
+
+
+def test_untimed_company_is_its_own_income_source(untimed):
+    record(
+        untimed,
+        kind="bonus",
+        company="platform_b",
+        received_on="2026-03-20",
+        amount="50",
+        currency="CAD",
+    )
+    month = untimed.get("/api/vault/income").json()["month"]
+    assert {s["key"]: s["name"] for s in month["by_source"]} == {"platform_b": "Platform B"}
