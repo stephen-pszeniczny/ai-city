@@ -32,6 +32,7 @@ from aicity.settings import (
     MainJob,
     PaySchedule,
     PlanSettings,
+    Routine,
     UsualEvent,
 )
 from aicity.side_work import SideWorkStore
@@ -62,6 +63,9 @@ SAMPLE_PLAN = PlanSettings(
         UsualEvent("Five-a-side", "event", 4, time(20), time(21)),
     ),
 )
+
+# Sample mode's routines (filled in with made-up items in Task 6).
+SAMPLE_ROUTINES: tuple[Routine, ...] = ()
 
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8

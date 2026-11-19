@@ -20,6 +20,7 @@ from aicity import (
     notification_routes,
     page,
     plan_routes,
+    routine_routes,
     task_routes,
     vault_routes,
 )
@@ -124,6 +125,7 @@ def create_app(
     notification_routes.register(app)
     vault_routes.register(app)
     plan_routes.register(app)
+    routine_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
