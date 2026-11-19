@@ -418,7 +418,7 @@
   gap: 8px;
 }
 
-/* A chip on a line of its own (e.g. "placeholder" under an amount) needs no left gap. */
-.sw-tile__label > .sw-chip:only-child {
+/* A chip on a line of its own (the "placeholder" under the set-aside amount) needs no left gap. */
+.in-chipline .sw-chip {
   margin-left: 0;
 }

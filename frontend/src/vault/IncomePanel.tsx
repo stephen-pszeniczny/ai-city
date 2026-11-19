@@ -110,7 +110,7 @@ function ThisMonth({ v }: { v: IncomeView }) {
         </span>
         <strong>{formatCad(v.set_aside.cents)}</strong>
         {v.set_aside.is_placeholder && (
-          <span className="sw-tile__label">
+          <span className="sw-tile__label in-chipline">
             <span className="sw-chip">placeholder</span>
           </span>
         )}
