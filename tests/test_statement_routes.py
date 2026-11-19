@@ -470,6 +470,29 @@ def test_sample_statement_previews_with_every_kind(data_dir, clock):
     assert confirm(c, decisions(p)).status_code == 200
 
 
+def test_sample_statement_proposes_link_to_typed_pay(data_dir, clock):
+    from aicity.sample_data import seed_sample_database
+
+    seed_sample_database(clock=lambda: NOW)
+    app = create_app(dev=False)
+    app.state.db_kind = DbKind.SAMPLE
+    app.state.clock = clock
+    c = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    [waiting] = [r for r in c.get("/api/vault/income").json()["main_job_pay"] if not r["confirmed"]]
+    p = preview(c, c.get("/api/vault/statements/sample.csv").content).json()
+    [row] = p["main_job"]
+    assert row["proposal"]["kind"] == "link"
+    assert row["proposal"]["pay_id"] == waiting["id"]
+    assert row["day"] < waiting["day"]  # the bank posts it a day early
+    body = decisions(p)
+    body["main_job"] = [{"ref": row["ref"], "action": "link", "pay_id": waiting["id"]}]
+    assert confirm(c, body).status_code == 200
+    after = next(
+        r for r in c.get("/api/vault/income").json()["main_job_pay"] if r["id"] == waiting["id"]
+    )
+    assert (after["confirmed"], after["day"]) == (True, waiting["day"])
+
+
 def test_sample_statement_is_not_offered_in_personal(client):
     assert client.get("/api/vault/statements/sample.csv").status_code == 404
 
