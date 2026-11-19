@@ -24,6 +24,7 @@ import {
 } from "../api";
 import { categoryLabel } from "../todo/categories";
 import { BlockForm } from "./BlockForm";
+import { TodayRoutines } from "./RoutineCard";
 import { canMarkGym, dayLabel, isPast, overlapping, shiftWeek, todosFor } from "./week";
 import "./plan.css";
 
@@ -197,6 +198,7 @@ export function PlanPanel() {
 
       <section className="plan__todo" aria-labelledby="plan-today">
         <h3 id="plan-today">{day === today ? "Today" : dayLabel(day)}</h3>
+        {day === today && <TodayRoutines />}
         <ul>
           {todos.length === 0 && <li className="plan__note">No to-dos due.</li>}
           {todos.map((t) => (
@@ -216,7 +218,7 @@ export function PlanPanel() {
               </span>
             </li>
           ))}
-          <li className="plan__note">Habits: coming in Phase 2</li>
+          <li className="plan__tag">Habits · Phase 2</li>
         </ul>
       </section>
     </div>
