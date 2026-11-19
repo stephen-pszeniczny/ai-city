@@ -219,6 +219,21 @@ export const removePlanBlock = (id: number) =>
 export const setGym = (id: number, status: GymStatus) =>
   request<PlanBlock>("POST", `/api/plan/blocks/${id}/gym`, { status });
 
+// --- Mission Control: grocery list ---------------------------------------------------
+
+export type GroceryItem = { id: number; name: string; ticked: boolean };
+/** Unticked items first; open is how many are unticked. */
+export type GroceryList = { items: GroceryItem[]; open: number };
+
+export const getGrocery = () => request<GroceryList>("GET", "/api/grocery");
+export const addGrocery = (name: string) => request<GroceryItem>("POST", "/api/grocery", { name });
+export const tickGrocery = (id: number, ticked: boolean) =>
+  request<GroceryItem>("POST", `/api/grocery/${id}/tick`, { ticked });
+export const removeGrocery = (id: number) =>
+  request<{ removed: boolean }>("POST", `/api/grocery/${id}/remove`);
+export const clearTickedGrocery = () =>
+  request<{ cleared: number }>("POST", "/api/grocery/clear-ticked");
+
 // --- Mission Control: routines -------------------------------------------------------
 
 export type RoutineItem = { name: string; ticked: boolean };
