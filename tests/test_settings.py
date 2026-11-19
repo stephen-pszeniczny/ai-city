@@ -186,3 +186,75 @@ def test_placeholder_flag_must_be_true_or_false(example_data):
 def test_errors_never_repeat_the_value(example_data, section, key, secret):
     msg = error_for(broken(example_data, section, key, secret))
     assert str(secret) not in msg
+
+
+# --- Pay schedules ----------------------------------------------------------------
+
+GOOD_SCHEDULE = {
+    "name": "Platform A",
+    "period": "weekly",
+    "week_starts": "saturday",
+    "released_days_after_period_end": [5, 6],
+    "arrives_days_after_release": [3, 4],
+}
+
+
+def with_schedule(example_data: dict, **changes) -> dict:
+    data = copy.deepcopy(example_data)
+    data["pay_schedules"] = {"platform_a": GOOD_SCHEDULE | changes}
+    return data
+
+
+def test_pay_schedule_is_read(example_data):
+    s = parse_settings(with_schedule(example_data))
+    p = s.pay_schedules["platform_a"]
+    assert (p.id, p.name, p.week_starts, p.release_after, p.arrive_after) == (
+        "platform_a",
+        "Platform A",
+        5,
+        (5, 6),
+        (3, 4),
+    )
+
+
+def test_pay_schedules_section_is_optional(example_data):
+    data = {k: v for k, v in example_data.items() if k != "pay_schedules"}
+    assert parse_settings(data).pay_schedules == {}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"period": "monthly"},
+        {"week_starts": "someday"},
+        {"released_days_after_period_end": [6, 5]},
+        {"released_days_after_period_end": [5]},
+        {"released_days_after_period_end": [5.5, 6]},
+        {"released_days_after_period_end": [True, 6]},
+        {"arrives_days_after_release": [-1, 2]},
+        {"arrives_days_after_release": [3, 61]},
+        {"name": ""},
+        {"surprise": 1},
+    ],
+)
+def test_bad_pay_schedule_is_refused(example_data, bad):
+    assert "pay_schedules.platform_a" in error_for(with_schedule(example_data, **bad))
+
+
+def test_missing_pay_schedule_key_is_refused(example_data):
+    data = with_schedule(example_data)
+    del data["pay_schedules"]["platform_a"]["week_starts"]
+    assert "pay_schedules.platform_a" in error_for(data)
+
+
+@pytest.mark.parametrize("bad_id", ["Platform", "1abc", "a-b", "x" * 32])
+def test_bad_pay_schedule_id_is_refused(example_data, bad_id):
+    data = copy.deepcopy(example_data)
+    data["pay_schedules"] = {bad_id: dict(GOOD_SCHEDULE)}
+    assert "pay_schedules" in error_for(data)
+
+
+def test_pay_schedules_must_be_a_section(example_data):
+    data = copy.deepcopy(example_data)
+    data["pay_schedules"] = "weekly"
+    assert "pay_schedules" in error_for(data)
