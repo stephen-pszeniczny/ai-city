@@ -132,6 +132,10 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Changed your fixed times in settings?** → it applies from the next week created. For this week, press **Rebuild this week**: from today on, blocks you haven't touched are refreshed from settings. Anything you removed, edited or marked Done/Skipped, and anything you added, stays as it is, and past days aren't touched. Rebuilding twice changes nothing more.
 
+**Sunday check-in (Mission Control)** → open Mission Control's computer → **Sunday check-in**. From Sunday noon it plans next week; on other days it plans this week until this week is checked in. Tap a usual-event chip to add it on its day and time (a chip without a day asks which day; a ✓ chip is already added; a greyed one's day has passed), or *+ Add other event* for anything else, including side-work or build blocks. Pick the grocery day, look over the to-dos needing attention, then **Finish check-in**. Reopening it is safe: it edits the saved week, so nothing gets added twice, and the first finish time is kept. The belt label says **Check-in due** from Sunday noon until next week is checked in, and all week if this week never was (after "N overdue", before "N stale"). One reminder comes at 16:00 on Sunday (shuttle, ticker, Mac notification); if the Mac was asleep, it comes at the next wake. It's cleared when that week is checked in, even mid-week.
+
+**Usual events and check-in times (settings)** → under `[plan]`: `checkin_opens` (default `"12:00"`) and `checkin_reminder` (default `"16:00"`), and one `[[plan.usual_events]]` per chip: `title`, `start`, `end`, and optionally `day` (`"thu"`) and `kind` (`event`, `side_work`, `build` or `other`; default `event`). See the commented example in `settings.example.toml`. No restart needed: reopen the check-in. The check-in day itself is always Sunday.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---
