@@ -8,17 +8,15 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   addEntry,
-  ApiError,
+  editPayment,
   archiveEntry,
-  getMode,
   getSideWork,
-  hasVaultKey,
-  onVaultLocked,
   recordPayment,
   refreshRates,
   setManualRate,
   type Currency,
   type SideWorkGroup,
+  type SideWorkPayment,
   type SideWorkView,
 } from "../api";
 import {
@@ -30,36 +28,21 @@ import {
   hoursProblem,
   statusLabel,
 } from "./sideWork";
-import { VaultLockScreen } from "./VaultLockScreen";
+import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
+import { errorText, todayIso, VaultGate } from "./VaultGate";
 import "./vault.css";
 
 const KEY = ["sidework"];
 
-function todayIso(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function errorText(err: unknown): string {
-  return err instanceof Error ? err.message : "Something went wrong.";
-}
-
 export function SideWorkPanel() {
-  const mode = useQuery({ queryKey: ["mode"], queryFn: getMode, retry: false });
-  const [unlocked, setUnlocked] = useState(hasVaultKey());
-  // Any "locked" answer (a load or a save) brings the lock screen back.
-  useEffect(() => onVaultLocked(() => setUnlocked(false)), []);
-  const needsKey = mode.data === "personal" && !unlocked;
-  const ready = mode.status === "success" && !needsKey;
-
-  if (mode.status === "pending") return <p className="sw-note">Opening the Vault…</p>;
-  if (mode.status === "error") return <p className="sw-note">{errorText(mode.error)}</p>;
-  if (needsKey) return <VaultLockScreen onUnlocked={() => setUnlocked(true)} />;
-  return ready ? <SideWork onLocked={() => setUnlocked(false)} /> : null;
+  return (
+    <VaultGate>
+      <SideWork />
+    </VaultGate>
+  );
 }
 
-function SideWork({ onLocked }: { onLocked: () => void }) {
+function SideWork() {
   const client = useQueryClient();
   const [ratesOk, setRatesOk] = useState(true);
 
@@ -72,11 +55,6 @@ function SideWork({ onLocked }: { onLocked: () => void }) {
   }, [client]);
 
   const view = useQuery({ queryKey: KEY, queryFn: getSideWork, retry: false });
-
-  const locked = view.error instanceof ApiError && view.error.status === 403;
-  useEffect(() => {
-    if (locked) onLocked();
-  }, [locked, onLocked]);
 
   if (view.status === "pending") return <p className="sw-note">Counting…</p>;
   if (view.status === "error") return <p className="sw-note">{errorText(view.error)}</p>;
@@ -344,6 +322,7 @@ function Group({ g }: { g: SideWorkGroup }) {
           <span>
             Received {formatMoney(g.payment.amount_cents, g.payment.currency)} on{" "}
             {formatDay(g.payment.received_on)} = {formatCad(g.payment.received_cad_cents)}
+            {g.bonus_cad_cents ? ` · bonus ${formatCad(g.bonus_cad_cents)}` : ""}
             {g.difference_cad_cents !== null && (
               <strong className={g.difference_cad_cents < 0 ? "sw-short" : "sw-ok"}>
                 {" "}
@@ -359,6 +338,7 @@ function Group({ g }: { g: SideWorkGroup }) {
           )
         )}
       </footer>
+      {g.payment && <PaymentNote payment={g.payment} />}
       {paying && !g.payment && (
         <PaymentForm
           kind="pay"
@@ -373,7 +353,7 @@ function Group({ g }: { g: SideWorkGroup }) {
 }
 
 function PaymentForm(props: {
-  kind: "pay" | "bonus";
+  kind: "pay" | "bonus" | "extra";
   company: string | null;
   entryIds: number[];
   currency: Currency;
@@ -383,6 +363,7 @@ function PaymentForm(props: {
   const [day, setDay] = useState(todayIso());
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>(props.currency);
+  const [extra, setExtra] = useState<BonusNotes>(EMPTY_BONUS_NOTES);
   const save = useMutation({
     mutationFn: () =>
       recordPayment({
@@ -392,6 +373,7 @@ function PaymentForm(props: {
         amount: amount.trim(),
         currency,
         entry_ids: props.entryIds,
+        ...bonusNotesBody(extra),
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: KEY });
@@ -427,6 +409,7 @@ function PaymentForm(props: {
           <option value="CAD">CAD</option>
         </select>
       </label>
+      <IncomeFields value={extra} onChange={setExtra} bonus={props.kind === "pay"} />
       <button type="submit" disabled={save.isPending}>
         Save
       </button>
@@ -438,6 +421,54 @@ function PaymentForm(props: {
   );
 }
 
+/** Change a recorded payment's bonus box and notes (never its amount). */
+function EditPaymentForm({ payment, onDone }: { payment: SideWorkPayment; onDone: () => void }) {
+  const client = useQueryClient();
+  const [value, setValue] = useState<BonusNotes>({
+    includesBonus: payment.includes_bonus,
+    bonus: payment.bonus_cents !== null ? (payment.bonus_cents / 100).toFixed(2) : "",
+    notes: payment.notes ?? "",
+  });
+  const save = useMutation({
+    mutationFn: () => editPayment(payment.id, bonusNotesBody(value)),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: KEY });
+      onDone();
+    },
+  });
+  return (
+    <form
+      className="sw-pay"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <IncomeFields value={value} onChange={setValue} bonus={payment.kind === "pay"} />
+      <button type="submit" disabled={save.isPending}>
+        Save
+      </button>
+      <button type="button" className="sw-link" onClick={onDone}>
+        Cancel
+      </button>
+      {save.error && <span className="sw-error">{errorText(save.error)}</span>}
+    </form>
+  );
+}
+
+function PaymentNote({ payment }: { payment: SideWorkPayment }) {
+  const [editing, setEditing] = useState(false);
+  if (editing) return <EditPaymentForm payment={payment} onDone={() => setEditing(false)} />;
+  return (
+    <p className="sw-note-line">
+      {payment.notes && <span className="sw-dim">“{payment.notes}” </span>}
+      <button type="button" className="sw-link" onClick={() => setEditing(true)}>
+        {payment.notes || payment.includes_bonus ? "Edit bonus or notes" : "Add bonus or notes"}
+      </button>
+    </p>
+  );
+}
+
 // --- Bonuses -----------------------------------------------------------------------------
 
 function Bonuses({ v }: { v: SideWorkView }) {
@@ -446,17 +477,21 @@ function Bonuses({ v }: { v: SideWorkView }) {
   return (
     <section aria-labelledby="sw-bonus-title">
       <h3 id="sw-bonus-title" className="sw-h">
-        Bonuses
+        Bonuses and other income
       </h3>
-      {v.bonuses.length > 0 && (
-        <ul className="sw-entries">
-          {v.bonuses.map((b) => (
+      {v.bonuses.length + v.extras.length > 0 && (
+        <ul className="sw-entries sw-entries--stacked">
+          {[...v.bonuses, ...v.extras].map((b) => (
             <li key={b.id}>
               <span>{formatDay(b.received_on)}</span>
-              <span>{v.schedules.find((s) => s.id === b.company)?.name ?? b.company ?? ""}</span>
+              <span>
+                {v.schedules.find((s) => s.id === b.company)?.name ?? b.company ?? ""}
+                {b.kind === "extra" && <span className="sw-dim"> · other income</span>}
+              </span>
               <span className="sw-amount">
                 {formatMoney(b.amount_cents, b.currency)} = {formatCad(b.received_cad_cents)}
               </span>
+              <PaymentNote payment={b} />
             </li>
           ))}
         </ul>
