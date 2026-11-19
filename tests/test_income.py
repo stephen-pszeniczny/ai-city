@@ -131,7 +131,7 @@ def test_edit_confirmed_amount_is_refused(store):
         {"net_cents": 150000, "paid_on": None},
         {"net_cents": None, "paid_on": date(2026, 3, 1)},
     ):
-        with pytest.raises(IncomeError, match="confirmed by the statement"):
+        with pytest.raises(IncomeError, match="This pay is confirmed"):
             store.edit_main_job_pay(
                 pay.id, gross_cents=None, rrsp_cents=None, match_cents=None, notes=None, **change
             )
@@ -268,7 +268,7 @@ def test_archive_unconfirmed_pay_hides_it(store):
 def test_archive_confirmed_pay_is_refused(store):
     pay = typed(store)
     store.link_main_job_pay(pay.id, main_deposit(store))
-    with pytest.raises(IncomeError, match="confirmed by the statement"):
+    with pytest.raises(IncomeError, match="This pay is confirmed"):
         store.archive_main_job_pay(pay.id)
     assert len(store.main_job_pay()) == 1
 
@@ -293,3 +293,52 @@ def test_archived_pay_cannot_be_linked_or_edited(store):
 def test_archive_unknown_pay_is_not_found(store):
     with pytest.raises(MainJobPayNotFound):
         store.archive_main_job_pay(42)
+
+
+# --- Older pay checked by hand (marked once by migration 009) ------------------------------
+
+
+def hand_check(store, pay_id):
+    store._conn.execute(
+        "UPDATE main_job_payments SET hand_checked_at = '2026-11-19T12:00:00Z' WHERE id = ?",
+        (pay_id,),
+    )
+
+
+def test_hand_checked_pay_is_locked_like_confirmed(store):
+    pay = typed(store)
+    hand_check(store, pay.id)
+    [row] = store.main_job_pay()
+    assert (row.confirmed, row.hand_checked) == (True, True)
+    with pytest.raises(IncomeError) as exc:
+        store.edit_main_job_pay(
+            pay.id,
+            paid_on=None,
+            net_cents=150100,
+            gross_cents=None,
+            rrsp_cents=None,
+            match_cents=None,
+            notes=None,
+        )
+    assert "statement" not in str(exc.value)
+    with pytest.raises(IncomeError) as exc:
+        store.archive_main_job_pay(pay.id)
+    assert "statement" not in str(exc.value)
+    row = store.edit_main_job_pay(
+        pay.id,
+        paid_on=None,
+        net_cents=None,
+        gross_cents=200000,
+        rrsp_cents=None,
+        match_cents=None,
+        notes=None,
+    )
+    assert row.gross_cents == 200000
+
+
+def test_hand_checked_pay_is_not_offered_or_linked(store):
+    pay = typed(store)
+    hand_check(store, pay.id)
+    assert store.unconfirmed_main_job_pay() == []
+    with pytest.raises(MainJobPayTaken):
+        store.link_main_job_pay(pay.id, main_deposit(store))

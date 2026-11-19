@@ -217,3 +217,44 @@ def test_one_pay_per_deposit(conn):
 def test_bad_main_job_payment_is_refused(conn, bad):
     with pytest.raises(sqlite3.IntegrityError):
         add_pay(conn, **bad)
+
+
+# --- 009: older pay checked by hand, once ----------------------------------------------------
+
+
+def at_version_8(tmp_path):
+    return open_database(tmp_path / "sample.db", DbKind.SAMPLE, load_migrations()[:8])
+
+
+def marked(conn):
+    return {
+        r[0]: r[1] is not None
+        for r in conn.execute("SELECT paid_on, hand_checked_at FROM main_job_payments")
+    }
+
+
+def test_009_marks_only_older_unconfirmed_pay(tmp_path):
+    conn = at_version_8(tmp_path)
+    add_import(conn)  # first day 2026-03-01
+    add_pay(conn, paid_on="2026-02-13")
+    add_pay(conn, paid_on="2026-02-27", archived_at=NOW)
+    add_pay(conn, paid_on="2026-03-13")
+    add_pay(conn, paid_on="2026-02-20", deposit_id=add_deposit(conn, posted_on="2026-02-20"))
+    conn.commit()
+    migrate(conn, load_migrations()[:9])
+    assert marked(conn) == {
+        "2026-02-13": True,
+        "2026-02-27": False,
+        "2026-03-13": False,
+        "2026-02-20": False,
+    }
+    conn.close()
+
+
+def test_009_marks_nothing_without_imports(tmp_path):
+    conn = at_version_8(tmp_path)
+    add_pay(conn, paid_on="2026-02-13")
+    conn.commit()
+    migrate(conn, load_migrations()[:9])
+    assert marked(conn) == {"2026-02-13": False}
+    conn.close()

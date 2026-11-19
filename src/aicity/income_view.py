@@ -176,6 +176,7 @@ def main_job_pay_json(r: MainJobPayRow) -> dict:
         "deductions_cents": r.deductions_cents,
         "notes": r.notes,
         "confirmed": r.confirmed,
+        "checked_by_hand": r.hand_checked,
     }
 
 

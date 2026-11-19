@@ -135,6 +135,7 @@ def test_view_typed_pay_counts_and_is_unconfirmed(conn, stores):
             "deductions_cents": 90000,
             "notes": None,
             "confirmed": False,
+            "checked_by_hand": False,
         }
     ]
 
@@ -281,3 +282,14 @@ def test_view_main_job_uses_net_when_gross_missing(conn, stores):
 
 def test_view_has_no_split_without_goals(conn, stores):
     assert view(conn, stores)["month"]["goal_split"] is None
+
+
+def test_view_shows_hand_checked_pay_as_confirmed(conn, stores):
+    _side, income = stores
+    pay = main_pay(income, date(2026, 3, 6), 210000)
+    conn.execute(
+        "UPDATE main_job_payments SET hand_checked_at = '2026-03-25T12:00:00Z' WHERE id = ?",
+        (pay.id,),
+    )
+    [row] = view(conn, stores)["main_job_pay"]
+    assert (row["confirmed"], row["checked_by_hand"]) == (True, True)

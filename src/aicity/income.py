@@ -25,7 +25,7 @@ class MainJobPayNotFound(IncomeError):
 
 
 class MainJobPayTaken(IncomeError):
-    """That pay is already confirmed by a deposit (or doesn't exist)."""
+    """That pay is already confirmed (or doesn't exist)."""
 
 
 @dataclass(frozen=True)
@@ -48,11 +48,13 @@ class MainJobPayRow:
     match_cents: int | None
     notes: str | None
     deposit_id: int | None
+    # Older pay checked against old statements by hand (marked once by migration 009).
+    hand_checked: bool = False
 
     @property
     def confirmed(self) -> bool:
-        """A statement deposit has confirmed this pay."""
-        return self.deposit_id is not None
+        """A statement deposit has confirmed this pay, or it was checked by hand."""
+        return self.deposit_id is not None or self.hand_checked
 
     @property
     def deductions_cents(self) -> int | None:
@@ -113,16 +115,20 @@ class IncomeStore:
 
     def unconfirmed_main_job_pay(self) -> list[MainJobPayRow]:
         """Pay typed in by hand that no statement deposit has confirmed yet."""
-        return self._pay_rows("AND deposit_id IS NULL")
+        return self._pay_rows("AND deposit_id IS NULL AND hand_checked_at IS NULL")
 
     def _pay_rows(self, more: str, args: tuple = ()) -> list[MainJobPayRow]:
         rows = self._conn.execute(
             "SELECT id, paid_on, net_cents, gross_cents, rrsp_cents, match_cents, notes, "
-            f"deposit_id FROM main_job_payments WHERE archived_at IS NULL {more} "
+            "deposit_id, hand_checked_at IS NOT NULL "
+            f"FROM main_job_payments WHERE archived_at IS NULL {more} "
             "ORDER BY paid_on, id",
             args,
         ).fetchall()
-        return [MainJobPayRow(r[0], date.fromisoformat(r[1]), *r[2:]) for r in rows]
+        return [
+            MainJobPayRow(r[0], date.fromisoformat(r[1]), *r[2:8], hand_checked=bool(r[8]))
+            for r in rows
+        ]
 
     def _pay(self, pay_id: int) -> MainJobPayRow | None:
         """One pay by ID; a removed (archived) pay counts as not there."""
@@ -253,9 +259,7 @@ class IncomeStore:
             new_day = pay.paid_on if paid_on is None else paid_on
             new_net = pay.net_cents if net_cents is None else net_cents
             if pay.confirmed and (new_day, new_net) != (pay.paid_on, pay.net_cents):
-                raise IncomeError(
-                    "This pay is confirmed by the statement; its amount and date come from there."
-                )
+                raise IncomeError("This pay is confirmed; its amount and date can't change.")
             _check_pay(new_net, gross_cents, rrsp_cents)
             self._conn.execute(
                 "UPDATE main_job_payments SET paid_on = ?, net_cents = ?, gross_cents = ?, "
@@ -277,9 +281,7 @@ class IncomeStore:
             if pay is None:
                 raise MainJobPayNotFound(f"No main-job pay with ID {pay_id}.")
             if pay.confirmed:
-                raise IncomeError(
-                    "This pay is confirmed by the statement, so it stays. Edit its stub details."
-                )
+                raise IncomeError("This pay is confirmed, so it stays. Edit its stub details.")
             self._conn.execute(
                 "UPDATE main_job_payments SET archived_at = ? WHERE id = ?",
                 (_stamp(self._clock()), pay_id),
@@ -296,7 +298,7 @@ class IncomeStore:
         def work() -> None:
             pay = self._pay(pay_id)
             if pay is None or pay.confirmed:
-                raise MainJobPayTaken("That pay is already confirmed by the statement.")
+                raise MainJobPayTaken("That pay is already confirmed.")
             self._conn.execute(
                 "UPDATE main_job_payments SET deposit_id = ?, net_cents = ? WHERE id = ?",
                 (deposit.id, deposit.amount_cents, pay_id),

@@ -50,6 +50,10 @@ test("main-job pay says whether the statement has confirmed it", () => {
   assert.equal(payStatus(false), "not yet confirmed");
 });
 
+test("older pay checked by hand says so", () => {
+  assert.equal(payStatus(true, true), "✓ confirmed (checked by hand)");
+});
+
 test("linking: nothing to say when the statement matches what was typed", () => {
   assert.equal(linkNote(210000, 210000), null);
 });

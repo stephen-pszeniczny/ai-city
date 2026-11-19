@@ -34,8 +34,10 @@ export function formatMonth(month: string): string {
   return MONTHS[m - 1] ?? month;
 }
 
-/** Main-job pay's label: typed in by hand until a statement deposit confirms it. */
-export function payStatus(confirmed: boolean): string {
+/** Main-job pay's label: typed in by hand until a statement deposit confirms it (older
+ * pay from before the first statement import was checked by hand once instead). */
+export function payStatus(confirmed: boolean, byHand = false): string {
+  if (confirmed && byHand) return "✓ confirmed (checked by hand)";
   return confirmed ? "✓ confirmed by statement" : "not yet confirmed";
 }
 
