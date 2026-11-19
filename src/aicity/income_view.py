@@ -51,7 +51,10 @@ def income_view(
     schedules: dict[str, PaySchedule],
     main_job_name: str | None,
     today: date,
+    *,
+    goal_split: tuple[int, int] | None = None,
 ) -> dict:
+    """The Income screen. goal_split is (main job, side income) goals, when set."""
     del conn  # the stores carry the connection
     names = {"main_job": main_job_name or "Main job", "extra": "Other side income"}
     names |= {s.id: s.name for s in schedules.values()}
@@ -134,6 +137,11 @@ def income_view(
             "gross_missing": this in missing_gross,
             "goal_cents": goal_cents,
             "employer_match_cents": match.get(this, 0),
+            "main_job_gross_cents": month_sources.get("main_job", 0),
+            "side_gross_cents": side_now,
+            "goal_split": None
+            if goal_split is None
+            else {"main_job_cents": goal_split[0], "side_income_cents": goal_split[1]},
             "by_source": by_source,
         },
         "months": [

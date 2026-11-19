@@ -609,3 +609,12 @@ def test_archive_typed_pay_route(unlocked):
     assert r.status_code == 200, r.text
     assert unlocked.get("/api/vault/income").json()["main_job_pay"] == []
     assert unlocked.post("/api/vault/income/main-job/999/archive").status_code == 404
+
+
+def test_sample_income_has_its_own_goal_split(data_dir):
+    app = create_app(dev=False)
+    app.state.db_kind = DbKind.SAMPLE
+    client = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    month = client.get("/api/vault/income").json()["month"]
+    assert month["goal_split"] == {"main_job_cents": 550000, "side_income_cents": 100000}
+    assert month["goal_cents"] == 650000

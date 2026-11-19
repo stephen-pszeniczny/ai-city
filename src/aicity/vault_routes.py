@@ -439,17 +439,22 @@ def confirm_statement(request: Request, body: ConfirmIn) -> dict:
 income_router = APIRouter(prefix="/api/vault/income", dependencies=[Depends(_require_key)])
 
 
-def _goal_cents(request: Request) -> int:
+def _goals_for(request: Request) -> tuple[int, tuple[int, int] | None]:
+    """(total goal, (main job, side income) split or None): Sample's own, or the settings."""
     if _sample(request):
-        return sample_data.SAMPLE_GOAL_CENTS
-    return load_settings().goals.monthly_income_cents
+        return sample_data.SAMPLE_GOAL_CENTS, sample_data.SAMPLE_GOAL_SPLIT
+    goals = load_settings().goals
+    split = None
+    if goals.main_job_cents is not None and goals.side_income_cents is not None:
+        split = (goals.main_job_cents, goals.side_income_cents)
+    return goals.monthly_income_cents, split
 
 
 @income_router.get("")
 def get_income(request: Request) -> dict:
     schedules, income = _settings_for(request)
     _schedules, main_job = _sources(request)
-    goal = _goal_cents(request)
+    goal, split = _goals_for(request)
     with _open(request) as (side, conn):
         return income_view(
             conn,
@@ -460,6 +465,7 @@ def get_income(request: Request) -> dict:
             schedules,
             main_job.name if main_job else None,
             _today(request),
+            goal_split=split,
         )
 
 

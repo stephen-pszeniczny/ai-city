@@ -2,7 +2,8 @@
 //   /                    the belt (level 1)
 //   /b/<id>              inside a building, the robot at work (level 2)
 //   /b/<id>/screen       zoomed into the robot's screen (level 3)
-// The address is the single source of truth, so reloads and browser Back work.
+// The address is the single source of truth while the app is open, so browser Back and
+// forward work. A fresh load or reload starts at the belt (see src/startAtBelt.ts).
 import type { BuildingId } from "../api";
 
 export type View =
@@ -29,6 +30,12 @@ export function parsePath(path: string): View {
   if (parts.length === 2) return { level: "building", id: parts[1] };
   if (parts.length === 3 && parts[2] === "screen") return { level: "screen", id: parts[1] };
   return { level: "belt" };
+}
+
+/** Where a fresh open of the page starts: building and screen addresses go to the belt
+ * (the Dock app reopens the last address; Steve wants every open to start at the belt). */
+export function startPath(path: string): string {
+  return path === "/b" || path.startsWith("/b/") ? "/" : path;
 }
 
 export function toPath(view: View): string {
