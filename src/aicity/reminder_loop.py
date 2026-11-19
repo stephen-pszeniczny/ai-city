@@ -5,6 +5,11 @@ caught even with no page open, and Personal reminders are caught while Sample
 mode is on (they show after switching back). It runs once straight away at
 start, which also catches reminders that came due while the app or Mac was off.
 
+In the Personal database it also makes the monthly "import last month's statement"
+reminder (statement_reminder.py), using the due day and reminder time from the
+private settings; a settings problem is logged (by type only) and task reminders
+still go ahead.
+
 It never creates a database file, and a file it can't use is logged (by kind
 only, never its contents) and skipped, so the other one is still checked.
 """
@@ -13,10 +18,12 @@ import logging
 import sqlite3
 import threading
 from collections.abc import Callable
-from datetime import datetime, tzinfo
+from datetime import UTC, datetime, tzinfo
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database
 from aicity.notifications import Notification, NotificationStore
+from aicity.settings import SettingsError, load_settings
+from aicity.statement_reminder import check_statement_reminder
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +34,7 @@ def check_all_databases(
     clock: Clock,
     local_tz: tzinfo | None = None,
     notify: Callable[[list[Notification]], None] | None = None,
+    load: Callable[[], object] = load_settings,
 ) -> dict[DbKind, int]:
     """Run the reminder check on each database that exists. Returns how many each made.
 
@@ -51,6 +59,8 @@ def check_all_databases(
             store = NotificationStore(conn, clock, local_tz)
             before = store.last_id()
             made[kind] = store.check_reminders()
+            if kind is DbKind.PERSONAL:
+                made[kind] += _statement(conn, clock, local_tz, load)
             if notify is not None and kind is DbKind.PERSONAL:
                 new = store.created_after(before)
                 if new:
@@ -62,6 +72,24 @@ def check_all_databases(
         finally:
             conn.close()
     return made
+
+
+def _statement(
+    conn: sqlite3.Connection, clock: Clock, local_tz: tzinfo | None, load: Callable[[], object]
+) -> int:
+    try:
+        settings = load()
+    except (SettingsError, OSError) as exc:
+        log.warning("Statement reminder skipped (%s).", type(exc).__name__)
+        return 0
+    now = clock()
+    return check_statement_reminder(
+        conn,
+        now.astimezone(local_tz),
+        settings.income.statement_due_day,
+        settings.tasks.reminder_time,
+        now.astimezone(UTC),
+    )
 
 
 def _tell(notify: Callable[[list[Notification]], None], new: list[Notification]) -> None:

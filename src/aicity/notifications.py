@@ -12,6 +12,10 @@ runs in the background every 30 seconds (src/aicity/reminder_loop.py) and:
   - deletes ones that have been dismissed or cleared for 90 days, once their task
     no longer has that reminder time (until then the row stops a second firing).
 
+The monthly "import last month's statement" reminder (kind 'statement', no task)
+is made by statement_reminder.py; the checks above only touch 'reminder' rows,
+apart from the 90-day tidy-up.
+
 Reminder times are local Mac time to the minute ("2026-11-30T09:00"), so "due"
 is a plain text comparison in that format. Only the task's title is copied.
 """
