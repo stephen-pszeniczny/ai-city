@@ -64,8 +64,17 @@ SAMPLE_PLAN = PlanSettings(
     ),
 )
 
-# Sample mode's routines (filled in with made-up items in Task 6).
-SAMPLE_ROUTINES: tuple[Routine, ...] = ()
+# Sample mode's routines: invented items, never the private settings.
+SAMPLE_ROUTINES: tuple[Routine, ...] = (
+    Routine(
+        id="evening_prep",
+        title="Evening prep",
+        days=(6, 0, 1, 2, 3),
+        shows_from=time(19),
+        remind_at=time(21, 30),
+        items=("Lunch packed", "Water bottle filled", "Bag by the door"),
+    ),
+)
 
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
