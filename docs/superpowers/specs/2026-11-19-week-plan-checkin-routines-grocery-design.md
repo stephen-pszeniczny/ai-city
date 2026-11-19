@@ -241,6 +241,12 @@ Week of Nov 23                                [Check-in] [Rebuild this week]
 A new Mission Control desktop app: add an item, tick it, "Clear ticked". Nothing else (no
 quantities or aisles yet). Built so a later Training Bay recipe feature can add items.
 
+PR 4 calls: a name already on the list (ignoring case and end spaces), ticked or not, returns
+that item instead of a second one, unticked if it was ticked. "Remove" takes one item off,
+"Clear ticked" takes all ticked ones off; both set `status = 'cleared'`. Unticked items come
+first (oldest first), then ticked ones in the order ticked. The count shown elsewhere is the
+number of unticked items.
+
 ### Mission Control desktop and badge
 
 - Apps: To-do, Daily plan, Sunday check-in, Grocery list, Projects (later). The old "Weekly review"
