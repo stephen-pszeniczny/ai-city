@@ -21,6 +21,7 @@ import type { View } from "./levels";
 import { tintOf } from "./tints";
 import type { LabelElements } from "./Labels";
 import { fadeSecondsFor } from "./dayNight";
+import { DESK_LIGHT_COUNT, deskLights } from "./deskLights";
 import { LOOK } from "./look";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
@@ -57,7 +58,7 @@ export function BeltScene({
   /** A notification shuttle to fly now (belt level only), with the banner it carries. */
   shuttle: { key: string; banner: RefObject<HTMLDivElement | null>; onDone: () => void } | null;
 }) {
-  const { scene, gl } = useThree();
+  const { scene, gl, camera } = useThree();
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   // Plain objects only (nothing is added to the scene here), so it's safe for
@@ -122,6 +123,57 @@ export function BeltScene({
     [world],
   );
   const v = useMemo(() => new THREE.Vector3(), []);
+
+  // Get the station's inside ready in the background soon after the app opens.
+  // The first time it's shown, the browser must build its materials and upload
+  // every shape and texture, which froze the first flight in at the hatch (in
+  // the dark, with the outside already hidden). Here, while the belt just sits
+  // there: compile its materials in the background, then draw it once to a tiny
+  // hidden target with nothing culled, so nothing is left to do at the hatch.
+  useEffect(() => {
+    let cancelled = false;
+    // Same lights and objects as "inside the station" (the frame loop puts the
+    // real state back before the next frame is drawn).
+    const asInside = (on: boolean) => {
+      const inside = interior.current;
+      if (!inside) return false;
+      world.station.group.visible = !on;
+      inside.visible = on;
+      return true;
+    };
+    const id = window.setTimeout(async () => {
+      const inside = interior.current;
+      if (cancelled || !inside || inside.visible || !asInside(true)) return;
+      const compiled = gl.compileAsync(scene, camera);
+      asInside(false);
+      try {
+        await compiled;
+      } catch {
+        return; // a warm-up only: the first flight still works without it
+      }
+      if (cancelled || interior.current?.visible) return;
+      const culled: THREE.Object3D[] = [];
+      inside.traverse((obj) => {
+        if (obj.frustumCulled) {
+          obj.frustumCulled = false;
+          culled.push(obj);
+        }
+      });
+      const target = new THREE.WebGLRenderTarget(1, 1);
+      const before = gl.getRenderTarget();
+      asInside(true);
+      gl.setRenderTarget(target);
+      gl.render(scene, camera);
+      gl.setRenderTarget(before);
+      asInside(false);
+      for (const obj of culled) obj.frustumCulled = true;
+      target.dispose();
+    }, LOOK.warmUp.interiorAfterMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, [gl, scene, camera, world]);
 
   // Mission Control or the Vault: the station's inside (hub, hallways, rooms)
   // shows while the camera is inside the station; its outside shows otherwise.
@@ -228,6 +280,7 @@ export function BeltScene({
     <>
       {shuttle && <Shuttle key={shuttle.key} banner={shuttle.banner} onDone={shuttle.onDone} />}
       <primitive object={world.station.group} {...events} />
+      <DeskLightPool />
       <group ref={interior} visible={false}>
         <StationInterior
           titleOf={titleOf}
@@ -267,6 +320,47 @@ export function BeltScene({
     </>
   );
 }
+
+// The one shared set of close-up desk lights (see deskLights.ts): always in the
+// scene so the light count never changes; dark when no desk is close up.
+const DESK_LIGHTS = [
+  { mark: "work", intensity: 3, distance: 5, color: 0xffe2c0 },
+  { mark: "glow", intensity: 1.4, distance: 2.5, color: 0x8aa4ff },
+  { mark: "lamp", intensity: 1.2, distance: 1.6, color: 0xffd9a8 },
+] as const;
+
+function DeskLightPool() {
+  const lights = useRef<(THREE.PointLight | null)[]>([]);
+  useFrame((state) => {
+    const desk = deskLights.closestNear(state.camera.position);
+    DESK_LIGHTS.forEach((spec, i) => {
+      const light = lights.current[i];
+      if (!light) return;
+      if (desk) {
+        desk[spec.mark].getWorldPosition(light.position);
+        light.intensity = spec.intensity;
+      } else {
+        light.intensity = 0;
+      }
+    });
+  });
+  return (
+    <>
+      {DESK_LIGHTS.map((spec, i) => (
+        <pointLight
+          key={spec.mark}
+          ref={(l) => {
+            lights.current[i] = l;
+          }}
+          intensity={0}
+          distance={spec.distance}
+          color={spec.color}
+        />
+      ))}
+    </>
+  );
+}
+if (DESK_LIGHTS.length !== DESK_LIGHT_COUNT) throw new Error("Desk light count mismatch.");
 
 function disposeTree(root: THREE.Object3D) {
   root.traverse((o) => {

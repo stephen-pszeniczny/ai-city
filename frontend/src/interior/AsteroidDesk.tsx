@@ -5,11 +5,12 @@
 // the same world; far from the camera it switches to a lighter version.
 // It sits on the asteroid's spinning deck, so the view sweeps slowly as it turns.
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
 import { DECK_R } from "../belt/asteroids";
+import { deskLights } from "../belt/deskLights";
 import { detailFor, type Detail } from "../belt/lod";
 import { Desk, DESK_Z } from "./Desk";
 import { DeskProps } from "./DeskProps";
@@ -56,6 +57,17 @@ export function AsteroidDesk({
   const [detail, setDetail] = useState<Detail>("far");
   const nextCheck = useRef(0);
   const where = useMemo(() => new THREE.Vector3(), []);
+  const workMark = useRef<THREE.Object3D>(null);
+  const glowMark = useRef<THREE.Object3D>(null);
+  const lampMark = useRef<THREE.Object3D>(null);
+
+  useEffect(() => {
+    const [work, glow, lamp] = [workMark.current, glowMark.current, lampMark.current];
+    if (!work || !glow || !lamp) return;
+    deskLights.register(id, { work, glow, lamp });
+    return () => deskLights.unregister(id);
+  }, [id]);
+  useEffect(() => deskLights.setNear(id, detail === "near"), [id, detail]);
 
   // Pick near or far detail twice a second from the camera's distance.
   useFrame((state) => {
@@ -90,7 +102,7 @@ export function AsteroidDesk({
           <group position={[0, 0, DESK_Z]}>
             <Desk tint={tint} detail={detail} />
           </group>
-          <DeskProps tint={tint} detail={detail} projector={!built} />
+          <DeskProps tint={tint} detail={detail} projector={!built} lampMark={lampMark} />
           <Gadget id={id} tint={tint} detail={detail} reducedMotion={reducedMotion} orbit={orbit} />
           <group position={MONITOR_AT} rotation={MONITOR_TURN} visible={!atScreen}>
             <Monitor
@@ -104,13 +116,10 @@ export function AsteroidDesk({
             />
           </group>
         </group>
-        {/* A warm work light and the screen's cool glow, only up close (lights are costly). */}
-        {near && (
-          <>
-            <pointLight position={[0.6, 2.6, -0.9]} intensity={3} distance={5} color={0xffe2c0} />
-            <pointLight position={[0, 1.3, 0.5]} intensity={1.4} distance={2.5} color={0x8aa4ff} />
-          </>
-        )}
+        {/* Where the shared close-up lights sit at this desk (belt/deskLights.ts):
+            a warm work light and the screen's cool glow. */}
+        <object3D ref={workMark} position={[0.6, 2.6, -0.9]} />
+        <object3D ref={glowMark} position={[0, 1.3, 0.5]} />
       </group>
       {/* dispose={null}: the sign belongs to the asteroid and is reused, never freed here. */}
       {sign && <primitive object={sign} dispose={null} position={SIGN_AT} rotation={[0, 0.3, 0]} />}
