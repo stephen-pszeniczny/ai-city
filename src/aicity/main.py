@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
-from aicity import config, mac_notify, notification_routes, page, task_routes
+from aicity import config, mac_notify, notification_routes, page, task_routes, vault_routes
 from aicity.db import DbKind
 from aicity.mac_messages import MacMessage, plan_mac_messages
 from aicity.mode import (
@@ -114,6 +114,7 @@ def create_app(
 
     task_routes.register(app)
     notification_routes.register(app)
+    vault_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

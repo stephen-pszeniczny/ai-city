@@ -10,10 +10,22 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from aicity.db import with_transaction
-from aicity.side_work_math import CURRENCIES
+from aicity.fx import latest_rate
+from aicity.settings import IncomeSettings, PaySchedule
+from aicity.side_work_math import (
+    CURRENCIES,
+    arrival_window,
+    difference_cents,
+    expected_cents,
+    is_overdue,
+    pay_period,
+    rate_text,
+    set_aside_cents,
+    to_cad_cents,
+)
 from aicity.tasks import utc_now
 
 MAX_TEXT = 80
@@ -119,12 +131,6 @@ def _payment(row) -> Payment:
         rate_date=None if row[7] is None else date.fromisoformat(row[7]),
         created_at=row[8],
     )
-
-
-def rate_text(rate: Decimal) -> str:
-    """A rate as stored: plain decimal text with at least one decimal place."""
-    text = format(rate, "f")
-    return text if "." in text else text + ".0"
 
 
 class SideWorkStore:
@@ -310,3 +316,164 @@ class SideWorkStore:
             raise SideWorkConflict(f"A paid entry can't be {action}.")
         if current.archived:
             raise SideWorkConflict(f"An archived entry can't be {action}.")
+
+
+# --- The Side work screen ---------------------------------------------------------------
+
+
+def side_work_view(
+    store: SideWorkStore,
+    conn: sqlite3.Connection,
+    schedules: dict[str, PaySchedule],
+    income: IncomeSettings,
+    today: date,
+) -> dict:
+    """Everything the Side work screen shows, as plain JSON-ready data.
+
+    Entries for a platform with a pay schedule are grouped by pay week (and by
+    payment, if a week was paid in parts); any other entry stands alone. Paid
+    groups are valued at the payment's rate (the received day's), unpaid USD
+    at the newest known rate, marked as an estimate.
+    """
+    payments = {p.id: p for p in store.payments()}
+    latest = latest_rate(conn)
+    latest_value = None if latest is None else latest[0]
+    rates_pending = False
+
+    def payment_cad(p: Payment) -> int | None:
+        return to_cad_cents(p.amount_cents, p.currency, p.rate)
+
+    buckets: dict[tuple, list[Entry]] = {}
+    for e in store.entries():
+        schedule = schedules.get(e.company or "")
+        if schedule is None:
+            key = ("single", e.id)
+        else:
+            key = ("week", e.company, pay_period(e.worked_on, schedule)[0], e.payment_id)
+        buckets.setdefault(key, []).append(e)
+
+    groups = []
+    still_expected = 0
+    for key, entries in buckets.items():
+        first = entries[0]
+        schedule = schedules.get(first.company or "")
+        period = window = None
+        if key[0] == "week":
+            period = pay_period(first.worked_on, schedule)
+            window = arrival_window(period[1], schedule)
+        payment = payments.get(first.payment_id) if first.payment_id else None
+        rate = payment.rate if payment else latest_value
+
+        expected_cad, partial = 0, False
+        totals: dict[str, int] = {}
+        for e in entries:
+            amount = expected_cents(e.minutes, e.rate_cents)
+            if amount is None:
+                partial = True
+            else:
+                totals[e.currency] = totals.get(e.currency, 0) + amount
+        for currency, amount in totals.items():
+            cad = to_cad_cents(amount, currency, rate)
+            if cad is None:
+                partial = True
+                rates_pending = True
+            else:
+                expected_cad += cad
+        if not totals:
+            expected_cad = None
+
+        if payment:
+            status = "paid"
+        elif window is None:
+            status = "no_schedule"
+        else:
+            status = "overdue" if is_overdue(window, False, today) else "waiting"
+        if not payment and expected_cad is not None:
+            still_expected += expected_cad
+
+        received = None if payment is None else payment_cad(payment)
+        groups.append(
+            {
+                "company": first.company,
+                "company_name": schedule.name if schedule else first.company,
+                "schedule_id": schedule.id if schedule else None,
+                "period": None if period is None else [d.isoformat() for d in period],
+                "window": None if window is None else [d.isoformat() for d in window],
+                "status": status,
+                "entries": [_entry_json(e) for e in entries],
+                "expected_cad_cents": expected_cad,
+                "expected_is_partial": partial,
+                "expected_is_estimate": payment is None and "USD" in totals,
+                "payment": None if payment is None else _payment_json(payment, received),
+                "difference_cad_cents": None
+                if partial
+                else difference_cents(expected_cad, received),
+                "_sort": (period[0] if period else first.worked_on, first.id),
+            }
+        )
+    groups.sort(key=lambda g: g.pop("_sort"), reverse=True)
+
+    month_received = year_received = 0
+    bonuses = []
+    for p in payments.values():
+        cad = payment_cad(p)
+        if p.kind == "bonus":
+            bonuses.append(_payment_json(p, cad))
+        if cad is None:
+            rates_pending = True
+            continue
+        if p.received_on.year == today.year:
+            year_received += cad
+            if p.received_on.month == today.month:
+                month_received += cad
+    bonuses.reverse()
+
+    return {
+        "summary": {
+            "month_received_cad_cents": month_received,
+            "still_expected_cad_cents": still_expected,
+            "year_received_cad_cents": year_received,
+            "set_aside_cad_cents": set_aside_cents(year_received, income.tax_set_aside_percent),
+            "set_aside_percent": format(income.tax_set_aside_percent.normalize(), "f"),
+            "set_aside_is_placeholder": income.tax_set_aside_is_placeholder,
+            "rates_pending": rates_pending,
+        },
+        "schedules": [{"id": s.id, "name": s.name} for s in schedules.values()],
+        "groups": groups,
+        "bonuses": bonuses,
+    }
+
+
+def _hours_text(minutes: int | None) -> str | None:
+    if minutes is None:
+        return None
+    hours = (Decimal(minutes) / 60).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return format(hours.normalize(), "f")
+
+
+def _entry_json(e: Entry) -> dict:
+    return {
+        "id": e.id,
+        "worked_on": e.worked_on.isoformat(),
+        "company": e.company,
+        "role": e.role,
+        "hours": _hours_text(e.minutes),
+        "minutes": e.minutes,
+        "rate_cents": e.rate_cents,
+        "currency": e.currency,
+        "expected_cents": expected_cents(e.minutes, e.rate_cents),
+    }
+
+
+def _payment_json(p: Payment, received_cad: int | None) -> dict:
+    return {
+        "id": p.id,
+        "kind": p.kind,
+        "company": p.company,
+        "received_on": p.received_on.isoformat(),
+        "amount_cents": p.amount_cents,
+        "currency": p.currency,
+        "rate": None if p.rate is None else rate_text(p.rate),
+        "rate_date": None if p.rate_date is None else p.rate_date.isoformat(),
+        "received_cad_cents": received_cad,
+    }

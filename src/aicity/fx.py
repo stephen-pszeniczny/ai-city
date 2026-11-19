@@ -19,7 +19,7 @@ from decimal import Decimal, InvalidOperation
 import httpx
 
 from aicity.db import with_transaction
-from aicity.side_work import rate_text
+from aicity.side_work_math import rate_text
 
 VALET_URL = "https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json"
 TIMEOUT_S = 10
@@ -54,6 +54,14 @@ def rate_on(conn: sqlite3.Connection, day: date) -> tuple[Decimal, date] | None:
         if row is None:
             return None
     return Decimal(row[0]), date.fromisoformat(row[1])
+
+
+def latest_rate(conn: sqlite3.Connection) -> tuple[Decimal, date] | None:
+    """The newest rate known, for estimating pay that hasn't arrived yet."""
+    row = conn.execute(
+        "SELECT rate, day FROM fx_rates WHERE currency = 'USD' ORDER BY day DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else (Decimal(row[0]), date.fromisoformat(row[1]))
 
 
 def _checked_through(conn: sqlite3.Connection) -> date | None:

@@ -137,3 +137,13 @@ def test_valet_reader_gives_exact_rates():
 def test_valet_problems_are_rate_unavailable(status, body):
     with pytest.raises(RateUnavailable):
         valet_fetcher(date(2026, 3, 19), FRI, client=client_answering(status, body))
+
+
+def test_latest_rate_is_the_newest_day(conn):
+    from aicity.fx import latest_rate
+
+    assert latest_rate(conn) is None
+    refresh_rates(
+        conn, {MON}, FakeFetcher({FRI: Decimal("1.37"), MON: Decimal("1.38")}), today=TODAY
+    )
+    assert latest_rate(conn) == (Decimal("1.38"), MON)

@@ -16,13 +16,21 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
 from aicity.notifications import SINCE_KEY
+from aicity.settings import IncomeSettings, PaySchedule
 from aicity.tasks import TaskStore, utc_now
 
 SEEDED_KEY = "sample_seeded"
+
+# Sample mode's own side-work settings, so demos never show the private settings.
+SAMPLE_PAY_SCHEDULES: dict[str, PaySchedule] = {
+    "sample_a": PaySchedule("sample_a", "Nimbus Labs", 5, (5, 6), (3, 4)),
+}
+SAMPLE_INCOME = IncomeSettings(tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True)
 
 
 @dataclass(frozen=True)

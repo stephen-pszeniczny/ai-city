@@ -29,6 +29,7 @@ EXPECTED_AT_LEAST = {
     "/api/tasks/{task_id}",
     "/api/tasks/{task_id}/history",
     "/api/notifications",
+    "/api/vault/side-work",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {

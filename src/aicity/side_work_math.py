@@ -19,6 +19,12 @@ def _round_cents(value: Decimal) -> int:
     return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
 
 
+def rate_text(rate: Decimal) -> str:
+    """A rate as stored: plain decimal text with at least one decimal place."""
+    text = format(rate, "f")
+    return text if "." in text else text + ".0"
+
+
 # --- Money ---------------------------------------------------------------------------
 
 
