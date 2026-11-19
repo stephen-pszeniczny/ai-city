@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from aicity import config
 from aicity.db import DbKind, db_path, open_database
+from aicity.income import IncomeStore
 from aicity.main import create_app
 from aicity.mode import OwnerCheck
 
@@ -230,17 +231,139 @@ def test_confirm_stores_only_what_was_decided(app, client):
     assert imports[0]["kept"] == 4 and imports[0]["spending"] == 1
 
 
-def test_main_job_stub_details_are_saved(app, client):
+def test_confirm_new_main_job_deposit_with_stub_details(app, client):
     p = preview(client).json()
     confirm(client, decisions(p))
+    [pay] = pays()
+    assert (pay.paid_on, pay.net_cents, pay.confirmed) == (date(2026, 3, 20), 210000, True)
+    assert (pay.gross_cents, pay.rrsp_cents, pay.match_cents, pay.notes) == (
+        300000,
+        15000,
+        7500,
+        "Stub checked",
+    )
+
+
+# --- Main-job pay typed in by hand, confirmed by the statement ----------------------------
+
+
+def with_income(work):
     conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
     try:
-        row = conn.execute(
-            "SELECT gross_cents, rrsp_cents, match_cents, notes FROM main_job_pay"
-        ).fetchone()
+        return work(IncomeStore(conn, clock=lambda: NOW))
     finally:
         conn.close()
-    assert row == (300000, 15000, 7500, "Stub checked")
+
+
+def type_pay(day, net):
+    return with_income(
+        lambda s: s.add_main_job_pay(
+            paid_on=day,
+            net_cents=net,
+            gross_cents=None,
+            rrsp_cents=None,
+            match_cents=None,
+            notes=None,
+        )
+    ).id
+
+
+def pays():
+    return with_income(lambda s: s.main_job_pay())
+
+
+EARLY = statement("2026-03-19,Deposit,DAY JOB PAY,2100.00,3066.90,CAD")
+
+
+def main_choices(p, **choice):
+    return {
+        "token": p["token"],
+        "main_job": [{"ref": r["ref"], **choice} for r in p["main_job"]],
+        "platform": [],
+        "other_income": [],
+    }
+
+
+def test_preview_proposes_link_to_typed_pay(client):
+    pay_id = type_pay(date(2026, 3, 20), 210000)
+    p = preview(client, EARLY).json()
+    assert p["main_job"][0]["proposal"] == {
+        "kind": "link",
+        "pay_id": pay_id,
+        "pay": {"paid_on": "2026-03-20", "net_cents": 210000},
+    }
+    assert p["typed_pay"] == [{"id": pay_id, "paid_on": "2026-03-20", "net_cents": 210000}]
+
+
+def test_preview_with_no_typed_pay_proposes_new(client):
+    p = preview(client, EARLY).json()
+    assert p["main_job"][0]["proposal"] == {"kind": "new", "pay_id": None, "pay": None}
+    assert p["typed_pay"] == []
+
+
+def test_confirm_link_confirms_typed_pay(client):
+    pay_id = type_pay(date(2026, 3, 20), 209900)  # typed 1.00 less: the statement wins
+    p = preview(client, EARLY).json()
+    r = confirm(client, main_choices(p, action="link", pay_id=pay_id))
+    assert r.status_code == 200, r.text
+    [pay] = pays()
+    assert (pay.id, pay.paid_on, pay.net_cents, pay.confirmed) == (
+        pay_id,
+        date(2026, 3, 20),
+        210000,
+        True,
+    )
+
+
+def test_confirm_links_a_pay_that_was_not_proposed(client):
+    pay_id = type_pay(date(2026, 3, 20), 205000)  # a typo, over 1% off
+    p = preview(client, EARLY).json()
+    assert p["main_job"][0]["proposal"]["kind"] == "new"
+    r = confirm(client, main_choices(p, action="link", pay_id=pay_id))
+    assert r.status_code == 200, r.text
+    [pay] = pays()
+    assert (pay.net_cents, pay.confirmed) == (210000, True)
+
+
+def test_confirm_refuses_one_pay_linked_twice(app, client):
+    pay_id = type_pay(date(2026, 3, 20), 210000)
+    two = statement(
+        "2026-03-19,Deposit,DAY JOB PAY,2100.00,3066.90,CAD",
+        "2026-03-20,Deposit,DAY JOB PAY,2100.00,5166.90,CAD",
+    )
+    p = preview(client, two).json()
+    r = confirm(client, main_choices(p, action="link", pay_id=pay_id))
+    assert r.status_code == 422
+    assert "only be confirmed by one deposit" in r.json()["detail"]
+    assert (count(app, "deposits"), count(app, "statement_imports")) == (0, 0)
+
+
+def test_confirm_link_needs_a_pay(client):
+    type_pay(date(2026, 3, 20), 210000)
+    p = preview(client, EARLY).json()
+    r = confirm(client, main_choices(p, action="link"))
+    assert r.status_code == 422
+    assert "Pick which typed-in pay" in r.json()["detail"]
+
+
+def test_confirm_link_to_already_confirmed_pay_conflicts(app, client):
+    pay_id = type_pay(date(2026, 3, 20), 210000)
+    p = preview(client, EARLY).json()
+    other = statement("2026-03-21,Deposit,DAY JOB PAY,2100.00,7000.00,CAD")
+    q = preview(client, other).json()
+    assert confirm(client, main_choices(q, action="link", pay_id=pay_id)).status_code == 200
+    r = confirm(client, main_choices(p, action="link", pay_id=pay_id))
+    assert r.status_code == 409
+    assert "confirmed meanwhile" in r.json()["detail"]
+    assert (count(app, "deposits"), count(app, "statement_imports")) == (1, 1)
+
+
+def test_confirm_skip_main_job_deposit(app, client):
+    p = preview(client, EARLY).json()
+    r = confirm(client, main_choices(p, action="skip"))
+    assert r.json()["skipped"] == 1
+    assert count(app, "deposits") == 0
+    assert pays() == []
 
 
 def test_skipped_rows_and_spending_are_never_stored(app, client):

@@ -365,6 +365,8 @@ async def preview_statement(request: Request) -> dict:
 
 class MainJobIn(_Body):
     ref: str
+    action: Literal["new", "link", "skip"] = "new"
+    pay_id: int | None = None
     gross: Money = None
     rrsp: Money = None
     match: Money = None
@@ -407,7 +409,10 @@ def confirm_statement(request: Request, body: ConfirmIn) -> dict:
             IncomeStore(conn, clock=request.app.state.clock),
             pending,
             schedules,
-            [MainJobChoice(m.ref, m.gross, m.rrsp, m.match, m.notes) for m in body.main_job],
+            [
+                MainJobChoice(m.ref, m.action, m.pay_id, m.gross, m.rrsp, m.match, m.notes)
+                for m in body.main_job
+            ],
             [
                 PlatformChoice(
                     p.ref, p.action, p.week_start, p.payment_id, p.includes_bonus, p.bonus, p.notes
