@@ -126,6 +126,12 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **"No deposits found. Is this the chequing statement?"** → the file had no money coming in (a credit-card statement looks like this). Matching words for pay deposits live in the settings file: `[main_job] deposit_match` and `deposit_match` in each `[pay_schedules.<id>]` block.
 
+**Setting up the Daily plan (Mission Control)** → copy the commented `[plan]` example from `settings.example.toml` into your settings file and put in your own times: one `[[plan.blocks]]` per fixed block (title, kind `work`/`commute`/`gym`/`other`, the days, start and end, 24-hour, no block past midnight). Then open Mission Control's computer → **Daily plan**. Until `[plan]` is there, the app just says to add it. This week and next are saved from these blocks the first time you open them; weeks further ahead wait, and a past week that was never opened stays empty.
+
+**Changing a block in the Daily plan** → pick the day, then *Edit* or *Remove*; *+ Add block* adds an event, side-work or build block. Past days can't be changed. Gym has **Done / Skipped** (tap again to undo) for today and the last 7 days. Overlapping blocks are allowed and marked "overlaps".
+
+**Changed your fixed times in settings?** → it applies from the next week created. For this week, press **Rebuild this week**: from today on, blocks you haven't touched are refreshed from settings. Anything you removed, edited or marked Done/Skipped, and anything you added, stays as it is, and past days aren't touched. Rebuilding twice changes nothing more.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---
