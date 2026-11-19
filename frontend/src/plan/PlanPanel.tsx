@@ -198,7 +198,7 @@ export function PlanPanel() {
 
       <section className="plan__todo" aria-labelledby="plan-today">
         <h3 id="plan-today">{day === today ? "Today" : dayLabel(day)}</h3>
-        {day === today && <TodayRoutines />}
+        {day === today && <TodayRoutines day={day} />}
         <ul>
           {todos.length === 0 && <li className="plan__note">No to-dos due.</li>}
           {todos.map((t) => (

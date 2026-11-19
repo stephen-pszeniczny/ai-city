@@ -5,19 +5,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { getRoutines, tickRoutine, type RoutineDay } from "../api";
-import { isShowing, localHHMM, progress } from "./routines";
+import { isShowing, localHHMM, progress, routinesFor } from "./routines";
 
-export function TodayRoutines() {
+export function TodayRoutines({ day }: { day: string }) {
   const routines = useQuery({
     queryKey: ["routines"],
     queryFn: getRoutines,
     refetchInterval: 60_000, // so a card lights up when its time comes
   });
-  if (!routines.data || routines.data.routines.length === 0) return null;
+  const shown = routinesFor(routines.data, day);
+  if (shown.length === 0) return null;
   const now = localHHMM(new Date());
   return (
     <div className="routines">
-      {routines.data.routines.map((r) => (
+      {shown.map((r) => (
         <RoutineCard key={r.id} routine={r} showing={isShowing(r, now)} />
       ))}
     </div>

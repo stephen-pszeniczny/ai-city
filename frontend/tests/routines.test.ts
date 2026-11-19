@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { RoutineDay } from "../src/api.ts";
-import { isShowing, localHHMM, progress } from "../src/plan/routines.ts";
+import { isShowing, localHHMM, progress, routinesFor } from "../src/plan/routines.ts";
 
 const routine = (ticks: boolean[]): RoutineDay => ({
   id: "evening_prep",
@@ -31,4 +31,11 @@ test("isShowing: from its start time", () => {
 test("localHHMM pads hours and minutes", () => {
   assert.equal(localHHMM(new Date(2026, 10, 29, 7, 5)), "07:05");
   assert.equal(localHHMM(new Date(2026, 10, 29, 21, 30)), "21:30");
+});
+
+test("routinesFor: only when the server's today is the day on screen (no stale header past midnight)", () => {
+  const data = { today: "2026-11-30", routines: [routine([true])] };
+  assert.deepEqual(routinesFor(data, "2026-11-30").length, 1);
+  assert.deepEqual(routinesFor(data, "2026-11-29"), []);
+  assert.deepEqual(routinesFor(undefined, "2026-11-30"), []);
 });
