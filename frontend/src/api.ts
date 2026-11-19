@@ -224,6 +224,14 @@ export type NewPayment = {
 // so a reload (or restart) asks for Touch ID again.
 let vaultKey: string | null = null;
 
+const lockListeners = new Set<() => void>();
+
+/** Be told when the engine says the Vault is locked again (restart, mode switch). */
+export function onVaultLocked(listener: () => void): () => void {
+  lockListeners.add(listener);
+  return () => lockListeners.delete(listener);
+}
+
 export const hasVaultKey = () => vaultKey !== null;
 export const forgetVaultKey = () => {
   vaultKey = null;
@@ -243,7 +251,10 @@ async function vault<T>(method: string, path: string, body?: unknown): Promise<T
       vaultKey ? { "X-Vault-Key": vaultKey } : undefined,
     );
   } catch (err) {
-    if (err instanceof ApiError && err.status === 403) vaultKey = null; // locked again
+    if (err instanceof ApiError && err.status === 403) {
+      vaultKey = null; // locked again
+      lockListeners.forEach((listener) => listener());
+    }
     throw err;
   }
 }

@@ -13,6 +13,7 @@ import {
   getMode,
   getSideWork,
   hasVaultKey,
+  onVaultLocked,
   recordPayment,
   refreshRates,
   setManualRate,
@@ -47,6 +48,8 @@ function errorText(err: unknown): string {
 export function SideWorkPanel() {
   const mode = useQuery({ queryKey: ["mode"], queryFn: getMode, retry: false });
   const [unlocked, setUnlocked] = useState(hasVaultKey());
+  // Any "locked" answer (a load or a save) brings the lock screen back.
+  useEffect(() => onVaultLocked(() => setUnlocked(false)), []);
   const needsKey = mode.data === "personal" && !unlocked;
   const ready = mode.status === "success" && !needsKey;
 

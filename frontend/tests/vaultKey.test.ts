@@ -26,3 +26,17 @@ test("the key is sent, and a 'locked' answer forgets it", async () => {
   assert.deepEqual(sent, ["k1"]);
   assert.equal(hasVaultKey(), false);
 });
+
+test("a 'locked' answer to a save tells the screen to show the lock again", async () => {
+  const { addEntry, onVaultLocked } = await import("../src/api.ts");
+  globalThis.fetch = (async (path: string) =>
+    path === "/api/vault/unlock"
+      ? answer(200, { key: "k2" })
+      : answer(403, { detail: "Vault is locked." })) as typeof fetch;
+  let told = 0;
+  const stop = onVaultLocked(() => told++);
+  await unlockVault();
+  await assert.rejects(addEntry({ worked_on: "2026-03-10", currency: "CAD" }));
+  assert.equal(told, 1);
+  stop();
+});
