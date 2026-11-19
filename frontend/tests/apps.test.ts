@@ -28,12 +28,12 @@ test("Mission Control: To-do is ready; Daily plan, Weekly review and Projects co
   );
 });
 
-test("The Vault: Side work, Income and Statements are ready", () => {
+test("The Vault: Income first (it opens first), then Side work and Statements", () => {
   assert.deepEqual(
     appsFor("finance").map((a) => [a.id, a.name, a.ready]),
     [
-      ["sidework", "Side work", true],
       ["income", "Income", true],
+      ["sidework", "Side work", true],
       ["statements", "Statements", true],
     ],
   );

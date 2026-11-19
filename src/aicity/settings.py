@@ -49,11 +49,8 @@ class Location:
 
 @dataclass(frozen=True)
 class Goals:
-    monthly_income_cents: int  # the total goal (the split's sum when a split is set)
+    monthly_income_cents: int
     currency: str
-    # Optional split of the total: main job and side income (both or neither).
-    main_job_cents: int | None = None
-    side_income_cents: int | None = None
 
 
 @dataclass(frozen=True)
@@ -183,37 +180,13 @@ def _location(t: dict) -> Location:
 
 
 def _goals(t: dict) -> Goals:
-    split_keys = {"main_job_monthly", "side_income_monthly"}
-    _only_keys(t, "[goals]", {"monthly_income", "currency"} | split_keys)
-    given = split_keys & set(t)
-    if len(given) == 1:
-        raise SettingsError(
-            "Set both goals.main_job_monthly and goals.side_income_monthly, or neither."
-        )
-    required = {"currency"} if given else {"monthly_income", "currency"}
-    missing = sorted(required - set(t))
-    if missing:
-        raise SettingsError(f"Missing setting(s) in [goals]: {', '.join(missing)}.")
+    _exact_keys(t, "goals", {"monthly_income", "currency"})
     currency = _text(t, "goals", "currency")
     if not re.fullmatch(r"[A-Z]{3}", currency):
         raise SettingsError("goals.currency must be a 3-letter code like CAD or USD.")
-    if not given:
-        return Goals(
-            monthly_income_cents=_money_cents(t, "goals", "monthly_income"),
-            currency=currency,
-        )
-    main = _money_cents(t, "goals", "main_job_monthly")
-    side = _money_cents(t, "goals", "side_income_monthly")
-    if "monthly_income" in t and _money_cents(t, "goals", "monthly_income") != main + side:
-        raise SettingsError(
-            "goals.monthly_income must equal goals.main_job_monthly + "
-            "goals.side_income_monthly (or leave it out)."
-        )
     return Goals(
-        monthly_income_cents=main + side,
+        monthly_income_cents=_money_cents(t, "goals", "monthly_income"),
         currency=currency,
-        main_job_cents=main,
-        side_income_cents=side,
     )
 
 

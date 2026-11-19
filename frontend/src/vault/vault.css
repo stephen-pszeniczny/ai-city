@@ -46,6 +46,12 @@
   background: rgba(232, 196, 106, 0.06);
 }
 
+/* Lines start at the top of each tile, so the tallest tile doesn't spread the others'
+   lines apart, and the large amounts line up across the row. */
+.sw-summary .sw-tile {
+  align-content: start;
+}
+
 .sw-tile strong {
   font-size: 1.3rem;
   font-variant-numeric: tabular-nums;
@@ -405,15 +411,14 @@
   color: var(--warn, #ffb340);
 }
 
-/* The split goal: main job and side income, each toward its part of the goal. */
-.in-goal .in-part {
-  display: grid;
-  grid-template-columns: 6.5rem 1fr auto;
-  align-items: center;
+/* This month's two sources: name on the left, amount on the right. */
+.in-goal .in-row {
+  display: flex;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 6px;
 }
 
-.in-goal .in-bar--small {
-  height: 5px;
+/* A chip on a line of its own (the "placeholder" under the set-aside amount) needs no left gap. */
+.in-chipline .sw-chip {
+  margin-left: 0;
 }

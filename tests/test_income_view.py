@@ -83,11 +83,9 @@ def side_pay(side, day, cents, hundredths=None, company="platform_a"):
     )
 
 
-def view(conn, stores, goal_split=None):
+def view(conn, stores):
     side, income = stores
-    return income_view(
-        conn, side, income, GOAL, INCOME, SCHED, "Day job", TODAY, goal_split=goal_split
-    )
+    return income_view(conn, side, income, GOAL, INCOME, SCHED, "Day job", TODAY)
 
 
 def test_month_gross_net_and_match(conn, stores):
@@ -259,29 +257,28 @@ def test_badge_overdue_wins_and_has_no_amounts(conn, stores):
     assert "$" not in text and "." not in text
 
 
-# --- Goal split -----------------------------------------------------------------------------
+# --- This month by source -------------------------------------------------------------------
 
 
-def test_view_goal_split_amounts(conn, stores):
+def test_view_month_source_amounts(conn, stores):
     side, income = stores
     main_pay(income, date(2026, 3, 6), 210000, gross=300000)
     side_pay(side, date(2026, 3, 22), 100000, hundredths=500)
     side_pay(side, date(2026, 3, 23), 40000, company="Some Co")
-    m = view(conn, stores, goal_split=(250000, 100000))["month"]
-    # Not capped at the goals: the screen shows the real amounts and percent.
+    m = view(conn, stores)["month"]
     assert (m["main_job_gross_cents"], m["side_gross_cents"]) == (300000, 140000)
-    assert m["goal_split"] == {"main_job_cents": 250000, "side_income_cents": 100000}
+    assert "goal_split" not in m
 
 
 def test_view_main_job_uses_net_when_gross_missing(conn, stores):
     _side, income = stores
     main_pay(income, date(2026, 3, 6), 210000)
-    m = view(conn, stores, goal_split=(250000, 100000))["month"]
+    m = view(conn, stores)["month"]
     assert (m["main_job_gross_cents"], m["side_gross_cents"]) == (210000, 0)
 
 
-def test_view_has_no_split_without_goals(conn, stores):
-    assert view(conn, stores)["month"]["goal_split"] is None
+def test_view_main_job_label_defaults_to_main_job(conn, stores):
+    assert view(conn, stores)["month"]["main_job_label"] == "Main job"
 
 
 def test_view_shows_hand_checked_pay_as_confirmed(conn, stores):

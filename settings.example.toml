@@ -28,10 +28,6 @@ timezone = "Europe/London"   # a name from the standard time zone list
 
 [goals]
 monthly_income = "4000.00"
-# Optional: split the goal into main job and side income (set both, or neither).
-# The total is then their sum; monthly_income can be left out (or must match).
-# main_job_monthly = "3500.00"
-# side_income_monthly = "500.00"
 currency = "CAD"
 
 [tasks]
