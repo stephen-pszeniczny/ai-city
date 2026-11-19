@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { BuildingId } from "../api";
+import { PlanPanel } from "../plan/PlanPanel";
 import { TodoPanel } from "../todo/TodoPanel";
 import { IncomePanel } from "../vault/IncomePanel";
 import { SideWorkPanel } from "../vault/SideWorkPanel";
@@ -16,7 +17,7 @@ import "./desktop.css";
 const ICONS: Record<string, string> = {
   todo: "✓",
   plan: "☀",
-  review: "↻",
+  checkin: "☑",
   projects: "⚒",
   sidework: "⏱",
   income: "$",
@@ -87,6 +88,8 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                 <div className="window__body">
                   {openApp === "todo" ? (
                     <TodoPanel />
+                  ) : openApp === "plan" ? (
+                    <PlanPanel />
                   ) : openApp === "sidework" ? (
                     <SideWorkPanel />
                   ) : openApp === "income" ? (

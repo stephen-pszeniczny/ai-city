@@ -16,7 +16,7 @@ import hashlib
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,7 +24,8 @@ from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transa
 from aicity.fx import rate_on
 from aicity.income import IncomeStore
 from aicity.notifications import SINCE_KEY
-from aicity.settings import IncomeSettings, MainJob, PaySchedule
+from aicity.plan import PlanStore, monday_of
+from aicity.settings import BlockRule, IncomeSettings, MainJob, PaySchedule, PlanSettings
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import expected_cents, pay_period, rate_text, to_cad_cents
 from aicity.tasks import TaskStore, utc_now
@@ -37,6 +38,18 @@ SAMPLE_PAY_SCHEDULES: dict[str, PaySchedule] = {
 }
 SAMPLE_MAIN_JOB = MainJob(name="Day job", deposit_match="DAY JOB PAY")
 SAMPLE_GOAL_CENTS = 650000
+_WEEKDAYS = (0, 1, 2, 3, 4)
+# Sample mode's Daily plan fixed blocks: made-up times, never the private settings.
+SAMPLE_PLAN = PlanSettings(
+    blocks=(
+        BlockRule("Commute", "commute", (0, 1), time(8, 15), time(8, 45)),
+        BlockRule("Work", "work", _WEEKDAYS, time(9), time(12)),
+        BlockRule("Gym", "gym", _WEEKDAYS, time(12), time(13)),
+        BlockRule("Work", "work", _WEEKDAYS, time(13), time(17)),
+        BlockRule("Commute", "commute", (0, 1), time(17), time(17, 30)),
+    )
+)
+
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
 )
@@ -106,6 +119,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         # Its own once-only check, so a Sample database made before the Vault gets it too.
         seed_side_work(conn, now)
         seed_income(conn, now)
+        seed_plan(conn, now)
         return seeded
     finally:
         conn.close()
@@ -186,6 +200,40 @@ def seed(conn: sqlite3.Connection, now: datetime) -> bool:
         )
 
     with_transaction(conn, mark_seeded)
+    return True
+
+
+# --- Sample Daily plan (Mission Control) -----------------------------------------------
+
+PLAN_SEEDED_KEY = "sample_plan_seeded"
+
+
+def seed_plan(conn: sqlite3.Connection, now: datetime) -> bool:
+    """Save this week's made-up plan with two invented evening events, once. Sample only.
+
+    The events go on today and the next day (both today on a Sunday), so they're
+    never on a past day and can be edited in a demo.
+    """
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("The sample plan only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (PLAN_SEEDED_KEY,)).fetchone():
+        return False
+
+    today = now.astimezone().date()
+    week_start = monday_of(today)
+    next_day = min(today + timedelta(days=1), week_start + timedelta(days=6))
+    store = PlanStore(conn, clock=lambda: now)
+
+    def work() -> None:
+        store.ensure_week(week_start, SAMPLE_PLAN, today)
+        store.add_block(week_start, today, time(19), time(20, 30), "Book club", "event", today)
+        store.add_block(
+            week_start, next_day, time(20, 30), time(21, 30), "Five-a-side", "event", today
+        )
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (PLAN_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
     return True
 
 

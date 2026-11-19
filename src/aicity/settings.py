@@ -31,6 +31,12 @@ BUILDING_IDS = (
     "library",
 )
 
+# Days of the week as written in settings; the index is date.weekday() (Monday = 0).
+DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+# Kinds of fixed block the Daily plan's settings may list.
+PLAN_RULE_KINDS = ("work", "commute", "gym", "other")
+PLAN_TITLE_MAX = 100
+
 SETTINGS_SUBDIR = "settings"
 SETTINGS_FILENAME = "settings.toml"
 
@@ -104,6 +110,25 @@ class MainJob:
 
 
 @dataclass(frozen=True)
+class BlockRule:
+    """One fixed block of the Daily plan, repeated every week on its days.
+
+    days are date.weekday() numbers (Monday = 0), sorted and unique.
+    """
+
+    title: str
+    kind: str
+    days: tuple[int, ...]
+    start: time
+    end: time
+
+
+@dataclass(frozen=True)
+class PlanSettings:
+    blocks: tuple[BlockRule, ...]
+
+
+@dataclass(frozen=True)
 class Settings:
     buildings: dict[str, str]
     location: Location
@@ -112,6 +137,8 @@ class Settings:
     income: IncomeSettings
     pay_schedules: dict[str, PaySchedule] = field(default_factory=dict)
     main_job: MainJob | None = None
+    # Mission Control's Daily plan (optional: None when the file has no [plan]).
+    plan: PlanSettings | None = None
 
 
 def settings_path() -> Path:
@@ -143,7 +170,16 @@ def parse_settings(data: dict) -> Settings:
     _only_keys(
         data,
         "settings file",
-        {"buildings", "location", "goals", "tasks", "income", "pay_schedules", "main_job"},
+        {
+            "buildings",
+            "location",
+            "goals",
+            "tasks",
+            "income",
+            "pay_schedules",
+            "main_job",
+            "plan",
+        },
     )
     return Settings(
         buildings=_buildings(_table(data, "buildings")),
@@ -153,6 +189,7 @@ def parse_settings(data: dict) -> Settings:
         income=_income(_table(data, "income")),
         pay_schedules=_pay_schedules(data.get("pay_schedules", {})),
         main_job=_main_job(data["main_job"]) if "main_job" in data else None,
+        plan=_plan(data["plan"]) if "plan" in data else None,
     )
 
 
@@ -195,13 +232,9 @@ def _tasks(t: dict) -> TaskDefaults:
     days = t["stale_after_days"]
     if type(days) is not int or not 1 <= days <= 365:
         raise SettingsError("tasks.stale_after_days must be a whole number from 1 to 365.")
-    raw_time = _text(t, "tasks", "reminder_time")
-    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", raw_time)
-    if not match:
-        raise SettingsError('tasks.reminder_time must be a 24-hour time like "09:00".')
     return TaskDefaults(
         stale_after_days=days,
-        reminder_time=time(int(match[1]), int(match[2])),
+        reminder_time=_clock_time(t, "tasks", "reminder_time"),
     )
 
 
@@ -310,6 +343,61 @@ def _day_pair(t: dict, where: str, key: str) -> tuple[int, int]:
 
 
 # --- Small checking helpers ------------------------------------------------
+
+
+def _plan(t) -> PlanSettings:
+    if not isinstance(t, dict):
+        raise SettingsError("[plan] must be a section.")
+    _exact_keys(t, "plan", {"blocks"})
+    blocks = t["blocks"]
+    if not isinstance(blocks, list) or not all(isinstance(b, dict) for b in blocks):
+        raise SettingsError("plan.blocks must be a list of [[plan.blocks]] entries.")
+    return PlanSettings(blocks=tuple(_block_rule(b, n) for n, b in enumerate(blocks, start=1)))
+
+
+def _block_rule(t: dict, n: int) -> BlockRule:
+    where = f"plan.blocks (entry {n})"
+    required = {"title", "kind", "days", "start", "end"}
+    _only_keys(t, where, required)
+    missing = sorted(required - set(t))
+    if missing:
+        raise SettingsError(f"Missing setting(s) in {where}: {', '.join(missing)}.")
+    title = _text(t, where, "title")
+    if len(title) > PLAN_TITLE_MAX:
+        raise SettingsError(f"{where}.title must be at most {PLAN_TITLE_MAX} characters.")
+    kind = t["kind"]
+    if kind not in PLAN_RULE_KINDS:
+        raise SettingsError(f"{where}.kind must be one of: {', '.join(PLAN_RULE_KINDS)}.")
+    days = t["days"]
+    if (
+        not isinstance(days, list)
+        or not days
+        or not all(isinstance(d, str) and d in DAY_CODES for d in days)
+        or len(set(days)) != len(days)
+    ):
+        raise SettingsError(
+            f"{where}.days must be a list of different days from: {', '.join(DAY_CODES)}."
+        )
+    start = _clock_time(t, where, "start")
+    end = _clock_time(t, where, "end")
+    if end <= start:
+        raise SettingsError(f"{where}.end must be later than its start (no blocks past midnight).")
+    return BlockRule(
+        title=title,
+        kind=kind,
+        days=tuple(sorted(DAY_CODES.index(d) for d in days)),
+        start=start,
+        end=end,
+    )
+
+
+def _clock_time(t: dict, section: str, key: str) -> time:
+    """A 24-hour "HH:MM" time, like "09:00"."""
+    value = t[key]
+    match = isinstance(value, str) and re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", value)
+    if not match:
+        raise SettingsError(f'{section}.{key} must be a 24-hour time like "09:00".')
+    return time(int(match[1]), int(match[2]))
 
 
 def _table(data: dict, name: str) -> dict:
