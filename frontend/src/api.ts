@@ -291,6 +291,13 @@ export type StatementPreview = {
   platform: (PreviewRow & { schedule_id: string; proposal: Proposal })[];
   other_income: PreviewRow[];
   weeks: { schedule_id: string; start: string; window: [string, string] }[];
+  hand_payments: {
+    id: number;
+    schedule_id: string;
+    received_on: string;
+    amount_cents: number;
+    currency: Currency;
+  }[];
   already_imported: number;
   spending: number;
   other_currency: number;

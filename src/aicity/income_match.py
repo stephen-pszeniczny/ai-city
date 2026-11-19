@@ -4,7 +4,8 @@ One pure function, so every rule is tested on its own. Nothing is stored here:
 the import's review screen shows these proposals and Steve confirms them.
 
 Rules (design: docs/superpowers/specs/2026-11-18-vault-income-import-design.md):
-  1. link:  within 3 days and 5% of a payment already typed in by hand.
+  1. link:  within 7 days and 5% of a payment already typed in by hand (people
+            often type the day it was paid, days before it lands).
   2. week:  an unpaid week whose landing window (plus 2 days each side) holds the
             deposit day, and whose expected pay (in CAD at that day's rate) is
             within 5% of the deposit. Closest amount wins; a tie goes to the
@@ -28,6 +29,7 @@ from aicity.statement_csv import StatementRow
 WINDOW_SLACK_DAYS = 2
 AMOUNT_TOLERANCE = Decimal("0.05")
 BONUS_DAYS = 3
+LINK_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -96,7 +98,7 @@ def propose(
                     p
                     for p in hand
                     if p.payment_id not in used_hand
-                    and abs((day - p.received_on).days) <= BONUS_DAYS
+                    and abs((day - p.received_on).days) <= LINK_DAYS
                     and _close(amount, p.amount_cad_cents)
                 ),
                 None,

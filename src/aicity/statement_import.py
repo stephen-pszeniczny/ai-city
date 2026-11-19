@@ -6,6 +6,7 @@ They're dropped on confirm, on a mode switch, or when the app restarts. Rows
 leave this module only as day + amount + an opaque ref: never a description.
 """
 
+import hashlib
 import secrets
 import sqlite3
 import threading
@@ -16,7 +17,7 @@ from datetime import date, datetime, timedelta
 from aicity.db import DbKind, with_transaction
 from aicity.fx import rate_on
 from aicity.income import IncomeStore
-from aicity.income_match import HandPayment, OpenWeek, Proposal, propose
+from aicity.income_match import WINDOW_SLACK_DAYS, HandPayment, OpenWeek, Proposal, propose
 from aicity.settings import PaySchedule
 from aicity.side_work import SideWorkConflict, SideWorkError, SideWorkStore
 from aicity.side_work_math import arrival_window, expected_cents, pay_period, to_cad_cents
@@ -143,7 +144,19 @@ def build_preview(
     if not incoming:
         raise NoDeposits("No deposits found. Is this the chequing statement?")
 
-    keys = {id(r): row_key(r) for r in incoming}
+    keys: dict[int, str] = {}
+    seen_blank: dict[str, int] = {}
+    for r in sorted(incoming, key=lambda r: r.line):
+        base = row_key(r)
+        if r.balance_cents is None:
+            # Without a balance, two identical rows (two equal deposits on one day)
+            # would share a key; number them in file order so both are kept, and a
+            # re-import of the same file numbers them the same way.
+            n = seen_blank.get(base, 0)
+            seen_blank[base] = n + 1
+            if n:
+                base = hashlib.sha256(f"{base}#{n}".encode()).hexdigest()
+        keys[id(r)] = base
     existing = income.existing_row_keys(set(keys.values()))
     seen: set[str] = set()
     duplicates = 0
@@ -221,6 +234,17 @@ def build_preview(
             for p in sorted(proposals, key=lambda p: (p.row.day, p.row.line))
         ],
         "other_income": [brief(r) for r in other],
+        "hand_payments": [
+            {
+                "id": p.id,
+                "schedule_id": p.company,
+                "received_on": p.received_on.isoformat(),
+                "amount_cents": p.amount_cents,
+                "currency": p.currency,
+            }
+            for p in side.payments()
+            if p.deposit_id is None and p.company in schedules
+        ],
         "weeks": [
             {
                 "schedule_id": w.schedule_id,
@@ -281,6 +305,9 @@ def confirm_import(
     by_ref_platform = {c.ref: c for c in platform_choices}
     if set(by_ref_platform) != set(pending.platform):
         raise SideWorkError("Decide every platform deposit (week, bonus, link or skip).")
+    for c in platform_choices:
+        if c.action != "week" and (c.includes_bonus or c.bonus_cents is not None):
+            raise SideWorkError("A bonus amount only goes with a week's pay.")
     main_by_ref = {c.ref: c for c in main_choices}
     other_by_ref = {c.ref: c for c in other_choices}
     unknown = (set(main_by_ref) - set(pending.main_job)) | (
@@ -347,6 +374,11 @@ def confirm_import(
                 week = weeks.pop((sid, c.week_start), None)
                 if week is None:
                     raise ImportConflict("That week isn't waiting for pay any more. Upload again.")
+                if r.day < week.window[0] - timedelta(days=WINDOW_SLACK_DAYS):
+                    raise SideWorkError(
+                        "That week's pay couldn't have landed yet on that day. "
+                        "Pick an earlier week, or link it to a payment you typed in."
+                    )
                 d = deposit(ref, "side_work", sid)
                 side.record_payment(
                     kind="pay",

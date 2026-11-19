@@ -364,3 +364,86 @@ def test_trying_the_sample_statement_twice_never_doubles_pay(data_dir, clock):
     again = preview(c, c.get("/api/vault/statements/sample.csv").content).json()
     assert again["main_job"] == []  # the same pay row: already imported
     assert again["already_imported"] >= 1
+
+
+# --- Review fixes ---------------------------------------------------------------------------
+
+
+def hand_pay_mar7_week(client):
+    ids = [
+        e["id"] for g in client.get("/api/vault/side-work").json()["groups"] for e in g["entries"]
+    ]
+    r = client.post(
+        "/api/vault/side-work/payments",
+        json={
+            "kind": "pay",
+            "company": "platform_a",
+            "received_on": "2026-03-18",
+            "amount": "191",
+            "currency": "CAD",
+            "entry_ids": ids,
+        },
+    )
+    assert r.status_code == 201, r.text
+    client.post(
+        "/api/vault/side-work/entries",
+        json={
+            "worked_on": "2026-03-16",
+            "company": "platform_a",
+            "hours": "1",
+            "rate": "40",
+            "currency": "USD",
+        },
+    )
+    return r.json()["id"]
+
+
+def test_a_payment_typed_by_hand_is_linked_not_counted_again(app, client):
+    pid = hand_pay_mar7_week(client)
+    p = preview(
+        client, statement("2026-03-22,Deposit,NIMBUS LABS PAYOUT,191.00,3257.90,CAD")
+    ).json()
+    [row] = p["platform"]
+    assert (row["proposal"]["kind"], row["proposal"]["payment_id"]) == ("link", pid)
+    assert [h["id"] for h in p["hand_payments"]] == [pid]
+    confirm(client, decisions(p))
+    assert client.get("/api/vault/side-work").json()["summary"]["month_received_cad_cents"] == 19100
+
+
+def test_a_week_cannot_be_paid_before_its_pay_could_land(client):
+    hand_pay_mar7_week(client)
+    p = preview(
+        client, statement("2026-03-22,Deposit,NIMBUS LABS PAYOUT,191.00,3257.90,CAD")
+    ).json()
+    body = decisions(p)
+    body["platform"][0].update(action="week", week_start="2026-03-14", payment_id=None)
+    r = confirm(client, body)
+    assert r.status_code == 422
+    assert "week" in r.json()["detail"].lower()
+
+
+@pytest.mark.parametrize("action", ["bonus", "link"])
+def test_a_bonus_amount_only_goes_with_a_weeks_pay(client, action):
+    pid = hand_pay_mar7_week(client)
+    p = preview(
+        client, statement("2026-03-22,Deposit,NIMBUS LABS PAYOUT,191.00,3257.90,CAD")
+    ).json()
+    body = decisions(p)
+    body["platform"][0].update(
+        action=action, payment_id=pid, week_start=None, includes_bonus=True, bonus="5"
+    )
+    r = confirm(client, body)
+    assert r.status_code == 422
+    assert "bonus" in r.json()["detail"].lower()
+
+
+def test_identical_rows_with_no_balance_are_both_kept(app, client):
+    body = statement(
+        "2026-03-20,Deposit,DAY JOB PAY,100.00,,CAD",
+        "2026-03-20,Deposit,DAY JOB PAY,100.00,,CAD",
+    )
+    p = preview(client, body).json()
+    assert len(p["main_job"]) == 2 and p["already_imported"] == 0
+    confirm(client, decisions(p))
+    again = preview(client, body).json()
+    assert again["main_job"] == [] and again["already_imported"] == 2

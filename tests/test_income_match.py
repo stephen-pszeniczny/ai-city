@@ -139,3 +139,11 @@ def test_when_two_weeks_fit_the_closer_amount_wins():
     # Both windows hold Mar 22; the deposit is 0.1% from the second week, 1.9% from the first.
     weeks = [week(WEEK1, cad=10000), week(date(2026, 3, 8), cad=10200, entry_ids=(2,))]
     assert run([row(date(2026, 3, 22), 10190)], weeks)[0].week_start == date(2026, 3, 8)
+
+
+def test_hand_payment_typed_with_the_paid_day_still_links():
+    # Typed with the platform's "paid" day; the deposit lands 4 days later.
+    paid = [HandPayment(7, "platform_a", date(2026, 3, 18), 19100)]
+    later = week(WEEK2, cad=5000, entry_ids=(9,))
+    [p] = run([row(date(2026, 3, 22), 19100)], [later], paid)
+    assert (p.kind, p.payment_id) == ("link", 7)

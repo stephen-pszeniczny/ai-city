@@ -14,7 +14,7 @@ import {
   type StatementPreview,
 } from "../api";
 import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
-import { formatCad, formatDay, formatWindow } from "./sideWork";
+import { formatCad, formatDay, formatMoney, formatWindow } from "./sideWork";
 import { errorText, VaultGate } from "./VaultGate";
 
 export function StatementsPanel() {
@@ -144,7 +144,13 @@ function Review({
       preview.platform.map((r) => {
         const p = r.proposal;
         const action =
-          p.kind === "week" ? `week:${p.week_start}` : p.kind === "unmatched" ? "skip" : p.kind;
+          p.kind === "week"
+            ? `week:${p.week_start}`
+            : p.kind === "link"
+              ? `link:${p.payment_id}`
+              : p.kind === "unmatched"
+                ? "skip"
+                : p.kind;
         return [r.ref, { action, extra: EMPTY_BONUS_NOTES }];
       }),
     ),
@@ -179,12 +185,12 @@ function Review({
         }),
         platform: preview.platform.map((r) => {
           const c = platform[r.ref]!;
-          const [action, week] = c.action.split(":") as [string, string | undefined];
+          const [action, value] = c.action.split(":") as [string, string | undefined];
           return {
             ref: r.ref,
             action: action as "week" | "bonus" | "link" | "skip",
-            week_start: week ?? null,
-            payment_id: action === "link" || action === "bonus" ? r.proposal.payment_id : null,
+            week_start: action === "week" ? (value ?? null) : null,
+            payment_id: action === "link" ? Number(value) : null,
             ...(action === "week"
               ? bonusNotesBody(c.extra)
               : { notes: c.extra.notes.trim() || null }),
@@ -307,11 +313,14 @@ function Review({
                           </option>
                         ))}
                         <option value="bonus">A bonus</option>
-                        {r.proposal.kind === "link" && r.proposal.payment && (
-                          <option value="link">
-                            The payment I typed in ({formatDay(r.proposal.payment.received_on)})
-                          </option>
-                        )}
+                        {preview.hand_payments
+                          .filter((h) => h.schedule_id === r.schedule_id)
+                          .map((h) => (
+                            <option key={h.id} value={`link:${h.id}`}>
+                              The payment I typed in ({formatDay(h.received_on)},{" "}
+                              {formatMoney(h.amount_cents, h.currency)})
+                            </option>
+                          ))}
                         <option value="skip">Skip (don't store)</option>
                       </select>
                     </label>
