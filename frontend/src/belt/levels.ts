@@ -2,7 +2,8 @@
 //   /                    the belt (level 1)
 //   /b/<id>              inside a building, the robot at work (level 2)
 //   /b/<id>/screen       zoomed into the robot's screen (level 3)
-// The address is the single source of truth, so reloads and browser Back work.
+// The address is the single source of truth while the app is open, so browser Back and
+// forward work. A fresh load or reload starts at the belt (see src/startAtBelt.ts).
 import type { BuildingId } from "../api";
 
 export type View =

@@ -66,11 +66,11 @@ export function wholeDollars(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString("en-CA")}`;
 }
 
-/** The amounts listed under one month's bar: stack order, empty sources left out. */
+/** The amounts listed under one month's bar: stack order; sources that round to $0 are left out. */
 export function monthLines(
   bySource: readonly { key: string; cents: number }[],
 ): { key: string; text: string }[] {
   return bySource
-    .filter((s) => s.cents > 0)
+    .filter((s) => Math.round(s.cents / 100) > 0)
     .map((s) => ({ key: s.key, text: wholeDollars(s.cents) }));
 }

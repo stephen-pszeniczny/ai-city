@@ -94,3 +94,13 @@ test("monthLines drops empty sources", () => {
   );
   assert.deepEqual(monthLines([]), []);
 });
+
+test("monthLines never shows a $0 line for a few cents", () => {
+  assert.deepEqual(
+    monthLines([
+      { key: "main_job", cents: 500000 },
+      { key: "extra", cents: 30 },
+    ]),
+    [{ key: "main_job", text: "$5,000" }],
+  );
+});
