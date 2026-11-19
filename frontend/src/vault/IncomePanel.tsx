@@ -54,7 +54,7 @@ function ThisMonth({ v }: { v: IncomeView }) {
   return (
     <section className="sw-summary" aria-label="This month">
       <div className="sw-tile in-goal">
-        <span className="sw-tile__label">This month, gross</span>
+        <span className="sw-tile__label">Monthly Gross</span>
         <strong>{formatCad(m.gross_cents)}</strong>
         <div
           className="in-bar"
@@ -70,23 +70,19 @@ function ThisMonth({ v }: { v: IncomeView }) {
           {progress.label} ({formatCad(m.goal_cents)})
           {m.gross_missing && <span className="sw-chip">gross missing</span>}
         </span>
-        {m.goal_split && (
-          <>
-            <GoalPart
-              label="Main job"
-              cents={m.main_job_gross_cents}
-              goalCents={m.goal_split.main_job_cents}
-            />
-            <GoalPart
-              label="Side income"
-              cents={m.side_gross_cents}
-              goalCents={m.goal_split.side_income_cents}
-            />
-          </>
-        )}
+        <span className="sw-tile__label in-row">
+          <span>{m.main_job_label}</span>
+          <span>{formatCad(m.main_job_gross_cents)}</span>
+        </span>
+        <span className="sw-tile__label in-row">
+          <span>Side income</span>
+          <span>{formatCad(m.side_gross_cents)}</span>
+        </span>
       </div>
       <div className="sw-tile">
-        <span className="sw-tile__label">Net this month (after the tax set-aside)</span>
+        <span className="sw-tile__label" title="After the tax set-aside">
+          Monthly Net
+        </span>
         <strong>{formatCad(m.net_cents)}</strong>
         {m.employer_match_cents > 0 && (
           <span className="sw-tile__label">
@@ -95,53 +91,31 @@ function ThisMonth({ v }: { v: IncomeView }) {
         )}
       </div>
       <div className="sw-tile">
-        <span className="sw-tile__label">{v.year.year} so far, gross</span>
+        <span className="sw-tile__label" title={`${v.year.year}, January 1 to today`}>
+          Annual Gross
+        </span>
         <strong>{formatCad(v.year.gross_cents)}</strong>
         <span className="sw-tile__label">net {formatCad(v.year.net_cents)}</span>
         <span className="sw-tile__label">
-          Main job {formatCad(v.year.main_job_gross_cents)} · Side income{" "}
-          {formatCad(v.year.side_gross_cents)}
+          {m.main_job_label} {formatCad(v.year.main_job_gross_cents)}
         </span>
+        <span className="sw-tile__label">Side income {formatCad(v.year.side_gross_cents)}</span>
       </div>
       <div className="sw-tile">
-        <span className="sw-tile__label">
-          Tax set-aside ({v.set_aside.percent}% of this year's side income)
-          {v.set_aside.is_placeholder && <span className="sw-chip">placeholder</span>}
+        <span
+          className="sw-tile__label"
+          title={`${v.set_aside.percent}% of this year's side income`}
+        >
+          Tax Set Aside
         </span>
         <strong>{formatCad(v.set_aside.cents)}</strong>
+        {v.set_aside.is_placeholder && (
+          <span className="sw-tile__label">
+            <span className="sw-chip">placeholder</span>
+          </span>
+        )}
       </div>
     </section>
-  );
-}
-
-/** One part of the split goal: a small bar toward that part's goal, "$X / $Y". */
-function GoalPart({
-  label,
-  cents,
-  goalCents,
-}: {
-  label: string;
-  cents: number;
-  goalCents: number;
-}) {
-  const p = goalProgress(cents, goalCents);
-  return (
-    <div className="in-part">
-      <span className="sw-tile__label">{label}</span>
-      <div
-        className="in-bar in-bar--small"
-        role="meter"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.min(100, p.percent)}
-        aria-label={`${label}: ${p.label}`}
-      >
-        <span style={{ width: `${p.fill * 100}%` }} />
-      </div>
-      <span className="sw-tile__label">
-        {formatCad(cents)} / {formatCad(goalCents)}
-      </span>
-    </div>
   );
 }
 
