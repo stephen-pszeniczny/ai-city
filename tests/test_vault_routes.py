@@ -611,13 +611,21 @@ def test_archive_typed_pay_route(unlocked):
     assert unlocked.post("/api/vault/income/main-job/999/archive").status_code == 404
 
 
-def test_sample_income_has_its_own_goal_split(data_dir):
+def test_month_main_job_label_sample(data_dir):
     app = create_app(dev=False)
     app.state.db_kind = DbKind.SAMPLE
     client = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
     month = client.get("/api/vault/income").json()["month"]
-    assert month["goal_split"] == {"main_job_cents": 550000, "side_income_cents": 100000}
+    assert month["main_job_label"] == "Main job"  # never the settings' name, even made-up
     assert month["goal_cents"] == 650000
+
+
+def test_month_main_job_label_personal(data_dir, unlocked):
+    path = data_dir / "settings" / "settings.toml"
+    path.write_text(
+        path.read_text() + '\n[main_job]\nname = "Day job"\ndeposit_match = "DAY JOB"\n'
+    )
+    assert unlocked.get("/api/vault/income").json()["month"]["main_job_label"] == "Day job"
 
 
 # --- A company with no pay timing (just a name) ----------------------------------------------
