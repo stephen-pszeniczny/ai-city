@@ -101,7 +101,7 @@ def open_weeks(store: SideWorkStore, schedules: dict[str, PaySchedule]) -> list[
     weeks: dict[tuple[str, date], dict] = {}
     for e in store.entries():
         schedule = schedules.get(e.company or "")
-        if schedule is None or e.payment_id is not None:
+        if schedule is None or not schedule.timed or e.payment_id is not None:
             continue
         start, end = pay_period(e.worked_on, schedule)
         w = weeks.setdefault(
