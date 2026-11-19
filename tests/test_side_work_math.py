@@ -147,3 +147,12 @@ def test_no_bonus_box_means_plain_difference():
 
     assert split_bonus(14000, 15000, False, None) == (1000, None)
     assert split_bonus(None, 15000, True, None) == (None, None)
+
+
+def test_effective_hourly_rate():
+    from aicity.side_work_math import hourly_rate_cents
+
+    assert hourly_rate_cents(19215, 350) == 5490  # 192.15 / 3.5 h = 54.90
+    assert hourly_rate_cents(10000, 300) == 3333  # 33.333 -> 33.33
+    assert hourly_rate_cents(10000, 600) == 1667  # 16.666 rounds half up
+    assert hourly_rate_cents(1000, 0) is None

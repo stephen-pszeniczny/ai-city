@@ -119,3 +119,10 @@ def split_bonus(
     if bonus_cad is not None:
         return difference - bonus_cad, bonus_cad
     return (0, difference) if difference > 0 else (difference, 0)
+
+
+def hourly_rate_cents(received_cents: int, hundredths: int) -> int | None:
+    """Effective pay per hour (cents), or None with no hours."""
+    if hundredths <= 0:
+        return None
+    return _round_cents(Decimal(received_cents) * 100 / hundredths)

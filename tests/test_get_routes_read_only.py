@@ -31,6 +31,8 @@ EXPECTED_AT_LEAST = {
     "/api/notifications",
     "/api/vault/side-work",
     "/api/vault/statements",
+    "/api/vault/income",
+    "/api/vault/badge",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {

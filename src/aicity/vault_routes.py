@@ -34,6 +34,7 @@ from aicity import sample_data
 from aicity.db import DbKind, db_path, open_database
 from aicity.fx import rate_on, refresh_rates, save_manual_rate, valet_fetcher
 from aicity.income import IncomeError, IncomeStore
+from aicity.income_view import income_view, vault_badge
 from aicity.settings import MainJob, PaySchedule, load_settings
 from aicity.side_work import (
     SideWorkConflict,
@@ -126,13 +127,32 @@ class EntryEdit(_Body):
     currency: Currency | None = None
 
 
+Notes = Annotated[str | None, Field(max_length=500)]
+
+
 class PaymentCreate(_Body):
-    kind: Literal["pay", "bonus"]
+    kind: Literal["pay", "bonus", "extra"]
     company: Text = None
     received_on: Day
     amount: Amount
     currency: Currency
     entry_ids: list[int] = Field(default_factory=list, max_length=500)
+    includes_bonus: bool = False
+    bonus: Money = None
+    notes: Notes = None
+
+
+class PaymentEdit(_Body):
+    includes_bonus: bool = False
+    bonus: Money = None
+    notes: Notes = None
+
+
+class MainJobEdit(_Body):
+    gross: Money = None
+    rrsp: Money = None
+    match: Money = None
+    notes: Notes = None
 
 
 class RateIn(_Body):
@@ -249,8 +269,26 @@ def create_payment(request: Request, body: PaymentCreate) -> dict:
             entry_ids=body.entry_ids,
             rate=None if found is None else found[0],
             rate_date=None if found is None else found[1],
+            includes_bonus=body.includes_bonus,
+            bonus_cents=body.bonus,
+            notes=body.notes,
         )
         return {"id": p.id, "kind": p.kind}
+
+
+@router.patch("/payments/{payment_id}")
+def edit_payment(request: Request, payment_id: int, body: PaymentEdit) -> dict:
+    """Change a payment's bonus box, bonus amount and notes (never its amount)."""
+    with _open(request) as (store, _conn):
+        p = store.edit_payment(
+            payment_id, includes_bonus=body.includes_bonus, bonus_cents=body.bonus, notes=body.notes
+        )
+        return {
+            "id": p.id,
+            "includes_bonus": p.includes_bonus,
+            "bonus_cents": p.bonus_cents,
+            "notes": p.notes,
+        }
 
 
 @router.post("/rates/refresh")
@@ -325,9 +363,6 @@ async def preview_statement(request: Request) -> dict:
     return await run_in_threadpool(_preview, request, data)
 
 
-Notes = Annotated[str | None, Field(max_length=500)]
-
-
 class MainJobIn(_Body):
     ref: str
     gross: Money = None
@@ -385,6 +420,59 @@ def confirm_statement(request: Request, body: ConfirmIn) -> dict:
     return result
 
 
+income_router = APIRouter(prefix="/api/vault/income", dependencies=[Depends(_require_key)])
+
+
+def _goal_cents(request: Request) -> int:
+    if _sample(request):
+        return sample_data.SAMPLE_GOAL_CENTS
+    return load_settings().goals.monthly_income_cents
+
+
+@income_router.get("")
+def get_income(request: Request) -> dict:
+    schedules, income = _settings_for(request)
+    _schedules, main_job = _sources(request)
+    goal = _goal_cents(request)
+    with _open(request) as (side, conn):
+        return income_view(
+            conn,
+            side,
+            IncomeStore(conn, clock=request.app.state.clock),
+            goal,
+            income,
+            schedules,
+            main_job.name if main_job else None,
+            _today(request),
+        )
+
+
+@income_router.patch("/main-job/{deposit_id}")
+def edit_main_job(request: Request, deposit_id: int, body: MainJobEdit) -> dict:
+    """Set a main-job pay's stub details (gross, RRSP, employer match, notes)."""
+    with _open(request) as (_side, conn):
+        row = IncomeStore(conn, clock=request.app.state.clock).set_main_job_pay(
+            deposit_id,
+            gross_cents=body.gross,
+            rrsp_cents=body.rrsp,
+            match_cents=body.match,
+            notes=body.notes,
+        )
+        return {"deposit_id": row.deposit_id, "deductions_cents": row.deductions_cents}
+
+
+@unlock_router.get("/badge")
+def badge(request: Request) -> dict[str, str | None]:
+    """The Vault's belt badge. No Touch ID needed: counts only, never amounts."""
+    schedules, _income = _settings_for(request)
+    with _open(request) as (side, conn):
+        return {
+            "text": vault_badge(
+                side, IncomeStore(conn, clock=request.app.state.clock), schedules, _today(request)
+            )
+        }
+
+
 @statements_router.get("")
 def list_statements(request: Request) -> list[dict]:
     with _open(request) as (_side, conn):
@@ -423,6 +511,7 @@ def register(app: FastAPI) -> None:
     app.include_router(unlock_router)
     app.include_router(router)
     app.include_router(statements_router)
+    app.include_router(income_router)
 
     @app.exception_handler(StatementError)
     def _statement(_request: Request, exc: StatementError) -> JSONResponse:

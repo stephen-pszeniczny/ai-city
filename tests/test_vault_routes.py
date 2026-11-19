@@ -419,3 +419,137 @@ def test_sample_rates_keep_coming_after_the_day_it_was_made(data_dir, fetcher):
     v = view(client)
     assert v["summary"]["rates_pending"] is False
     assert fetcher.calls == 0
+
+
+# --- Part B: income, edits, badge ------------------------------------------------------
+
+
+def test_badge_needs_no_key_but_income_does(client):
+    assert client.get("/api/vault/badge").status_code == 200
+    assert client.get("/api/vault/income").status_code == 403
+
+
+def test_badge_text_is_counts_only(unlocked):
+    add(unlocked, worked_on="2026-03-02", company="platform_a", hours="1", rate="40")
+    del unlocked.headers["X-Vault-Key"]
+    assert unlocked.get("/api/vault/badge").json() == {"text": "1 overdue"}
+
+
+def test_income_view_route(unlocked):
+    add(unlocked, worked_on="2026-03-12", hours="1", rate="30", currency="CAD")
+    v = unlocked.get("/api/vault/income").json()
+    assert set(v) >= {"month", "months", "platforms", "set_aside", "main_job_pay"}
+    assert len(v["months"]) == 6
+
+
+def paid_cad(unlocked, amount="80", **extra):
+    e = add(unlocked, worked_on="2026-03-10", hours="2", rate="40", currency="CAD")
+    return unlocked.post(
+        "/api/vault/side-work/payments",
+        json={
+            "kind": "pay",
+            "received_on": "2026-03-22",
+            "amount": amount,
+            "currency": "CAD",
+            "entry_ids": [e["id"]],
+            **extra,
+        },
+    )
+
+
+def test_record_payment_with_bonus_box_and_notes(unlocked):
+    r = paid_cad(unlocked, amount="90", includes_bonus=True, bonus="10", notes="Holiday bonus")
+    assert r.status_code == 201, r.text
+    [g] = view(unlocked)["groups"]
+    assert (g["difference_cad_cents"], g["bonus_cad_cents"], g["payment"]["notes"]) == (
+        0,
+        1000,
+        "Holiday bonus",
+    )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"bonus": "10"},  # no box ticked
+        {"includes_bonus": True, "bonus": "100"},  # more than the payment
+        {"includes_bonus": True, "bonus": "-1"},
+    ],
+)
+def test_bad_bonus_names_the_field(unlocked, extra):
+    r = paid_cad(unlocked, **extra)
+    assert r.status_code == 422
+    assert "bonus" in r.text.lower()
+
+
+def test_long_notes_are_refused(unlocked):
+    assert paid_cad(unlocked, notes="x" * 501).status_code == 422
+
+
+def test_edit_payment_notes_and_bonus(unlocked):
+    paid_cad(unlocked, amount="90")
+    [g] = view(unlocked)["groups"]
+    pid = g["payment"]["id"]
+    r = unlocked.patch(
+        f"/api/vault/side-work/payments/{pid}",
+        json={"includes_bonus": True, "bonus": None, "notes": "Paid with bonus"},
+    )
+    assert r.status_code == 200, r.text
+    [g] = view(unlocked)["groups"]
+    assert (g["bonus_cad_cents"], g["payment"]["notes"]) == (1000, "Paid with bonus")
+
+
+def test_record_extra_income_by_hand(unlocked):
+    r = unlocked.post(
+        "/api/vault/side-work/payments",
+        json={
+            "kind": "extra",
+            "company": "Some Co",
+            "received_on": "2026-03-20",
+            "amount": "50",
+            "currency": "CAD",
+            "notes": "One-off",
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert [x["notes"] for x in view(unlocked)["extras"]] == ["One-off"]
+
+
+def test_edit_main_job_stub_details(app, unlocked):
+    from aicity.db import db_path, open_database
+    from aicity.income import IncomeStore
+
+    conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
+    try:
+        store = IncomeStore(conn, clock=lambda: NOW)
+        imp = store.record_import(
+            first_day=date(2026, 3, 6),
+            last_day=date(2026, 3, 6),
+            kept=1,
+            duplicates=0,
+            skipped=0,
+            spending=0,
+        )
+        d = store.add_deposit(
+            posted_on=date(2026, 3, 6),
+            amount_cents=210000,
+            kind="main_job",
+            source="main_job",
+            row_key="a" * 64,
+            import_id=imp,
+        )
+    finally:
+        conn.close()
+    r = unlocked.patch(
+        f"/api/vault/income/main-job/{d.id}",
+        json={"gross": "3000", "rrsp": "150", "match": "75", "notes": "From the stub"},
+    )
+    assert r.status_code == 200, r.text
+    [row] = unlocked.get("/api/vault/income").json()["main_job_pay"]
+    assert (row["gross_cents"], row["deductions_cents"], row["notes"]) == (
+        300000,
+        75000,
+        "From the stub",
+    )
+    bad = unlocked.patch(f"/api/vault/income/main-job/{d.id}", json={"gross": "1000"})
+    assert bad.status_code == 422  # gross below net
