@@ -94,12 +94,33 @@ test("monthLines drops empty sources", () => {
     [
       { key: "main_job", text: "$5,000" },
       { key: "extra", text: "$76" },
+      { key: "total", text: "($5,076)", total: true },
     ],
   );
   assert.deepEqual(monthLines([]), []);
 });
 
 test("monthLines never shows a $0 line for a few cents", () => {
+  assert.deepEqual(
+    monthLines([
+      { key: "main_job", cents: 500000 },
+      { key: "extra", cents: 30 },
+    ]),
+    [{ key: "main_job", text: "$5,000" }],
+  );
+});
+
+test("monthLines adds a total only for two or more sources", () => {
+  assert.deepEqual(
+    monthLines([
+      { key: "main_job", cents: 500000 },
+      { key: "platform_a", cents: 221400 },
+    ]).at(-1),
+    { key: "total", text: "($7,214)", total: true },
+  );
+  assert.deepEqual(monthLines([{ key: "main_job", cents: 500000 }]), [
+    { key: "main_job", text: "$5,000" },
+  ]);
   assert.deepEqual(
     monthLines([
       { key: "main_job", cents: 500000 },

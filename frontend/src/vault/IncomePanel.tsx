@@ -86,7 +86,7 @@ function ThisMonth({ v }: { v: IncomeView }) {
         )}
       </div>
       <div className="sw-tile">
-        <span className="sw-tile__label">Net (after the tax set-aside)</span>
+        <span className="sw-tile__label">Net this month (after the tax set-aside)</span>
         <strong>{formatCad(m.net_cents)}</strong>
         {m.employer_match_cents > 0 && (
           <span className="sw-tile__label">

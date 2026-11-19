@@ -317,7 +317,14 @@
 
 /* Each month's amounts under its label; the colour comes from the bar (fill attribute). */
 .in-chart__amount {
-  font-size: 10px;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A month's total, in brackets under its amounts (months with two or more sources). */
+.in-chart__total {
+  fill: #ffffff;
+  font-size: 9px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -345,10 +352,16 @@
   vertical-align: -1px;
 }
 
+/* The goal mark sits mid-line, like a hyphen. */
 .in-legend .in-legend__goal {
   height: 0;
   border-top: 2px dashed rgba(255, 255, 255, 0.55);
   border-radius: 0;
+  vertical-align: middle;
+}
+
+.in-legend .in-legend__total {
+  background: #ffffff;
 }
 
 /* Statements app */
