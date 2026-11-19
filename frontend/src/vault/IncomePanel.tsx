@@ -342,7 +342,7 @@ function PayRow({ row }: { row: MainJobPay }) {
           : " · gross not entered"}
       </span>
       <span className={row.confirmed ? "sw-dim" : "sw-dim in-unconfirmed"}>
-        {payStatus(row.confirmed)}
+        {payStatus(row.confirmed, row.checked_by_hand)}
       </span>
       {row.rrsp_cents ? <span className="sw-dim">RRSP {formatCad(row.rrsp_cents)}</span> : null}
       {row.match_cents ? (

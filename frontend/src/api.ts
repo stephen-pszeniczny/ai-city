@@ -274,8 +274,9 @@ export type MainJobPay = {
   match_cents: number | null;
   deductions_cents: number | null;
   notes: string | null;
-  /** A statement deposit has confirmed it. */
+  /** A statement deposit has confirmed it, or (older pay) it was checked by hand. */
   confirmed: boolean;
+  checked_by_hand: boolean;
 };
 
 export type MainJobAdd = {

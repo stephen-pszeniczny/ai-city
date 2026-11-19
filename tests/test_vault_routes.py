@@ -598,7 +598,7 @@ def test_edit_confirmed_net_is_refused(app, unlocked):
         conn.close()
     r = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"net": "2000"})
     assert r.status_code == 422
-    assert "confirmed by the statement" in r.json()["detail"]
+    assert "This pay is confirmed" in r.json()["detail"]
     ok = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"gross": "3000"})
     assert ok.status_code == 200 and ok.json()["confirmed"] is True
 
