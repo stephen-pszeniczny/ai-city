@@ -147,3 +147,25 @@ def test_latest_rate_is_the_newest_day(conn):
         conn, {MON}, FakeFetcher({FRI: Decimal("1.37"), MON: Decimal("1.38")}), today=TODAY
     )
     assert latest_rate(conn) == (Decimal("1.38"), MON)
+
+
+def test_a_day_never_fetched_never_borrows_an_older_rate(conn):
+    # Reviewer's case: an early fetch covers early March; a much later refresh covers
+    # November. Mar 9 itself was never fetched, so it must not borrow Mar 5's rate.
+    early = FakeFetcher({date(2026, 3, 5): Decimal("1.3500"), date(2026, 3, 9): Decimal("1.3600")})
+    refresh_rates(conn, {date(2026, 3, 5)}, early, today=date(2026, 3, 6))
+    refresh_rates(conn, {date(2026, 11, 17)}, FakeFetcher({date(2026, 11, 17): Decimal("1.40")}), today=date(2026, 11, 18))
+    assert rate_on(conn, date(2026, 3, 9)) is None
+    refresh_rates(conn, {date(2026, 3, 9)}, early, today=date(2026, 11, 18))
+    assert rate_on(conn, date(2026, 3, 9)) == (Decimal("1.3600"), date(2026, 3, 9))
+
+
+def test_a_gap_of_unopened_days_is_still_fetched(conn):
+    # Opened Mar 7, then not again until Mar 25 (that fetch only covers Mar 18-25).
+    # A deposit on Tue Mar 10, inside the gap, must not borrow Mar 6's rate.
+    fetch = FakeFetcher({date(2026, 3, 6): Decimal("1.30"), date(2026, 3, 10): Decimal("1.33")})
+    refresh_rates(conn, {date(2026, 3, 6)}, fetch, today=date(2026, 3, 7))
+    refresh_rates(conn, {TODAY}, fetch, today=TODAY)
+    assert rate_on(conn, date(2026, 3, 10)) is None
+    refresh_rates(conn, {date(2026, 3, 10)}, fetch, today=TODAY)
+    assert rate_on(conn, date(2026, 3, 10)) == (Decimal("1.33"), date(2026, 3, 10))

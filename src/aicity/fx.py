@@ -5,10 +5,10 @@ pair and a date range, nothing personal. Each day's rate is fetched once and
 kept in fx_rates.
 
 Weekends and holidays have no rate; they use the last business day before
-(looking back up to 7 days). That fallback is only used for days a fetch has
-already covered (meta key below), so a failed fetch never quietly turns into
-an older rate: the day stays "rate pending" until a fetch succeeds or a rate
-is typed in by hand.
+(looking back up to 7 days). That fallback is only used for days a fetch
+actually covered (fx_checked_days), so a failed fetch or a gap between opens
+never quietly turns into an older rate: the day stays "rate pending" until a
+fetch covers it or a rate is typed in by hand.
 """
 
 import sqlite3
@@ -24,7 +24,6 @@ from aicity.side_work_math import rate_text
 VALET_URL = "https://www.bankofcanada.ca/valet/observations/FXUSDCAD/json"
 TIMEOUT_S = 10
 LOOK_BACK_DAYS = 7
-CHECKED_KEY = "fx_usd_checked_through"
 MANUAL_RANGE = (Decimal("0.5"), Decimal(3))
 
 Fetcher = Callable[[date, date], dict[date, Decimal]]
@@ -43,8 +42,7 @@ def rate_on(conn: sqlite3.Connection, day: date) -> tuple[Decimal, date] | None:
         "SELECT rate, day FROM fx_rates WHERE currency = 'USD' AND day = ?", (day.isoformat(),)
     ).fetchone()
     if row is None:
-        checked = _checked_through(conn)
-        if checked is None or day > checked:
+        if not _was_checked(conn, day):
             return None
         row = conn.execute(
             "SELECT rate, day FROM fx_rates WHERE currency = 'USD' AND day < ? AND day >= ? "
@@ -64,9 +62,11 @@ def latest_rate(conn: sqlite3.Connection) -> tuple[Decimal, date] | None:
     return None if row is None else (Decimal(row[0]), date.fromisoformat(row[1]))
 
 
-def _checked_through(conn: sqlite3.Connection) -> date | None:
-    row = conn.execute("SELECT value FROM meta WHERE key = ?", (CHECKED_KEY,)).fetchone()
-    return None if row is None else date.fromisoformat(row[0])
+def _was_checked(conn: sqlite3.Connection, day: date) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM fx_checked_days WHERE currency = 'USD' AND day = ?", (day.isoformat(),)
+    ).fetchone()
+    return row is not None
 
 
 # --- Filling the cache -----------------------------------------------------------------
@@ -95,12 +95,12 @@ def refresh_rates(
             "VALUES ('USD', ?, ?, 'boc', ?)",
             [(d.isoformat(), rate_text(r), stamp) for d, r in rates.items()],
         )
-        before = _checked_through(conn)
-        if before is None or checked > before:
-            conn.execute(
-                "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
-                (CHECKED_KEY, checked.isoformat()),
-            )
+        covered = [
+            ((start + timedelta(days=i)).isoformat(),) for i in range((checked - start).days + 1)
+        ]
+        conn.executemany(
+            "INSERT OR IGNORE INTO fx_checked_days (currency, day) VALUES ('USD', ?)", covered
+        )
 
     with_transaction(conn, work, immediate=True)
     return True

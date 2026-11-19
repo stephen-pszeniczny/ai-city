@@ -65,3 +65,12 @@ CREATE TABLE fx_rates (
                CHECK (strftime('%Y-%m-%dT%H:%M:%SZ', fetched_at) IS fetched_at),
     PRIMARY KEY (currency, day)
 ) STRICT;
+
+-- Every past day a successful Bank of Canada fetch covered. A day listed here
+-- with no rate of its own was a weekend or holiday, so it may use the last
+-- business day before it. A day not listed was never checked: it stays pending.
+CREATE TABLE fx_checked_days (
+    currency TEXT NOT NULL CHECK (currency = 'USD'),
+    day      TEXT NOT NULL CHECK (date(day) IS day),
+    PRIMARY KEY (currency, day)
+) STRICT;
