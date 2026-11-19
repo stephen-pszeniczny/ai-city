@@ -38,8 +38,11 @@ CREATE TABLE plan_blocks (
     id           INTEGER PRIMARY KEY,
     week_id      INTEGER NOT NULL REFERENCES plan_weeks (id),
     day          TEXT NOT NULL CHECK (date(day) IS day),
-    start_time   TEXT NOT NULL CHECK (strftime('%H:%M', start_time) IS start_time),
-    end_time     TEXT NOT NULL CHECK (strftime('%H:%M', end_time) IS end_time),
+    -- The explicit '23:59' limit matters: some SQLite versions keep '24:00' as it is.
+    start_time   TEXT NOT NULL
+                 CHECK (strftime('%H:%M', start_time) IS start_time AND start_time <= '23:59'),
+    end_time     TEXT NOT NULL
+                 CHECK (strftime('%H:%M', end_time) IS end_time AND end_time <= '23:59'),
     title        TEXT NOT NULL
                  CHECK (length(title) BETWEEN 1 AND 100 AND title = trim(title)),
     kind         TEXT NOT NULL
@@ -53,7 +56,7 @@ CREATE TABLE plan_blocks (
                  CHECK (strftime('%Y-%m-%dT%H:%M:%SZ', created_at) IS created_at),
     updated_at   TEXT NOT NULL
                  CHECK (strftime('%Y-%m-%dT%H:%M:%SZ', updated_at) IS updated_at),
-    -- strftime('%H:%M') can't hold 24:00, and a block may not run past midnight.
+    -- A block may not run past midnight.
     CHECK (end_time > start_time),
     -- A settings block always says which rule it came from; an added block never does.
     CHECK ((source = 'settings') = (settings_key IS NOT NULL)),
