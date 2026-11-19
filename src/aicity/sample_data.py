@@ -12,6 +12,7 @@ It runs when the app starts (scripts/run_app.py), not on each request, so a
 fresh database in tests stays empty.
 """
 
+import hashlib
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,10 +22,11 @@ from pathlib import Path
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
 from aicity.fx import rate_on
+from aicity.income import IncomeStore
 from aicity.notifications import SINCE_KEY
 from aicity.settings import IncomeSettings, MainJob, PaySchedule
 from aicity.side_work import SideWorkStore
-from aicity.side_work_math import expected_cents, pay_period, rate_text
+from aicity.side_work_math import expected_cents, pay_period, rate_text, to_cad_cents
 from aicity.tasks import TaskStore, utc_now
 
 SEEDED_KEY = "sample_seeded"
@@ -101,6 +103,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         seeded = seed(conn, now)
         # Its own once-only check, so a Sample database made before the Vault gets it too.
         seed_side_work(conn, now)
+        seed_income(conn, now)
         return seeded
     finally:
         conn.close()
@@ -191,6 +194,11 @@ _RATE_CENTS = 4500  # 45.00 USD an hour, invented
 _SESSIONS = ((1, 300), (3, 250), (4, 200))  # (days into the week, hours x 100)
 
 
+def sample_rate(day: date) -> Decimal:
+    """Sample mode's invented USD-to-CAD rate for a day (it never goes online)."""
+    return Decimal("1.3600") + Decimal("0.0015") * (day.toordinal() % 7)
+
+
 def ensure_sample_rates(conn: sqlite3.Connection, first_day: date, last_day: date) -> None:
     """Invented USD-to-CAD rates for every day in the range that has none yet.
 
@@ -201,8 +209,7 @@ def ensure_sample_rates(conn: sqlite3.Connection, first_day: date, last_day: dat
     rows = []
     for i in range((last_day - first_day).days + 1):
         day = first_day + timedelta(days=i)
-        rate = Decimal("1.3600") + Decimal("0.0015") * (day.toordinal() % 7)
-        rows.append((day.isoformat(), rate_text(rate), stamp))
+        rows.append((day.isoformat(), rate_text(sample_rate(day)), stamp))
     with_transaction(
         conn,
         lambda: conn.executemany(
@@ -305,6 +312,120 @@ def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
         ),
     )
     return True
+
+
+# --- Sample income (the Vault, part B) --------------------------------------------------
+
+INCOME_SEEDED_KEY = "sample_income_seeded"
+_PAY_NET, _PAY_GROSS, _PAY_RRSP, _PAY_MATCH = 245000, 340000, 17000, 8500  # invented
+_PAYDAYS = 14  # about 6 months of biweekly pay
+
+
+def _sample_key(text: str) -> str:
+    return hashlib.sha256(f"sample:{text}".encode()).hexdigest()
+
+
+def last_seeded_payday(today: date) -> date:
+    """The newest main-job payday in the seeded history: a Friday at least 2 weeks back."""
+    friday = today - timedelta(days=(today.weekday() - 4) % 7)
+    return friday - timedelta(days=14)
+
+
+def seed_income(conn: sqlite3.Connection, now: datetime) -> bool:
+    """Made-up main-job pay and the deposits behind Sample's paid side work, once."""
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("Sample income only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (INCOME_SEEDED_KEY,)).fetchone():
+        return False
+    today = now.astimezone().date()
+    side = SideWorkStore(conn, clock=lambda: now)
+    income = IncomeStore(conn, clock=lambda: now)
+    newest = last_seeded_payday(today)
+    paydays = [newest - timedelta(days=14 * i) for i in range(_PAYDAYS)]
+    payments = side.payments()
+    first = min([*paydays, *(p.received_on for p in payments)])
+
+    def work() -> None:
+        imp = income.record_import(
+            first_day=first, last_day=newest, kept=0, duplicates=0, skipped=0, spending=38
+        )
+        for i, day in enumerate(sorted(paydays)):
+            d = income.add_deposit(
+                posted_on=day,
+                amount_cents=_PAY_NET,
+                kind="main_job",
+                source="main_job",
+                row_key=_sample_key(f"pay-{day}"),
+                import_id=imp,
+            )
+            if day != newest:  # the newest stub isn't typed in yet
+                income.set_main_job_pay(
+                    d.id,
+                    gross_cents=_PAY_GROSS,
+                    rrsp_cents=_PAY_RRSP,
+                    match_cents=_PAY_MATCH,
+                    notes="Holiday pay included" if i == 3 else None,
+                )
+        for p in payments:
+            cad = to_cad_cents(p.amount_cents, p.currency, p.rate)
+            d = income.add_deposit(
+                posted_on=p.received_on,
+                amount_cents=cad,
+                kind="side_work",
+                source=p.company or "Other",
+                row_key=_sample_key(f"side-{p.id}"),
+                import_id=imp,
+            )
+            side.link_deposit(p.id, d.id, company=p.company)
+        conn.execute(
+            "UPDATE statement_imports SET kept = ? WHERE id = ?",
+            (len(paydays) + len(payments), imp),
+        )
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (INCOME_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
+    return True
+
+
+def build_sample_statement(conn: sqlite3.Connection, side: SideWorkStore, today: date) -> bytes:
+    """A made-up chequing statement for demonstrating the import (never stored as a file).
+
+    It holds the next main-job pay, the pay and bonus for Sample's oldest overdue
+    week, two purchases, a refund (other money in) and one USD row.
+    """
+    from aicity.statement_import import open_weeks  # avoids a circular import at load
+
+    rows: list[tuple[date, str, str, int, str]] = []
+    payday = last_seeded_payday(today) + timedelta(days=14)
+    rows.append((payday, "Deposit", "DAY JOB PAY", _PAY_NET, "CAD"))
+    due = [w for w in open_weeks(side, SAMPLE_PAY_SCHEDULES) if w.window[0] <= today]
+    if due:
+        week = due[0]
+        day = week.window[0]
+        found = rate_on(conn, day)  # read only: a GET must never write
+        rate = found[0] if found else sample_rate(day)
+        expected = sum(
+            to_cad_cents(c, cur, rate) or 0 for cur, c in week.expected_by_currency.items()
+        )
+        rows.append((day, "Deposit", "NIMBUS LABS PAYOUT", expected - expected // 125, "CAD"))
+        rows.append(
+            (min(day + timedelta(days=1), today), "Deposit", "NIMBUS LABS BONUS", 2500, "CAD")
+        )
+    rows.append((today - timedelta(days=6), "Purchase", "CORNER GROCER", -6420, "CAD"))
+    rows.append((today - timedelta(days=3), "Purchase", "TRANSIT PASS", -15600, "CAD"))
+    rows.append((today - timedelta(days=4), "Deposit", "STORE REFUND", 1500, "CAD"))
+    rows.append((today - timedelta(days=2), "Deposit", "NIMBUS LABS", 1000, "USD"))
+    rows.sort(key=lambda r: r[0])
+
+    balance = 412_300
+    lines = ["date,transaction,description,amount,balance,currency"]
+    for day, kind, text, cents, currency in rows:
+        if currency == "CAD":
+            balance += cents
+        amount = f"{cents / 100:.2f}"
+        lines.append(f"{day.isoformat()},{kind},{text},{amount},{balance / 100:.2f},{currency}")
+    return ("\n".join(lines) + "\n").encode()
 
 
 def _local_minute(moment: datetime) -> str:

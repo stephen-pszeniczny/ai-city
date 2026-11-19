@@ -323,3 +323,29 @@ def test_every_platform_deposit_needs_a_decision(client):
     body = decisions(p)
     body["platform"] = body["platform"][:1]
     assert confirm(client, body).status_code == 422
+
+
+# --- Sample mode's demo statement ----------------------------------------------------------
+
+
+def test_sample_statement_previews_with_every_kind(data_dir, clock):
+    from aicity.sample_data import seed_sample_database
+
+    seed_sample_database(clock=lambda: NOW)
+    app = create_app(dev=False)
+    app.state.db_kind = DbKind.SAMPLE
+    app.state.clock = clock
+    c = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    csv_text = c.get("/api/vault/statements/sample.csv")
+    assert csv_text.status_code == 200
+    assert csv_text.headers["content-type"].startswith("text/csv")
+    p = preview(c, csv_text.content).json()
+    kinds = {row["proposal"]["kind"] for row in p["platform"]}
+    assert {"week", "bonus"} <= kinds
+    assert len(p["main_job"]) == 1 and len(p["other_income"]) >= 1
+    assert p["spending"] >= 2 and p["other_currency"] >= 1
+    assert confirm(c, decisions(p)).status_code == 200
+
+
+def test_sample_statement_is_not_offered_in_personal(client):
+    assert client.get("/api/vault/statements/sample.csv").status_code == 404

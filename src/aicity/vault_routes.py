@@ -26,7 +26,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -471,6 +471,16 @@ def badge(request: Request) -> dict[str, str | None]:
                 side, IncomeStore(conn, clock=request.app.state.clock), schedules, _today(request)
             )
         }
+
+
+@statements_router.get("/sample.csv")
+def sample_statement(request: Request) -> Response:
+    """Sample mode's made-up statement, for trying the import. Not offered in Personal."""
+    if not _sample(request):
+        raise HTTPException(status_code=404, detail="Only in Sample mode.")
+    with _open(request) as (side, conn):
+        body = sample_data.build_sample_statement(conn, side, _today(request))
+    return Response(body, media_type="text/csv")
 
 
 @statements_router.get("")
