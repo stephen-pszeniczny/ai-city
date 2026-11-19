@@ -133,3 +133,169 @@ def test_block_fields(store):
 def test_unknown_block_is_not_found(store):
     with pytest.raises(BlockNotFound):
         store.get_block(999)
+
+
+# --- Edits -------------------------------------------------------------------
+
+THU = date(2026, 11, 26)
+
+
+@pytest.fixture
+def week(store):
+    return store.ensure_week(THIS_MONDAY, RULES, TODAY)
+
+
+def block_on(store, day: str, title: str):
+    return next(b for b in day_blocks(store.get_week(THIS_MONDAY), day) if b.title == title)
+
+
+def test_add_edit_remove_block(store, conn, week):
+    hockey = store.add_block(THIS_MONDAY, THU, time(21), time(22), "Hockey", "event", TODAY)
+    assert (hockey.source, hockey.kind, hockey.start, hockey.end) == ("added", "event", "21:00", "22:00")
+    assert titles(store.get_week(THIS_MONDAY), "2026-11-26") == ["Work", "Gym", "Hockey"]
+
+    renamed = store.edit_block(hockey.id, TODAY, title="Hockey (away)")
+    assert renamed.title == "Hockey (away)"
+    assert renamed.edited is False  # added blocks are Steve's anyway
+
+    store.remove_block(hockey.id, TODAY)
+    assert "Hockey (away)" not in titles(store.get_week(THIS_MONDAY), "2026-11-26")
+    status = conn.execute("SELECT status FROM plan_blocks WHERE id = ?", (hockey.id,)).fetchone()
+    assert status == ("removed",)
+
+
+def test_adding_to_an_unsaved_week_is_refused(store):
+    with pytest.raises(PlanError):
+        store.add_block(NEXT_MONDAY, date(2026, 12, 1), time(9), time(10), "X", "event", TODAY)
+
+
+def test_adding_outside_the_week_is_refused(store, week):
+    with pytest.raises(PlanError):
+        store.add_block(THIS_MONDAY, date(2026, 12, 1), time(9), time(10), "X", "event", TODAY)
+
+
+def test_bad_block_data_is_refused(store, week):
+    with pytest.raises(PlanError):
+        store.add_block(THIS_MONDAY, THU, time(10), time(9), "X", "event", TODAY)
+    with pytest.raises(PlanError):
+        store.add_block(THIS_MONDAY, THU, time(9), time(10), "", "event", TODAY)
+
+
+def test_editing_a_settings_block_marks_it_edited(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    edited = store.edit_block(work.id, TODAY, end=time(11))
+    assert (edited.end, edited.edited) == ("11:00", True)
+
+
+def test_editing_with_unknown_field_is_refused(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    with pytest.raises(PlanError):
+        store.edit_block(work.id, TODAY, colour="red")
+
+
+def test_moving_a_block_to_another_day_of_the_week(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    moved = store.edit_block(work.id, TODAY, day=date(2026, 11, 28))
+    assert moved.day == "2026-11-28"
+    with pytest.raises(PlanError):
+        store.edit_block(work.id, TODAY, day=date(2026, 12, 1))
+
+
+def test_past_days_are_read_only(store, week):
+    monday_work = block_on(store, "2026-11-23", "Work")
+    thursday_work = block_on(store, "2026-11-26", "Work")
+    attempts = [
+        lambda: store.add_block(THIS_MONDAY, THIS_MONDAY, time(18), time(19), "X", "event", TODAY),
+        lambda: store.edit_block(monday_work.id, TODAY, title="Changed"),
+        lambda: store.remove_block(monday_work.id, TODAY),
+        lambda: store.edit_block(thursday_work.id, TODAY, day=THIS_MONDAY),
+    ]
+    for attempt in attempts:
+        with pytest.raises(PlanError, match="Past days can't be changed."):
+            attempt()
+
+
+def test_a_removed_block_cannot_be_changed(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    store.remove_block(work.id, TODAY)
+    with pytest.raises(PlanError, match="That block was removed."):
+        store.edit_block(work.id, TODAY, title="Back")
+    with pytest.raises(PlanError, match="That block was removed."):
+        store.remove_block(work.id, TODAY)
+
+
+def test_unknown_block_edit_is_not_found(store, week):
+    with pytest.raises(BlockNotFound):
+        store.edit_block(999, TODAY, title="X")
+
+
+# --- Gym done / skipped ------------------------------------------------------
+
+
+def test_gym_marking_window(store, week):
+    wed_gym = block_on(store, "2026-11-25", "Gym")
+    assert store.set_gym(wed_gym.id, "done", TODAY).status == "done"
+    assert store.set_gym(wed_gym.id, "planned", TODAY).status == "planned"
+
+    mon_gym = block_on(store, "2026-11-23", "Gym")
+    assert store.set_gym(mon_gym.id, "skipped", TODAY).status == "skipped"
+
+    thu_gym = block_on(store, "2026-11-26", "Gym")
+    with pytest.raises(PlanError, match="on or after its day"):
+        store.set_gym(thu_gym.id, "done", TODAY)
+
+    assert store.set_gym(mon_gym.id, "done", date(2026, 11, 30)).status == "done"
+    with pytest.raises(PlanError, match="last 7 days"):
+        store.set_gym(mon_gym.id, "done", date(2026, 12, 1))
+
+    with pytest.raises(PlanError):
+        store.set_gym(block_on(store, "2026-11-25", "Work").id, "done", TODAY)
+    with pytest.raises(PlanError):
+        store.set_gym(wed_gym.id, "removed", TODAY)
+
+
+def test_marking_gym_does_not_count_as_editing(store, week):
+    wed_gym = block_on(store, "2026-11-25", "Gym")
+    assert store.set_gym(wed_gym.id, "done", TODAY).edited is False
+
+
+# --- Rebuild -----------------------------------------------------------------
+
+
+def test_rebuild_keeps_steves_choices(store, week):
+    store.remove_block(block_on(store, "2026-11-26", "Gym").id, TODAY)
+    store.edit_block(block_on(store, "2026-11-26", "Work").id, TODAY, end=time(11, 30))
+    store.set_gym(block_on(store, "2026-11-25", "Gym").id, "done", TODAY)
+    store.add_block(THIS_MONDAY, date(2026, 11, 27), time(21), time(22), "Hockey", "event", TODAY)
+    before_monday = day_blocks(store.get_week(THIS_MONDAY), "2026-11-23")
+
+    later_gym = BlockRule("Gym", "gym", (0, 1, 2, 3, 4), time(12, 30), time(13, 30))
+    rebuilt = store.rebuild_week(THIS_MONDAY, PlanSettings(blocks=(WORK, COMMUTE, later_gym)), TODAY)
+
+    assert titles(rebuilt, "2026-11-26") == ["Work"]
+    assert day_blocks(rebuilt, "2026-11-26")[0].end == "11:30"
+    wed_gym = next(b for b in day_blocks(rebuilt, "2026-11-25") if b.kind == "gym")
+    assert (wed_gym.status, wed_gym.start) == ("done", "12:00")
+    fri = day_blocks(rebuilt, "2026-11-27")
+    assert [(b.title, b.start) for b in fri] == [("Work", "09:00"), ("Gym", "12:30"), ("Hockey", "21:00")]
+    assert day_blocks(rebuilt, "2026-11-23") == before_monday
+
+
+def test_rebuild_twice_is_stable(store, week):
+    once = store.rebuild_week(THIS_MONDAY, RULES, TODAY)
+    twice = store.rebuild_week(THIS_MONDAY, RULES, TODAY)
+    shape = lambda w: [(d, [(b.title, b.start, b.end) for b in bs]) for d, bs in w.days]
+    assert shape(once) == shape(twice) == shape(week)
+
+
+def test_rebuild_adds_new_rules_and_drops_deleted_ones(store, week):
+    walk = BlockRule("Walk", "other", (0, 1, 2, 3, 4, 5, 6), time(18), time(18, 30))
+    rebuilt = store.rebuild_week(THIS_MONDAY, PlanSettings(blocks=(WORK, walk)), TODAY)
+    assert titles(rebuilt, "2026-11-23") == ["Commute", "Work", "Gym"]  # past: untouched
+    assert titles(rebuilt, "2026-11-25") == ["Work", "Walk"]
+    assert titles(rebuilt, "2026-11-29") == ["Walk"]
+
+
+def test_rebuild_of_an_unsaved_week_is_refused(store):
+    with pytest.raises(PlanError):
+        store.rebuild_week(THIS_MONDAY, RULES, TODAY)

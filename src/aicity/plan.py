@@ -23,6 +23,11 @@ from aicity.tasks import utc_now
 
 _STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 _BLOCK_COLUMNS = "id, day, start_time, end_time, title, kind, source, settings_key, status, edited"
+BLOCK_KINDS = ("work", "commute", "gym", "event", "side_work", "build", "other")
+EDITABLE_FIELDS = ("day", "start", "end", "title", "kind")
+GYM_STATUSES = ("planned", "done", "skipped")
+GYM_DAYS_BACK = 7
+TITLE_MAX = 100
 # Statuses that hide a block from the week (still kept in the table).
 _HIDDEN = ("removed", "replaced")
 
@@ -166,7 +171,154 @@ class PlanStore:
         saved = with_transaction(self._conn, work, immediate=True)
         return self.get_week(week_start) if saved else None
 
+    # --- Changing blocks --------------------------------------------------
+    # Every change takes today's date: past days can't be changed (except gym).
+
+    def add_block(
+        self,
+        week_start: date,
+        day: date,
+        start: time,
+        end: time,
+        title: str,
+        kind: str,
+        today: date,
+    ) -> Block:
+        _require_monday(week_start)
+        title = _check_fields(day, start, end, title, kind, week_start, today)
+
+        def work() -> int:
+            week_id = self._week_id(week_start)
+            stamp = self._stamp()
+            return self._conn.execute(
+                "INSERT INTO plan_blocks (week_id, day, start_time, end_time, title, kind, "
+                "source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'added', ?, ?)",
+                (week_id, day.isoformat(), f"{start:%H:%M}", f"{end:%H:%M}", title, kind, stamp, stamp),
+            ).lastrowid
+
+        return self.get_block(self._write(work))
+
+    def edit_block(self, block_id: int, today: date, **fields) -> Block:
+        """Change any of day, start, end, title, kind. A settings block becomes "edited"."""
+        unknown = sorted(set(fields) - set(EDITABLE_FIELDS))
+        if unknown:
+            raise PlanError(f"These can't be changed: {', '.join(unknown)}.")
+        block = self._changeable(block_id, today)
+        week_start = monday_of(date.fromisoformat(block.day))
+        day = fields.get("day", date.fromisoformat(block.day))
+        start = fields.get("start", time.fromisoformat(block.start))
+        end = fields.get("end", time.fromisoformat(block.end))
+        title = _check_fields(
+            day, start, end, fields.get("title", block.title), fields.get("kind", block.kind),
+            week_start, today,
+        )
+        kind = fields.get("kind", block.kind)
+
+        def work() -> None:
+            self._conn.execute(
+                "UPDATE plan_blocks SET day = ?, start_time = ?, end_time = ?, title = ?, kind = ?, "
+                "edited = CASE WHEN source = 'settings' THEN 1 ELSE 0 END, updated_at = ? "
+                "WHERE id = ?",
+                (day.isoformat(), f"{start:%H:%M}", f"{end:%H:%M}", title, kind, self._stamp(), block_id),
+            )
+
+        self._write(work)
+        return self.get_block(block_id)
+
+    def remove_block(self, block_id: int, today: date) -> Block:
+        self._changeable(block_id, today)
+        self._write(lambda: self._set_status(block_id, "removed"))
+        return self.get_block(block_id)
+
+    def set_gym(self, block_id: int, status: str, today: date) -> Block:
+        """Mark a gym block done, skipped, or back to planned (today or the last 7 days)."""
+        if status not in GYM_STATUSES:
+            raise PlanError(f"Gym can be marked: {', '.join(GYM_STATUSES)}.")
+        block = self.get_block(block_id)
+        if block.status in _HIDDEN:
+            raise PlanError("That block was removed.")
+        if block.kind != "gym":
+            raise PlanError("Only gym blocks can be marked done or skipped.")
+        day = date.fromisoformat(block.day)
+        if day > today:
+            raise PlanError("Gym can only be marked on or after its day.")
+        if day < today - timedelta(days=GYM_DAYS_BACK):
+            raise PlanError("Gym can only be marked for the last 7 days.")
+        self._write(lambda: self._set_status(block_id, status))
+        return self.get_block(block_id)
+
+    # --- Rebuilding a week ------------------------------------------------
+
+    def rebuild_week(self, week_start: date, rules: PlanSettings, today: date) -> Week:
+        """Refresh untouched settings blocks from today on; Steve's changes stay.
+
+        For each day from today: settings blocks still planned and not edited are
+        marked 'replaced', then the rules' blocks for that day are added, except a
+        rule whose block Steve removed, edited or marked done/skipped that day.
+        Added blocks and past days are never touched.
+        """
+        _require_monday(week_start)
+
+        def work() -> None:
+            week_id = self._week_id(week_start)
+            stamp = self._stamp()
+            fresh = blocks_for_week(rules, week_start)
+            for n in range(7):
+                day = week_start + timedelta(days=n)
+                if day < today:
+                    continue
+                rows = self._conn.execute(
+                    "SELECT id, settings_key, status, edited FROM plan_blocks "
+                    "WHERE week_id = ? AND day = ? AND source = 'settings' AND status <> 'replaced'",
+                    (week_id, day.isoformat()),
+                ).fetchall()
+                touched = {key for _, key, status, edited in rows if edited or status != "planned"}
+                for block_id, _, status, edited in rows:
+                    if status == "planned" and not edited:
+                        self._conn.execute(
+                            "UPDATE plan_blocks SET status = 'replaced', updated_at = ? WHERE id = ?",
+                            (stamp, block_id),
+                        )
+                for block in fresh:
+                    if block.day == day and block.settings_key not in touched:
+                        self._insert_settings_block(week_id, block, stamp)
+
+        self._write(work)
+        week = self.get_week(week_start)
+        assert week is not None  # _week_id above proved it's saved
+        return week
+
     # --- Helpers ----------------------------------------------------------
+
+    def _changeable(self, block_id: int, today: date) -> Block:
+        block = self.get_block(block_id)
+        if block.status in _HIDDEN:
+            raise PlanError("That block was removed.")
+        if date.fromisoformat(block.day) < today:
+            raise PlanError(PAST_DAY)
+        return block
+
+    def _set_status(self, block_id: int, status: str) -> None:
+        self._conn.execute(
+            "UPDATE plan_blocks SET status = ?, updated_at = ? WHERE id = ?",
+            (status, self._stamp(), block_id),
+        )
+
+    def _week_id(self, week_start: date) -> int:
+        row = self._conn.execute(
+            "SELECT id FROM plan_weeks WHERE week_start = ?", (week_start.isoformat(),)
+        ).fetchone()
+        if row is None:
+            raise PlanError("That week isn't saved yet. Open it first.")
+        return row[0]
+
+    def _write(self, work):
+        """Run work() as one all-or-nothing change; data the database refuses is a PlanError."""
+        try:
+            return with_transaction(self._conn, work, immediate=True)
+        except sqlite3.IntegrityError:
+            # The SQLite message can quote values, so it isn't passed on.
+            raise PlanError("The block data isn't valid.") from None
 
     def _insert_settings_block(self, week_id: int, block: NewBlock, stamp: str) -> None:
         self._conn.execute(
@@ -191,6 +343,29 @@ class PlanStore:
         if now.tzinfo is None:
             raise ValueError("The clock must return a timezone-aware time.")
         return now.astimezone(UTC).strftime(_STAMP_FORMAT)
+
+
+PAST_DAY = "Past days can't be changed."
+
+
+def _check_fields(
+    day: date, start: time, end: time, title: str, kind: str, week_start: date, today: date
+) -> str:
+    """Check a block's fields; returns the trimmed title. Raises PlanError."""
+    if not week_start <= day <= week_start + timedelta(days=6):
+        raise PlanError("A block's day must be inside its week.")
+    if day < today:
+        raise PlanError(PAST_DAY)
+    if end <= start:
+        raise PlanError("A block must end later than it starts (none past midnight).")
+    if start.second or start.microsecond or end.second or end.microsecond:
+        raise PlanError("Times are to the minute.")
+    title = title.strip() if isinstance(title, str) else ""
+    if not 1 <= len(title) <= TITLE_MAX:
+        raise PlanError(f"A block needs a title of 1 to {TITLE_MAX} characters.")
+    if kind not in BLOCK_KINDS:
+        raise PlanError(f"A block's kind must be one of: {', '.join(BLOCK_KINDS)}.")
+    return title
 
 
 def _require_monday(week_start: date) -> None:
