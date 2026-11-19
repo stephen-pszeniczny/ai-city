@@ -16,6 +16,7 @@ from aicity.settings import (
     BUILDING_IDS,
     BlockRule,
     PlanSettings,
+    Routine,
     SettingsError,
     UsualEvent,
     load_settings,
@@ -483,3 +484,66 @@ def test_usual_events_must_be_a_list(example_data):
 def test_checkin_time_refuses(example_data):
     message = error_for(with_plan(example_data, {"blocks": [], "checkin_reminder": "4pm"}))
     assert "checkin_reminder" in message and "4pm" not in message
+
+
+# --- [[routines]] -------------------------------------------------------------------
+
+PREP = {
+    "id": "evening_prep",
+    "title": "Evening prep",
+    "days": ["thu", "sun"],
+    "shows_from": "19:00",
+    "remind_at": "21:30",
+    "items": ["Lunch packed", "Bag ready"],
+}
+
+
+def with_routines(example_data: dict, routines) -> dict:
+    data = copy.deepcopy(example_data)
+    data["routines"] = routines
+    return data
+
+
+def test_routines_are_optional(example_data):
+    assert parse_settings(example_data).routines == ()
+
+
+def test_routine_parses(example_data):
+    no_reminder = {k: v for k, v in PREP.items() if k != "remind_at"} | {"id": "morning"}
+    routines = parse_settings(with_routines(example_data, [PREP, no_reminder])).routines
+    assert routines == (
+        Routine(
+            "evening_prep",
+            "Evening prep",
+            (3, 6),
+            time(19),
+            time(21, 30),
+            ("Lunch packed", "Bag ready"),
+        ),
+        Routine("morning", "Evening prep", (3, 6), time(19), None, ("Lunch packed", "Bag ready")),
+    )
+
+
+@pytest.mark.parametrize(
+    ("routines", "fragment", "secret"),
+    [
+        ([{**PREP, "id": "Evening"}], "id", "Evening"),
+        ([PREP, PREP], "id", None),
+        ([{**PREP, "items": []}], "items", None),
+        ([{**PREP, "items": [f"Item {n}" for n in range(21)]}], "items", None),
+        ([{**PREP, "items": ["Lunch", "Lunch"]}], "items", None),
+        ([{**PREP, "items": ["Lunch", "  "]}], "items", None),
+        ([{**PREP, "items": ["x" * 101]}], "items", None),
+        ([{**PREP, "colour": "red"}], "routines", None),
+        ([{**PREP, "shows_from": "7pm"}], "shows_from", "7pm"),
+        ([{**PREP, "remind_at": "25:00"}], "remind_at", "25:00"),
+        ([{**PREP, "days": ["someday"]}], "days", "someday"),
+        ([{k: v for k, v in PREP.items() if k != "items"}], "items", None),
+        ({"id": "x"}, "routines", None),
+    ],
+)
+def test_routine_refuses(example_data, routines, fragment, secret):
+    message = error_for(with_routines(example_data, routines))
+    assert fragment in message
+    if secret:
+        assert secret not in message
