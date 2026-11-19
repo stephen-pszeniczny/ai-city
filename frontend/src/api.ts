@@ -219,6 +219,27 @@ export const removePlanBlock = (id: number) =>
 export const setGym = (id: number, status: GymStatus) =>
   request<PlanBlock>("POST", `/api/plan/blocks/${id}/gym`, { status });
 
+// --- Mission Control: routines -------------------------------------------------------
+
+export type RoutineItem = { name: string; ticked: boolean };
+
+/** One routine on today: its items in settings order. Times are local "19:00". */
+export type RoutineDay = {
+  id: string;
+  title: string;
+  shows_from: string;
+  remind_at: string | null;
+  items: RoutineItem[];
+  done: number;
+  total: number;
+};
+
+export type RoutinesToday = { today: string; routines: RoutineDay[] };
+
+export const getRoutines = () => request<RoutinesToday>("GET", "/api/plan/routines");
+export const tickRoutine = (id: string, item: string, ticked: boolean) =>
+  request<RoutineDay>("POST", `/api/plan/routines/${id}/tick`, { item, ticked });
+
 export const getCheckin = () => request<CheckinStatus>("GET", "/api/plan/checkin");
 /** Opens (creates if needed) the week the check-in plans; with start, that week instead. */
 export const openCheckin = (start?: string) =>
