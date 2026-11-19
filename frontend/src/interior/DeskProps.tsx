@@ -3,7 +3,7 @@
 // the robot, which picks it up.) Robot-space coordinates: the robot sits at
 // the origin facing +z; the desk top is at y = 0.75.
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type Ref } from "react";
 import * as THREE from "three";
 
 import type { Detail } from "../belt/lod";
@@ -16,11 +16,14 @@ export function DeskProps({
   tint,
   detail,
   projector,
+  lampMark,
 }: {
   tint: string;
   detail: Detail;
   /** Show the hologram projector (only while the building is unbuilt). */
   projector: boolean;
+  /** Marks where the lamp's light sits; the shared desk lights use it (belt/deskLights.ts). */
+  lampMark?: Ref<THREE.Object3D>;
 }) {
   const mats = useMemo(() => {
     const t = new THREE.Color(tint);
@@ -147,9 +150,11 @@ export function DeskProps({
               <sphereGeometry args={[0.022, 10, 8]} />
             </mesh>
           </group>
-          <pointLight position={[0, 0.3, -0.32]} intensity={1.2} distance={1.6} color={0xffd9a8} />
         </group>
       )}
+      <group position={[-0.76, TOP, 1.0]} rotation={[0, -0.9, 0]}>
+        <object3D ref={lampMark} position={[0, 0.3, -0.32]} />
+      </group>
 
       {/* Monitor cable dropping behind the desk. */}
       {near && (

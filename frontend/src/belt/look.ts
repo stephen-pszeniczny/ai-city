@@ -26,6 +26,10 @@ export const LOOK = {
     blinkingLights: 1.0,
   },
 
+  warmUp: {
+    /** How long after the belt appears to quietly prepare the station's inside. */
+    interiorAfterMs: 1500,
+  },
   flights: {
     toAsteroidSeconds: 3,
     /** Belt → Mission Control or the Vault (plus the door greeting, the first time). */

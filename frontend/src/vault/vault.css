@@ -2,6 +2,8 @@
    Vault's room; colours with transparency use commas (see todo.css). */
 
 .sw {
+  /* A 5% margin inside the window, so nothing touches its edges. */
+  padding: 5%;
   --gold: #e8c46a;
   --short: #ff8a7a;
   --ok: #7fd8a4;
