@@ -68,11 +68,17 @@ export function wholeDollars(cents: number): string {
   return `$${Math.round(cents / 100).toLocaleString("en-CA")}`;
 }
 
-/** The amounts listed under one month's bar: stack order; sources that round to $0 are left out. */
+/** The amounts listed under one month's bar: stack order; sources that round to $0 are left
+ * out. With two or more lines, a last line gives the month's total in brackets. */
 export function monthLines(
   bySource: readonly { key: string; cents: number }[],
-): { key: string; text: string }[] {
-  return bySource
+): { key: string; text: string; total?: boolean }[] {
+  const lines: { key: string; text: string; total?: boolean }[] = bySource
     .filter((s) => Math.round(s.cents / 100) > 0)
     .map((s) => ({ key: s.key, text: wholeDollars(s.cents) }));
+  if (lines.length >= 2) {
+    const sum = bySource.reduce((total, s) => total + s.cents, 0);
+    lines.push({ key: "total", text: `(${wholeDollars(sum)})`, total: true });
+  }
+  return lines;
 }

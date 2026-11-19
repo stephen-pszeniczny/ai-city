@@ -68,8 +68,12 @@ def income_view(
         gross.setdefault(month, {})
         gross[month][key] = gross[month].get(key, 0) + cents
 
+    year_main_gross = year_main_net = 0
     pay_rows = income.main_job_pay()
     for row in pay_rows:
+        if row.paid_on.year == today.year:
+            year_main_gross += row.gross_cents if row.gross_cents is not None else row.net_cents
+            year_main_net += row.net_cents
         m = _month(row.paid_on)  # the typed date, even when the deposit came a day early
         if row.gross_cents is None:
             missing_gross.add(m)
@@ -155,6 +159,15 @@ def income_view(
             }
             for m in _months_back(today, MONTHS_SHOWN)
         ],
+        "year": {
+            "year": today.year,
+            "gross_cents": year_main_gross + year_side,
+            "net_cents": year_main_net
+            + year_side
+            - set_aside_cents(year_side, settings.tax_set_aside_percent),
+            "main_job_gross_cents": year_main_gross,
+            "side_gross_cents": year_side,
+        },
         "platforms": platforms,
         "set_aside": {
             "cents": set_aside_cents(year_side, settings.tax_set_aside_percent),

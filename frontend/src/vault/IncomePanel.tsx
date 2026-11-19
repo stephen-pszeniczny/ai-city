@@ -86,13 +86,22 @@ function ThisMonth({ v }: { v: IncomeView }) {
         )}
       </div>
       <div className="sw-tile">
-        <span className="sw-tile__label">Net (after the tax set-aside)</span>
+        <span className="sw-tile__label">Net this month (after the tax set-aside)</span>
         <strong>{formatCad(m.net_cents)}</strong>
         {m.employer_match_cents > 0 && (
           <span className="sw-tile__label">
             + {formatCad(m.employer_match_cents)} employer contributions (not in the goal)
           </span>
         )}
+      </div>
+      <div className="sw-tile">
+        <span className="sw-tile__label">{v.year.year} so far, gross</span>
+        <strong>{formatCad(v.year.gross_cents)}</strong>
+        <span className="sw-tile__label">net {formatCad(v.year.net_cents)}</span>
+        <span className="sw-tile__label">
+          Main job {formatCad(v.year.main_job_gross_cents)} · Side income{" "}
+          {formatCad(v.year.side_gross_cents)}
+        </span>
       </div>
       <div className="sw-tile">
         <span className="sw-tile__label">

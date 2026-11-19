@@ -293,3 +293,23 @@ def test_view_shows_hand_checked_pay_as_confirmed(conn, stores):
     )
     [row] = view(conn, stores)["main_job_pay"]
     assert (row["confirmed"], row["checked_by_hand"]) == (True, True)
+
+
+# --- Year to date ---------------------------------------------------------------------------
+
+
+def test_view_year_counts_only_this_calendar_year(conn, stores):
+    side, income = stores
+    main_pay(income, date(2025, 12, 19), 210000, gross=300000)  # last year: left out
+    main_pay(income, date(2026, 1, 9), 210000, gross=300000)
+    main_pay(income, date(2026, 2, 6), 205000)  # no gross yet: its net counts
+    side_pay(side, date(2026, 2, 20), 50000, hundredths=500)
+    side_pay(side, date(2025, 12, 30), 40000, hundredths=400)  # last year: left out
+    y = view(conn, stores)["year"]
+    assert y == {
+        "year": 2026,
+        "main_job_gross_cents": 505000,
+        "side_gross_cents": 50000,
+        "gross_cents": 555000,
+        "net_cents": 210000 + 205000 + 50000 - 10000,  # side income less its 20% set-aside
+    }

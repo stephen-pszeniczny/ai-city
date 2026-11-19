@@ -69,8 +69,8 @@ export function StackedMonths({
                 x={slot * 0.3}
                 y={barArea + 18 + (j + 1) * LINE}
                 textAnchor="middle"
-                className="in-chart__amount"
-                fill={colourFor(line.key, keys)}
+                className={line.total ? "in-chart__total" : "in-chart__amount"}
+                fill={line.total ? undefined : colourFor(line.key, keys)}
               >
                 {line.text}
               </text>
@@ -90,6 +90,12 @@ export function StackedMonths({
             {names.get(k)}
           </span>
         ))}
+        {months.some((m) => monthLines(m.by_source).some((l) => l.total)) && (
+          <span>
+            <i className="in-legend__total" aria-hidden="true" />
+            Total
+          </span>
+        )}
         {goalCents > 0 && (
           <span>
             <i className="in-legend__goal" aria-hidden="true" />
