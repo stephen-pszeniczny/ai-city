@@ -67,3 +67,37 @@ tax_set_aside_is_placeholder = true
 # [main_job]
 # name = "Day job"
 # deposit_match = "DAY JOB PAY"          # text found in the pay deposit's description
+
+# Optional: fixed blocks for Mission Control's Daily plan, repeated every week.
+# kind: work | commute | gym | other. days: mon tue wed thu fri sat sun.
+# Times are 24-hour "HH:MM"; a block must end later than it starts (none past midnight).
+# The Daily plan builds each week from these. Example values only.
+# [plan]
+#
+# [[plan.blocks]]
+# title = "Commute"
+# kind = "commute"
+# days = ["mon", "tue"]
+# start = "07:30"
+# end = "08:00"
+#
+# [[plan.blocks]]
+# title = "Work"
+# kind = "work"
+# days = ["mon", "tue", "wed", "thu", "fri"]
+# start = "09:00"
+# end = "12:00"
+#
+# [[plan.blocks]]
+# title = "Gym"
+# kind = "gym"
+# days = ["mon", "tue", "wed", "thu", "fri"]
+# start = "12:00"
+# end = "13:00"
+#
+# [[plan.blocks]]
+# title = "Work"
+# kind = "work"
+# days = ["mon", "tue", "wed", "thu", "fri"]
+# start = "13:00"
+# end = "17:00"

@@ -14,6 +14,8 @@ import pytest
 from aicity import config
 from aicity.settings import (
     BUILDING_IDS,
+    BlockRule,
+    PlanSettings,
     SettingsError,
     load_settings,
     parse_settings,
@@ -355,3 +357,63 @@ def test_schedule_deposit_match_is_read_and_optional(example_data):
 
 def test_blank_schedule_deposit_match_is_refused(example_data):
     assert "pay_schedules.platform_a" in error_for(with_schedule(example_data, deposit_match=" "))
+
+
+# --- [plan]: fixed blocks for the Daily plan ---------------------------------------
+
+WORK_BLOCK = {"title": "Work", "kind": "work", "days": ["mon", "wed"], "start": "09:00", "end": "12:00"}
+
+
+def with_plan(example_data: dict, plan) -> dict:
+    data = copy.deepcopy(example_data)
+    data["plan"] = plan
+    return data
+
+
+def test_plan_is_optional(example_data):
+    assert parse_settings(example_data).plan is None
+
+
+def test_plan_blocks_parse(example_data):
+    s = parse_settings(with_plan(example_data, {"blocks": [WORK_BLOCK]}))
+    assert s.plan == PlanSettings(blocks=(BlockRule("Work", "work", (0, 2), time(9), time(12)),))
+
+
+def test_plan_with_no_blocks_is_fine(example_data):
+    assert parse_settings(with_plan(example_data, {"blocks": []})).plan == PlanSettings(blocks=())
+
+
+def test_plan_days_are_sorted(example_data):
+    block = {**WORK_BLOCK, "days": ["fri", "mon"]}
+    s = parse_settings(with_plan(example_data, {"blocks": [block]}))
+    assert s.plan.blocks[0].days == (0, 4)
+
+
+@pytest.mark.parametrize(
+    ("plan", "fragment", "secret"),
+    [
+        ({"blocks": [WORK_BLOCK], "extra": 1}, "plan", None),
+        ({"blocks": [{**WORK_BLOCK, "colour": "red"}]}, "plan.blocks", None),
+        ({"blocks": [{**WORK_BLOCK, "kind": "nap"}]}, "kind", "nap"),
+        ({"blocks": [{**WORK_BLOCK, "days": ["monday"]}]}, "days", "monday"),
+        ({"blocks": [{**WORK_BLOCK, "days": []}]}, "days", None),
+        ({"blocks": [{**WORK_BLOCK, "days": ["mon", "mon"]}]}, "days", None),
+        ({"blocks": [{**WORK_BLOCK, "days": "mon"}]}, "days", None),
+        ({"blocks": [{**WORK_BLOCK, "start": "7:45"}]}, "start", "7:45"),
+        ({"blocks": [{**WORK_BLOCK, "end": "09:00"}]}, "end", None),
+        ({"blocks": [{**WORK_BLOCK, "end": "08:00"}]}, "end", "08:00"),
+        ({"blocks": [{**WORK_BLOCK, "end": "24:00"}]}, "end", "24:00"),
+        ({"blocks": [{**WORK_BLOCK, "title": "   "}]}, "title", None),
+        ({"blocks": [{**WORK_BLOCK, "title": "x" * 101}]}, "title", None),
+        ({"blocks": [{k: v for k, v in WORK_BLOCK.items() if k != "end"}]}, "end", None),
+        ({"blocks": {"title": "Work"}}, "plan.blocks", None),
+        ({"blocks": ["Work"]}, "plan.blocks", None),
+        ({}, "blocks", None),
+        ("Work", "plan", None),
+    ],
+)
+def test_plan_refuses(example_data, plan, fragment, secret):
+    message = error_for(with_plan(example_data, plan))
+    assert fragment in message
+    if secret:
+        assert secret not in message
