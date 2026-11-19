@@ -15,13 +15,16 @@ fresh database in tests stays empty.
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
+from aicity.fx import rate_on
 from aicity.notifications import SINCE_KEY
 from aicity.settings import IncomeSettings, PaySchedule
+from aicity.side_work import SideWorkStore
+from aicity.side_work_math import expected_cents, pay_period, rate_text
 from aicity.tasks import TaskStore, utc_now
 
 SEEDED_KEY = "sample_seeded"
@@ -92,7 +95,11 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
     """Fill the Sample database with SAMPLE_TASKS once. True if it seeded now."""
     conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
     try:
-        return seed(conn, clock())
+        now = clock()
+        seeded = seed(conn, now)
+        # Its own once-only check, so a Sample database made before the Vault gets it too.
+        seed_side_work(conn, now)
+        return seeded
     finally:
         conn.close()
 
@@ -172,6 +179,121 @@ def seed(conn: sqlite3.Connection, now: datetime) -> bool:
         )
 
     with_transaction(conn, mark_seeded)
+    return True
+
+
+# --- Sample side work (the Vault) -------------------------------------------------------
+
+SIDE_WORK_SEEDED_KEY = "sample_side_work_seeded"
+_RATE_CENTS = 4500  # 45.00 USD an hour, invented
+_SESSIONS = ((1, 180), (3, 150), (4, 120))  # (days into the week, minutes)
+
+
+def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
+    """Add made-up side work, payments and exchange rates once. Sample database only.
+
+    Dates are relative to now, so any day of the week shows the same mix: paid
+    weeks (one paid short), an overdue week, waiting weeks, two bonuses, and an
+    unscheduled client. Rates are invented for every day, so nothing goes online.
+    """
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("Sample side work only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (SIDE_WORK_SEEDED_KEY,)).fetchone():
+        return False
+
+    today = now.astimezone().date()
+    schedule = SAMPLE_PAY_SCHEDULES["sample_a"]
+    week = pay_period(today, schedule)[0]  # this week's first day
+    store = SideWorkStore(conn, clock=lambda: now)
+
+    first_day = week - timedelta(weeks=7)
+    stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    rates = []
+    for i in range((today - first_day).days + 1):
+        rate = Decimal("1.3600") + Decimal("0.0015") * (i % 7)
+        rates.append(((first_day + timedelta(days=i)).isoformat(), rate_text(rate), stamp))
+
+    def add_rates() -> None:
+        conn.executemany(
+            "INSERT OR IGNORE INTO fx_rates (currency, day, rate, source, fetched_at) "
+            "VALUES ('USD', ?, ?, 'boc', ?)",
+            rates,
+        )
+
+    with_transaction(conn, add_rates)
+
+    def log_week(start: date) -> list[int]:
+        ids = []
+        for offset, minutes in _SESSIONS:
+            day = start + timedelta(days=offset)
+            if day <= today:
+                e = store.add_entry(
+                    worked_on=day,
+                    company="sample_a",
+                    role="Evaluator",
+                    minutes=minutes,
+                    rate_cents=_RATE_CENTS,
+                    currency="USD",
+                )
+                ids.append(e.id)
+        return ids
+
+    def pay(kind: str, received: date, cents: int, entry_ids: list[int]) -> None:
+        found = rate_on(conn, received)
+        store.record_payment(
+            kind=kind,
+            company="sample_a",
+            received_on=received,
+            amount_cents=cents,
+            currency="USD",
+            entry_ids=entry_ids,
+            rate=found[0],
+            rate_date=found[1],
+        )
+
+    # Six weeks back to three: paid (the five-weeks-back one paid 12.00 short).
+    for weeks_back in (6, 5, 4):
+        start = week - timedelta(weeks=weeks_back)
+        ids = log_week(start)
+        owed = sum(expected_cents(m, _RATE_CENTS) for _o, m in _SESSIONS)
+        received = start + timedelta(days=6 + 9)
+        pay("pay", received, owed - (1200 if weeks_back == 5 else 0), ids)
+        if weeks_back != 6:
+            pay("bonus", received + timedelta(days=1), 2500, [])
+    # Three weeks back: never arrived (overdue). Two, one and this week: waiting or due.
+    for weeks_back in (3, 2, 1, 0):
+        log_week(week - timedelta(weeks=weeks_back))
+
+    # A client with no pay schedule, paid in CAD.
+    quill = [
+        store.add_entry(
+            worked_on=week - timedelta(weeks=w, days=2),
+            company="Quill & Co",
+            role="Technical writer",
+            minutes=240,
+            rate_cents=6000,
+            currency="CAD",
+        )
+        for w in (4, 1)
+    ]
+    store.record_payment(
+        kind="pay",
+        company="Quill & Co",
+        received_on=quill[0].worked_on + timedelta(days=10),
+        amount_cents=24000,
+        currency="CAD",
+        entry_ids=[quill[0].id],
+        rate=None,
+        rate_date=None,
+    )
+
+    with_transaction(
+        conn,
+        lambda: conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?, '1')", (SIDE_WORK_SEEDED_KEY,)
+        ),
+    )
     return True
 
 

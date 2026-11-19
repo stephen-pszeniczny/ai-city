@@ -203,3 +203,55 @@ def test_first_check_after_seeding_makes_exactly_the_demo_notification():
         assert [n.title for n in store.list_active()] == ["Water the balcony plants"]
     finally:
         conn.close()
+
+
+# --- Sample side work (the Vault) ------------------------------------------------------
+
+
+def sample_view(now=NOW):
+    from aicity.sample_data import SAMPLE_INCOME, SAMPLE_PAY_SCHEDULES
+    from aicity.side_work import SideWorkStore, side_work_view
+
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        store = SideWorkStore(conn, clock=lambda: now)
+        today = now.astimezone().date()
+        return side_work_view(store, conn, SAMPLE_PAY_SCHEDULES, SAMPLE_INCOME, today)
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("days_later", [0, 1, 2, 3, 4, 5, 6])
+def test_sample_side_work_has_what_a_demo_needs(days_later):
+    now = NOW + timedelta(days=days_later)  # any weekday gives the same mix
+    seed_sample_database(clock=lambda: now)
+    v = sample_view(now)
+    statuses = Counter(g["status"] for g in v["groups"])
+    assert {"paid", "waiting", "overdue", "no_schedule"} <= set(statuses)
+    assert any((g["difference_cad_cents"] or 0) < 0 for g in v["groups"])  # one paid short
+    assert len(v["bonuses"]) == 2
+    assert v["summary"]["rates_pending"] is False
+    assert v["summary"]["month_received_cad_cents"] > 0 or now.day < 10
+
+
+def test_sample_side_work_is_seeded_once():
+    seed_sample_database(clock=lambda: NOW)
+    first = sample_view()
+    seed_sample_database(clock=lambda: NOW)
+    assert sample_view() == first
+
+
+def test_an_older_sample_database_gets_side_work_too():
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        seed(conn, NOW)  # tasks only, as before the Vault existed
+    finally:
+        conn.close()
+    seed_sample_database(clock=lambda: NOW)
+    assert sample_view()["groups"]
+
+
+def test_sample_side_work_uses_only_invented_names():
+    seed_sample_database(clock=lambda: NOW)
+    names = {g["company_name"] for g in sample_view()["groups"]}
+    assert names <= {"Nimbus Labs", "Quill & Co"}
