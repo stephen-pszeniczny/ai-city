@@ -349,3 +349,18 @@ def test_sample_statement_previews_with_every_kind(data_dir, clock):
 
 def test_sample_statement_is_not_offered_in_personal(client):
     assert client.get("/api/vault/statements/sample.csv").status_code == 404
+
+
+def test_trying_the_sample_statement_twice_never_doubles_pay(data_dir, clock):
+    from aicity.sample_data import seed_sample_database
+
+    seed_sample_database(clock=lambda: NOW)
+    app = create_app(dev=False)
+    app.state.db_kind = DbKind.SAMPLE
+    app.state.clock = clock
+    c = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    first = preview(c, c.get("/api/vault/statements/sample.csv").content).json()
+    confirm(c, decisions(first))
+    again = preview(c, c.get("/api/vault/statements/sample.csv").content).json()
+    assert again["main_job"] == []  # the same pay row: already imported
+    assert again["already_imported"] >= 1

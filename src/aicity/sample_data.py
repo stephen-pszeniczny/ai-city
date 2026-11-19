@@ -418,11 +418,12 @@ def build_sample_statement(conn: sqlite3.Connection, side: SideWorkStore, today:
     rows.append((today - timedelta(days=2), "Deposit", "NIMBUS LABS", 1000, "USD"))
     rows.sort(key=lambda r: r[0])
 
-    balance = 412_300
     lines = ["date,transaction,description,amount,balance,currency"]
     for day, kind, text, cents, currency in rows:
-        if currency == "CAD":
-            balance += cents
+        # Each row's balance depends only on that row, so the same made-up row is
+        # identical every time (like re-downloading a real statement) and a second
+        # try is recognised as already imported.
+        balance = 400_000 + (day.toordinal() * 37 + abs(cents)) % 300_000
         amount = f"{cents / 100:.2f}"
         lines.append(f"{day.isoformat()},{kind},{text},{amount},{balance / 100:.2f},{currency}")
     return ("\n".join(lines) + "\n").encode()
