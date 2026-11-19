@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from aicity.db import DbKind, open_database
-from aicity.income import IncomeError, IncomeStore
+from aicity.income import IncomeError, IncomeStore, MainJobPayNotFound, MainJobPayTaken
 from aicity.settings import IncomeSettings
 from aicity.side_work import SideWorkStore, side_work_view
 
@@ -42,21 +42,27 @@ def an_import(store):
     )
 
 
-def test_deposit_and_main_job_pay(store):
-    imp = an_import(store)
-    d = store.add_deposit(
-        posted_on=date(2026, 3, 20),
-        amount_cents=210000,
+def main_deposit(store, day=date(2026, 3, 19), cents=150900, ch="a"):
+    return store.add_deposit(
+        posted_on=day,
+        amount_cents=cents,
         kind="main_job",
         source="main_job",
-        row_key=key("a"),
-        import_id=imp,
+        row_key=key(ch),
+        import_id=an_import(store),
     )
-    store.set_main_job_pay(
-        d.id, gross_cents=300000, rrsp_cents=15000, match_cents=7500, notes=" ok "
-    )
+
+
+def typed(store, day=date(2026, 3, 20), net=150000, **stub):
+    fields = {"gross_cents": None, "rrsp_cents": None, "match_cents": None, "notes": None}
+    fields.update(stub)
+    return store.add_main_job_pay(paid_on=day, net_cents=net, **fields)
+
+
+def test_add_pay_with_stub_details(store):
+    typed(store, net=210000, gross_cents=300000, rrsp_cents=15000, match_cents=7500, notes=" ok ")
     [row] = store.main_job_pay()
-    assert (row.posted_on, row.net_cents, row.gross_cents, row.rrsp_cents, row.match_cents) == (
+    assert (row.paid_on, row.net_cents, row.gross_cents, row.rrsp_cents, row.match_cents) == (
         date(2026, 3, 20),
         210000,
         300000,
@@ -67,63 +73,111 @@ def test_deposit_and_main_job_pay(store):
     assert row.notes == "ok"
 
 
-def test_main_job_deposit_without_stub_details_is_listed(store):
-    imp = an_import(store)
-    store.add_deposit(
-        posted_on=date(2026, 3, 6),
-        amount_cents=200000,
-        kind="main_job",
-        source="main_job",
-        row_key=key("b"),
-        import_id=imp,
+def test_add_typed_pay_is_unconfirmed(store):
+    pay = typed(store)
+    assert pay.confirmed is False
+    assert pay.deposit_id is None
+    assert [p.id for p in store.unconfirmed_main_job_pay()] == [pay.id]
+
+
+def test_pay_added_from_a_deposit_is_confirmed(store):
+    d = main_deposit(store)
+    pay = typed(store, day=d.posted_on, net=d.amount_cents, deposit_id=d.id)
+    assert pay.confirmed is True
+    assert store.unconfirmed_main_job_pay() == []
+
+
+def test_link_keeps_typed_date_and_takes_statement_amount(store):
+    pay = typed(store)
+    linked = store.link_main_job_pay(pay.id, main_deposit(store))
+    assert (linked.paid_on, linked.net_cents, linked.confirmed) == (
+        date(2026, 3, 20),
+        150900,
+        True,
     )
-    [row] = store.main_job_pay()
-    assert (row.gross_cents, row.deductions_cents) == (None, None)
+    assert len(store.main_job_pay()) == 1
 
 
-def test_stub_details_can_be_changed_later(store):
-    imp = an_import(store)
-    d = store.add_deposit(
-        posted_on=date(2026, 3, 6),
-        amount_cents=200000,
-        kind="main_job",
-        source="main_job",
-        row_key=key("c"),
-        import_id=imp,
+def test_link_twice_is_refused(store):
+    pay = typed(store)
+    store.link_main_job_pay(pay.id, main_deposit(store, ch="a"))
+    with pytest.raises(MainJobPayTaken):
+        store.link_main_job_pay(pay.id, main_deposit(store, ch="b"))
+
+
+def test_link_to_a_missing_pay_is_refused(store):
+    with pytest.raises(MainJobPayTaken):
+        store.link_main_job_pay(999, main_deposit(store))
+
+
+def test_edit_typed_net_and_date_while_unconfirmed(store):
+    pay = typed(store)
+    row = store.edit_main_job_pay(
+        pay.id,
+        paid_on=date(2026, 3, 21),
+        net_cents=151000,
+        gross_cents=None,
+        rrsp_cents=None,
+        match_cents=None,
+        notes=None,
     )
-    store.set_main_job_pay(d.id, gross_cents=280000, rrsp_cents=None, match_cents=None, notes=None)
-    store.set_main_job_pay(d.id, gross_cents=281000, rrsp_cents=1000, match_cents=None, notes=None)
-    assert store.main_job_pay()[0].gross_cents == 281000
+    assert (row.paid_on, row.net_cents) == (date(2026, 3, 21), 151000)
 
 
-def test_stub_details_only_for_main_job_deposits(store):
-    imp = an_import(store)
-    d = store.add_deposit(
-        posted_on=date(2026, 3, 6),
-        amount_cents=5000,
-        kind="side_work",
-        source="platform_a",
-        row_key=key("d"),
-        import_id=imp,
+def test_edit_confirmed_amount_is_refused(store):
+    pay = typed(store)
+    store.link_main_job_pay(pay.id, main_deposit(store))
+    for change in (
+        {"net_cents": 150000, "paid_on": None},
+        {"net_cents": None, "paid_on": date(2026, 3, 1)},
+    ):
+        with pytest.raises(IncomeError, match="confirmed by the statement"):
+            store.edit_main_job_pay(
+                pay.id, gross_cents=None, rrsp_cents=None, match_cents=None, notes=None, **change
+            )
+
+
+def test_edit_confirmed_stub_details_still_allowed(store):
+    pay = typed(store)
+    store.link_main_job_pay(pay.id, main_deposit(store))
+    row = store.edit_main_job_pay(
+        pay.id,
+        paid_on=date(2026, 3, 20),  # unchanged: fine
+        net_cents=150900,  # unchanged: fine
+        gross_cents=281000,
+        rrsp_cents=1000,
+        match_cents=None,
+        notes="stub",
     )
-    with pytest.raises(IncomeError):
-        store.set_main_job_pay(d.id, gross_cents=1, rrsp_cents=None, match_cents=None, notes=None)
+    assert (row.gross_cents, row.notes) == (281000, "stub")
 
 
-def test_gross_below_net_is_refused(store):
-    imp = an_import(store)
-    d = store.add_deposit(
-        posted_on=date(2026, 3, 6),
-        amount_cents=200000,
-        kind="main_job",
-        source="main_job",
-        row_key=key("e"),
-        import_id=imp,
-    )
-    with pytest.raises(IncomeError):
-        store.set_main_job_pay(
-            d.id, gross_cents=100000, rrsp_cents=None, match_cents=None, notes=None
+def test_edit_unknown_pay_is_not_found(store):
+    with pytest.raises(MainJobPayNotFound):
+        store.edit_main_job_pay(
+            1,
+            paid_on=None,
+            net_cents=None,
+            gross_cents=None,
+            rrsp_cents=None,
+            match_cents=None,
+            notes=None,
         )
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"net_cents": 0},
+        {"gross_cents": 100000},  # below net
+        {"gross_cents": 150000, "rrsp_cents": 1},  # below net + RRSP
+        {"notes": "x" * 501},
+    ],
+)
+def test_bad_typed_pay_is_refused(store, fields):
+    with pytest.raises(IncomeError):
+        typed(store, net=fields.pop("net_cents", 150000), **fields)
+    assert store.main_job_pay() == []
 
 
 def test_existing_row_keys(store):

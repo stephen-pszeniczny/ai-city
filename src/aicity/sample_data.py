@@ -361,14 +361,16 @@ def seed_income(conn: sqlite3.Connection, now: datetime) -> bool:
                 row_key=_sample_key(f"pay-{day}"),
                 import_id=imp,
             )
-            if day != newest:  # the newest stub isn't typed in yet
-                income.set_main_job_pay(
-                    d.id,
-                    gross_cents=_PAY_GROSS,
-                    rrsp_cents=_PAY_RRSP,
-                    match_cents=_PAY_MATCH,
-                    notes="Holiday pay included" if i == 3 else None,
-                )
+            stub = day != newest  # the newest stub isn't typed in yet
+            income.add_main_job_pay(
+                paid_on=day,
+                net_cents=_PAY_NET,
+                gross_cents=_PAY_GROSS if stub else None,
+                rrsp_cents=_PAY_RRSP if stub else None,
+                match_cents=_PAY_MATCH if stub else None,
+                notes="Holiday pay included" if i == 3 else None,
+                deposit_id=d.id,
+            )
         for p in payments:
             cad = to_cad_cents(p.amount_cents, p.currency, p.rate)
             d = income.add_deposit(

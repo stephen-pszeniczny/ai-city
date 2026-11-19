@@ -57,8 +57,8 @@ def add_payment(conn, **overrides):
     ).lastrowid
 
 
-def test_new_database_reaches_version_5(conn):
-    assert schema_version(conn) == 5
+def test_new_database_reaches_the_latest_version(conn):
+    assert schema_version(conn) == len(load_migrations())
 
 
 def test_part_a_rows_survive_the_upgrade(tmp_path):
@@ -154,3 +154,66 @@ def test_nothing_new_is_ever_deleted(conn, table):
 
 def test_migrate_is_a_no_op_when_current(conn):
     assert migrate(conn, load_migrations()) == 0
+
+
+# --- 006: main_job_payments -----------------------------------------------------------------
+
+
+def test_006_moves_imported_main_job_pay(tmp_path):
+    conn = open_database(tmp_path / "sample.db", DbKind.SAMPLE, load_migrations()[:5])
+    with_stub = add_deposit(conn, posted_on="2026-03-06", row_key="a" * 64)
+    conn.execute(
+        "INSERT INTO main_job_pay VALUES (?, 300000, 15000, 7500, 'stub note')", (with_stub,)
+    )
+    bare = add_deposit(conn, posted_on="2026-03-20", amount_cents=150100, row_key="b" * 64)
+    add_deposit(conn, kind="side_work", source="platform_a", row_key="c" * 64)
+    conn.commit()
+    migrate(conn, load_migrations()[:6])
+    rows = conn.execute(
+        "SELECT paid_on, net_cents, gross_cents, rrsp_cents, match_cents, notes, deposit_id,"
+        " created_at FROM main_job_payments ORDER BY id"
+    ).fetchall()
+    assert rows == [
+        ("2026-03-06", 150000, 300000, 15000, 7500, "stub note", with_stub, NOW),
+        ("2026-03-20", 150100, None, None, None, None, bare, NOW),
+    ]
+    # The old table is left in place, untouched.
+    assert conn.execute("SELECT COUNT(*) FROM main_job_pay").fetchone()[0] == 1
+    conn.close()
+
+
+def add_pay(conn, **overrides):
+    row = {"paid_on": "2026-03-20", "net_cents": 150000, "created_at": NOW}
+    row.update(overrides)
+    cols, marks = ", ".join(row), ", ".join("?" for _ in row)
+    return conn.execute(
+        f"INSERT INTO main_job_payments ({cols}) VALUES ({marks})", tuple(row.values())
+    ).lastrowid
+
+
+def test_main_job_payments_never_deleted(conn):
+    pid = add_pay(conn)
+    with pytest.raises(sqlite3.IntegrityError, match="never deleted"):
+        conn.execute("DELETE FROM main_job_payments WHERE id = ?", (pid,))
+
+
+def test_one_pay_per_deposit(conn):
+    d = add_deposit(conn)
+    add_pay(conn, deposit_id=d)
+    with pytest.raises(sqlite3.IntegrityError):
+        add_pay(conn, deposit_id=d)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"paid_on": "2026-02-30"},
+        {"net_cents": 0},
+        {"gross_cents": -1},
+        {"notes": "x" * 501},
+        {"deposit_id": 999},
+    ],
+)
+def test_bad_main_job_payment_is_refused(conn, bad):
+    with pytest.raises(sqlite3.IntegrityError):
+        add_pay(conn, **bad)
