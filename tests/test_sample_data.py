@@ -205,8 +205,13 @@ def test_first_check_after_seeding_makes_exactly_the_demo_notification():
     conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
     try:
         store = NotificationStore(conn, clock=lambda: NOW)  # the Mac's own zone, like seeding
-        store.check_reminders()
-        assert [n.title for n in store.list_active()] == ["Water the balcony plants"]
+        assert store.check_reminders() == 1  # only the demo task reminder fires
+        active = sorted((n.kind, n.title) for n in store.list_active())
+        # The check-in notification is seeded ready-made, alongside it.
+        assert active == [
+            ("checkin", "Time for your Sunday check-in"),
+            ("reminder", "Water the balcony plants"),
+        ]
     finally:
         conn.close()
 
@@ -383,3 +388,22 @@ def test_seed_plan_refuses_the_personal_database():
     conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
     with pytest.raises(DatabaseError):
         seed_plan(conn, NOW)
+
+
+def test_sample_has_one_checkin_notification():
+    from aicity.checkin_reminder import CHECKIN_TITLE
+
+    seed_sample_database(clock=lambda: NOW)
+    seed_sample_database(clock=lambda: NOW)
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    rows = conn.execute(
+        "SELECT title FROM notifications WHERE kind = 'checkin' "
+        "AND dismissed_at IS NULL AND cleared_at IS NULL"
+    ).fetchall()
+    assert rows == [(CHECKIN_TITLE,)]
+
+
+def test_sample_plan_has_usual_events():
+    from aicity.sample_data import SAMPLE_PLAN
+
+    assert [e.title for e in SAMPLE_PLAN.usual_events] == ["Book club", "Five-a-side"]

@@ -20,12 +20,20 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+from aicity.checkin_reminder import CHECKIN_TITLE
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
 from aicity.fx import rate_on
 from aicity.income import IncomeStore
 from aicity.notifications import SINCE_KEY
 from aicity.plan import PlanStore, monday_of
-from aicity.settings import BlockRule, IncomeSettings, MainJob, PaySchedule, PlanSettings
+from aicity.settings import (
+    BlockRule,
+    IncomeSettings,
+    MainJob,
+    PaySchedule,
+    PlanSettings,
+    UsualEvent,
+)
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import expected_cents, pay_period, rate_text, to_cad_cents
 from aicity.tasks import TaskStore, utc_now
@@ -47,7 +55,12 @@ SAMPLE_PLAN = PlanSettings(
         BlockRule("Gym", "gym", _WEEKDAYS, time(12), time(13)),
         BlockRule("Work", "work", _WEEKDAYS, time(13), time(17)),
         BlockRule("Commute", "commute", (0, 1), time(17), time(17, 30)),
-    )
+    ),
+    # One-tap chips at the Sunday check-in: invented, like everything here.
+    usual_events=(
+        UsualEvent("Book club", "event", None, time(19), time(20, 30)),
+        UsualEvent("Five-a-side", "event", 4, time(20), time(21)),
+    ),
 )
 
 SAMPLE_INCOME = IncomeSettings(
@@ -120,6 +133,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         seed_side_work(conn, now)
         seed_income(conn, now)
         seed_plan(conn, now)
+        seed_checkin_notification(conn, now)
         return seeded
     finally:
         conn.close()
@@ -232,6 +246,37 @@ def seed_plan(conn: sqlite3.Connection, now: datetime) -> bool:
             week_start, next_day, time(20, 30), time(21, 30), "Five-a-side", "event", today
         )
         conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (PLAN_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
+    return True
+
+
+CHECKIN_SEEDED_KEY = "sample_checkin_seeded"
+
+
+def seed_checkin_notification(conn: sqlite3.Connection, now: datetime) -> bool:
+    """One ready-made check-in notification, once, so a demo shows the shuttle and ticker.
+
+    Sample mode never makes real check-in reminders (the background check is Personal only).
+    Its own once-only check, so a Sample database made before the check-in gets it too.
+    """
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("The sample check-in notification only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (CHECKIN_SEEDED_KEY,)).fetchone():
+        return False
+
+    def work() -> None:
+        conn.execute(
+            "INSERT INTO notifications (kind, task_id, title, due_at, created_at) "
+            "VALUES ('checkin', NULL, ?, ?, ?)",
+            (
+                CHECKIN_TITLE,
+                _local_minute(now - timedelta(minutes=10)),
+                now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            ),
+        )
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (CHECKIN_SEEDED_KEY,))
 
     with_transaction(conn, work, immediate=True)
     return True
