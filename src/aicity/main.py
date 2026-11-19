@@ -33,6 +33,7 @@ from aicity.security import FrontDoorMiddleware
 from aicity.settings import BUILDING_IDS, load_settings
 from aicity.sky import daylight_at
 from aicity.tasks import utc_now
+from aicity.vault_lock import VaultLock
 
 
 class ModeChange(BaseModel):
@@ -103,6 +104,8 @@ def create_app(
     # Which database the routes use: the mode saved last time (Sample if none).
     app.state.db_kind = load_saved_mode()
     app.state.mode_switcher = ModeSwitcher(app.state, ask)
+    # The Vault's Touch ID lock (memory only, so a restart locks it again).
+    app.state.vault_lock = VaultLock(ask)
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
     app.state.reminder_loop = None
@@ -133,6 +136,8 @@ def create_app(
         409 a switch is already waiting, 503 Touch ID can't run.
         """
         switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
+        # Any switch locks the Vault again, so Touch ID is asked afresh.
+        request.app.state.vault_lock.forget()
         if switched is DbKind.SAMPLE:
             # Take any real reminder titles off the screen before a demo.
             mac_notify.clear()
