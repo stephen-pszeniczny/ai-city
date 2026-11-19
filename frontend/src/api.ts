@@ -142,6 +142,59 @@ export const archiveTask = (id: number) => request<Task>("POST", `/api/tasks/${i
 export const getHistory = (id: number) =>
   request<HistoryEvent[]>("GET", `/api/tasks/${id}/history`);
 
+// --- Mission Control: Daily plan ---------------------------------------------------
+
+export type PlanKind = "work" | "commute" | "gym" | "event" | "side_work" | "build" | "other";
+export type GymStatus = "planned" | "done" | "skipped";
+
+/** One block of a saved week. Days are "2026-11-25"; times are local "09:00". */
+export type PlanBlock = {
+  id: number;
+  day: string;
+  start: string;
+  end: string;
+  title: string;
+  kind: PlanKind;
+  source: "settings" | "added";
+  status: GymStatus; // removed blocks are never sent
+  edited: boolean;
+};
+
+export type PlanWeek = {
+  configured: boolean; // false: no [plan] section in the settings file
+  week_start: string; // a Monday
+  today: string;
+  exists: boolean; // false: not saved (and not created)
+  checked_in: boolean;
+  days: { day: string; blocks: PlanBlock[] }[]; // seven days, or none when not saved
+};
+
+export type NewPlanBlock = {
+  week_start: string;
+  day: string;
+  start: string;
+  end: string;
+  title: string;
+  kind: PlanKind;
+};
+
+export type PlanBlockEdit = Partial<Pick<PlanBlock, "day" | "start" | "end" | "title" | "kind">>;
+
+export const getPlanWeek = (start?: string) =>
+  request<PlanWeek>("GET", start ? `/api/plan/week?start=${start}` : "/api/plan/week");
+export const openPlanWeek = (start: string) =>
+  request<PlanWeek>("POST", `/api/plan/week/${start}/open`);
+export const rebuildPlanWeek = (start: string) =>
+  request<PlanWeek>("POST", `/api/plan/week/${start}/rebuild`);
+export const addPlanBlock = (block: NewPlanBlock) =>
+  request<PlanBlock>("POST", "/api/plan/blocks", block);
+export const editPlanBlock = (id: number, changes: PlanBlockEdit) =>
+  request<PlanBlock>("PATCH", `/api/plan/blocks/${id}`, changes);
+export const removePlanBlock = (id: number) =>
+  request<PlanBlock>("POST", `/api/plan/blocks/${id}/remove`);
+export const setGym = (id: number, status: GymStatus) =>
+  request<PlanBlock>("POST", `/api/plan/blocks/${id}/gym`, { status });
+
 // --- Plumbing ----------------------------------------------------------------
 
 // --- The Vault's Side work (spec: docs/superpowers/specs/2026-11-18-vault-side-work-design.md)
