@@ -15,7 +15,7 @@ fresh database in tests stays empty.
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -189,6 +189,28 @@ _RATE_CENTS = 4500  # 45.00 USD an hour, invented
 _SESSIONS = ((1, 300), (3, 250), (4, 200))  # (days into the week, hours x 100)
 
 
+def ensure_sample_rates(conn: sqlite3.Connection, first_day: date, last_day: date) -> None:
+    """Invented USD-to-CAD rates for every day in the range that has none yet.
+
+    Sample mode never goes online, so it makes its own: called at seeding and
+    whenever Sample's Side work opens, so later days never show "rate pending".
+    """
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = []
+    for i in range((last_day - first_day).days + 1):
+        day = first_day + timedelta(days=i)
+        rate = Decimal("1.3600") + Decimal("0.0015") * (day.toordinal() % 7)
+        rows.append((day.isoformat(), rate_text(rate), stamp))
+    with_transaction(
+        conn,
+        lambda: conn.executemany(
+            "INSERT OR IGNORE INTO fx_rates (currency, day, rate, source, fetched_at) "
+            "VALUES ('USD', ?, ?, 'boc', ?)",
+            rows,
+        ),
+    )
+
+
 def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
     """Add made-up side work, payments and exchange rates once. Sample database only.
 
@@ -207,21 +229,7 @@ def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
     week = pay_period(today, schedule)[0]  # this week's first day
     store = SideWorkStore(conn, clock=lambda: now)
 
-    first_day = week - timedelta(weeks=7)
-    stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    rates = []
-    for i in range((today - first_day).days + 1):
-        rate = Decimal("1.3600") + Decimal("0.0015") * (i % 7)
-        rates.append(((first_day + timedelta(days=i)).isoformat(), rate_text(rate), stamp))
-
-    def add_rates() -> None:
-        conn.executemany(
-            "INSERT OR IGNORE INTO fx_rates (currency, day, rate, source, fetched_at) "
-            "VALUES ('USD', ?, ?, 'boc', ?)",
-            rates,
-        )
-
-    with_transaction(conn, add_rates)
+    ensure_sample_rates(conn, week - timedelta(weeks=7), today)
 
     def log_week(start: date) -> list[int]:
         ids = []

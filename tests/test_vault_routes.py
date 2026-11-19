@@ -401,3 +401,21 @@ def test_one_deposit_can_pay_several_sessions_without_a_schedule(unlocked):
     assert len(paid) == 1
     assert (paid[0]["status"], paid[0]["difference_cad_cents"]) == ("paid", 0)
     assert view(unlocked)["summary"]["still_expected_cad_cents"] == 3000  # only Other Co
+
+
+def test_sample_rates_keep_coming_after_the_day_it_was_made(data_dir, fetcher):
+    from datetime import timedelta
+
+    from aicity.sample_data import seed_sample_database
+
+    seed_sample_database(clock=lambda: NOW - timedelta(days=10))
+    app = create_app(dev=False)
+    app.state.db_kind = DbKind.SAMPLE
+    app.state.clock = lambda: NOW
+    app.state.fx_fetcher = fetcher
+    client = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    record(client, kind="bonus", received_on="2026-03-25", amount="10", currency="USD")
+    assert client.post("/api/vault/side-work/rates/refresh").json() == {"ok": True}
+    v = view(client)
+    assert v["summary"]["rates_pending"] is False
+    assert fetcher.calls == 0

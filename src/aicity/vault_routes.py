@@ -153,6 +153,17 @@ def _settings_for(request: Request):
     return settings.pay_schedules, settings.income
 
 
+def _get_rates(request: Request, conn: sqlite3.Connection, days: set[date]) -> bool:
+    """Make sure these days have rates: Bank of Canada in Personal, invented in Sample."""
+    today = _today(request)
+    if _sample(request):
+        past = [d for d in days if d <= today]
+        if past:
+            sample_data.ensure_sample_rates(conn, min(past), today)
+        return True
+    return refresh_rates(conn, days, request.app.state.fx_fetcher, today=today)
+
+
 def _fill_pending_rates(store: SideWorkStore, conn: sqlite3.Connection) -> None:
     for p in store.payments():
         if p.rate is None:
@@ -212,10 +223,7 @@ def archive_entry(request: Request, entry_id: int) -> dict:
 @router.post("/payments", status_code=201)
 def create_payment(request: Request, body: PaymentCreate) -> dict:
     with _open(request) as (store, conn):
-        if not _sample(request):
-            refresh_rates(
-                conn, {body.received_on}, request.app.state.fx_fetcher, today=_today(request)
-            )
+        _get_rates(request, conn, {body.received_on})
         found = rate_on(conn, body.received_on)
         p = store.record_payment(
             kind=body.kind,
@@ -234,11 +242,8 @@ def create_payment(request: Request, body: PaymentCreate) -> dict:
 def refresh(request: Request) -> dict[str, bool]:
     """Fetch the rates still missing (pending payments and today), then fill payments."""
     with _open(request) as (store, conn):
-        ok = True
-        if not _sample(request):
-            today = _today(request)
-            days = {p.received_on for p in store.payments() if p.rate is None} | {today}
-            ok = refresh_rates(conn, days, request.app.state.fx_fetcher, today=today)
+        days = {p.received_on for p in store.payments() if p.rate is None}
+        ok = _get_rates(request, conn, days | {_today(request)})
         _fill_pending_rates(store, conn)
         return {"ok": ok}
 
