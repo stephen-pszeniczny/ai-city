@@ -252,6 +252,14 @@ export type IncomeView = {
     goal_split: { main_job_cents: number; side_income_cents: number } | null;
   };
   months: { month: string; by_source: SourceCents[]; total_cents: number }[];
+  /** This calendar year so far, by the same gross and net rules as the month. */
+  year: {
+    year: number;
+    gross_cents: number;
+    net_cents: number;
+    main_job_gross_cents: number;
+    side_gross_cents: number;
+  };
   platforms: {
     id: string;
     name: string;

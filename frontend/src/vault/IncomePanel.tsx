@@ -95,6 +95,15 @@ function ThisMonth({ v }: { v: IncomeView }) {
         )}
       </div>
       <div className="sw-tile">
+        <span className="sw-tile__label">{v.year.year} so far, gross</span>
+        <strong>{formatCad(v.year.gross_cents)}</strong>
+        <span className="sw-tile__label">net {formatCad(v.year.net_cents)}</span>
+        <span className="sw-tile__label">
+          Main job {formatCad(v.year.main_job_gross_cents)} · Side income{" "}
+          {formatCad(v.year.side_gross_cents)}
+        </span>
+      </div>
+      <div className="sw-tile">
         <span className="sw-tile__label">
           Tax set-aside ({v.set_aside.percent}% of this year's side income)
           {v.set_aside.is_placeholder && <span className="sw-chip">placeholder</span>}
