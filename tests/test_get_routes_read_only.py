@@ -34,10 +34,12 @@ EXPECTED_AT_LEAST = {
     "/api/vault/income",
     "/api/vault/badge",
     "/api/vault/statements/sample.csv",
+    "/api/plan/week",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {
-    "/api/tasks": ["", "?status=open", "?status=done", "?status=archived", "?status=all"]
+    "/api/plan/week": ["", "?start=2026-11-23", "?start=2026-11-30"],
+    "/api/tasks": ["", "?status=open", "?status=done", "?status=archived", "?status=all"],
 }
 
 

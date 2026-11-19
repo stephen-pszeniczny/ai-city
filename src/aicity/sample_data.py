@@ -24,7 +24,7 @@ from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transa
 from aicity.fx import rate_on
 from aicity.income import IncomeStore
 from aicity.notifications import SINCE_KEY
-from aicity.settings import IncomeSettings, MainJob, PaySchedule
+from aicity.settings import IncomeSettings, MainJob, PaySchedule, PlanSettings
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import expected_cents, pay_period, rate_text, to_cad_cents
 from aicity.tasks import TaskStore, utc_now
@@ -37,6 +37,9 @@ SAMPLE_PAY_SCHEDULES: dict[str, PaySchedule] = {
 }
 SAMPLE_MAIN_JOB = MainJob(name="Day job", deposit_match="DAY JOB PAY")
 SAMPLE_GOAL_CENTS = 650000
+# Sample mode's Daily plan fixed blocks (filled in with made-up times in Task 6).
+SAMPLE_PLAN = PlanSettings(blocks=())
+
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
 )
