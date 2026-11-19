@@ -7,8 +7,10 @@ import {
   goalProgress,
   linkNote,
   matchChip,
+  monthLines,
   payStatus,
   stackSegments,
+  wholeDollars,
 } from "../src/vault/income.ts";
 
 test("goal progress shows the real percent", () => {
@@ -70,4 +72,25 @@ test("review chip: an exact match, a near one to check, or nothing", () => {
     "Might be the pay you typed in (Mar 20, $2,100.00): check the amount",
   );
   assert.equal(matchChip({ kind: "new", pay_id: null, pay: null, check_amount: false }), null);
+});
+
+test("wholeDollars rounds to whole dollars", () => {
+  assert.equal(wholeDollars(500000), "$5,000");
+  assert.equal(wholeDollars(123450), "$1,235");
+  assert.equal(wholeDollars(49), "$0");
+});
+
+test("monthLines drops empty sources", () => {
+  assert.deepEqual(
+    monthLines([
+      { key: "main_job", cents: 500000 },
+      { key: "platform_a", cents: 0 },
+      { key: "extra", cents: 7550 },
+    ]),
+    [
+      { key: "main_job", text: "$5,000" },
+      { key: "extra", text: "$76" },
+    ],
+  );
+  assert.deepEqual(monthLines([]), []);
 });

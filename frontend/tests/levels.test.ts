@@ -2,7 +2,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { back, otherStationRoom, parsePath, toPath, type View } from "../src/belt/levels.ts";
+import {
+  back,
+  otherStationRoom,
+  parsePath,
+  startPath,
+  toPath,
+  type View,
+} from "../src/belt/levels.ts";
 
 test("addresses map to views", () => {
   assert.deepEqual(parsePath("/"), { level: "belt" });
@@ -37,4 +44,14 @@ test("otherStationRoom pairs Mission Control and the Vault", () => {
   assert.equal(otherStationRoom("planner"), "finance");
   assert.equal(otherStationRoom("finance"), "planner");
   assert.equal(otherStationRoom("jobs"), null);
+});
+
+test("startPath sends building and screen addresses to the belt", () => {
+  assert.equal(startPath("/b/vault"), "/");
+  assert.equal(startPath("/b/vault/screen"), "/");
+});
+
+test("startPath keeps other pages", () => {
+  assert.equal(startPath("/"), "/");
+  assert.equal(startPath("/todo"), "/todo");
 });

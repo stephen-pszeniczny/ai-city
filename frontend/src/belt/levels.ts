@@ -31,6 +31,12 @@ export function parsePath(path: string): View {
   return { level: "belt" };
 }
 
+/** Where a fresh open of the page starts: building and screen addresses go to the belt
+ * (the Dock app reopens the last address; Steve wants every open to start at the belt). */
+export function startPath(path: string): string {
+  return path === "/b" || path.startsWith("/b/") ? "/" : path;
+}
+
 export function toPath(view: View): string {
   if (view.level === "belt") return "/";
   return view.level === "building" ? `/b/${view.id}` : `/b/${view.id}/screen`;

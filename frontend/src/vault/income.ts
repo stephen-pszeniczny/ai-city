@@ -60,3 +60,17 @@ export function matchChip(p: MainJobProposalLike): string | null {
     ? `Might be the pay you typed in ${which}: check the amount`
     : `Matches the pay you typed in ${which}`;
 }
+
+/** "$5,000": whole dollars, for the amounts under the chart's bars. */
+export function wholeDollars(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString("en-CA")}`;
+}
+
+/** The amounts listed under one month's bar: stack order, empty sources left out. */
+export function monthLines(
+  bySource: readonly { key: string; cents: number }[],
+): { key: string; text: string }[] {
+  return bySource
+    .filter((s) => s.cents > 0)
+    .map((s) => ({ key: s.key, text: wholeDollars(s.cents) }));
+}

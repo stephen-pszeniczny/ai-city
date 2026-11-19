@@ -1,6 +1,6 @@
 // Plain SVG charts for the Vault (no chart library).
 import type { IncomeView } from "../api";
-import { formatMonth, stackSegments } from "./income";
+import { formatMonth, monthLines, stackSegments } from "./income";
 import { formatCad } from "./sideWork";
 
 const COLOURS: Record<string, string> = {
@@ -15,7 +15,8 @@ function colourFor(key: string, keys: string[]): string {
   return PLATFORM_COLOURS[platforms.indexOf(key) % PLATFORM_COLOURS.length] ?? "#8aa4ff";
 }
 
-/** Income by source, one stacked bar per month, with a dashed goal line. */
+/** Income by source, one stacked bar per month with its amounts listed under it (in the
+ * bar colours), and a dashed goal line. */
 export function StackedMonths({
   months,
   goalCents,
@@ -24,8 +25,10 @@ export function StackedMonths({
   goalCents: number;
 }) {
   const W = 600;
-  const H = 180;
-  const barArea = H - 24;
+  const barArea = 156;
+  const LINE = 12; // each month's amounts are listed under its label, one per line
+  const maxLines = Math.max(0, ...months.map((m) => monthLines(m.by_source).length));
+  const H = barArea + 24 + maxLines * LINE;
   const scale = Math.max(goalCents, ...months.map((m) => m.total_cents), 1) * 1.08;
   const slot = W / months.length;
   const keys = [...new Set(months.flatMap((m) => m.by_source.map((s) => s.key)))];
@@ -57,9 +60,21 @@ export function StackedMonths({
                 </title>
               </rect>
             ))}
-            <text x={slot * 0.3} y={H - 6} textAnchor="middle" className="in-chart__label">
+            <text x={slot * 0.3} y={barArea + 18} textAnchor="middle" className="in-chart__label">
               {formatMonth(m.month)}
             </text>
+            {monthLines(m.by_source).map((line, j) => (
+              <text
+                key={line.key}
+                x={slot * 0.3}
+                y={barArea + 18 + (j + 1) * LINE}
+                textAnchor="middle"
+                className="in-chart__amount"
+                fill={colourFor(line.key, keys)}
+              >
+                {line.text}
+              </text>
+            ))}
           </g>
         ))}
         {goalCents > 0 && (

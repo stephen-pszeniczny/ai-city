@@ -315,6 +315,12 @@
   font-size: 12px;
 }
 
+/* Each month's amounts under its label; the colour comes from the bar (fill attribute). */
+.in-chart__amount {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 .in-chart__goal {
   stroke: rgba(255, 255, 255, 0.55);
   stroke-width: 1.5;

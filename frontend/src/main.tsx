@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 
+import "./startAtBelt"; // must stay first among the app's own imports
 import { router } from "./App";
 import "./styles.css";
 
