@@ -336,3 +336,50 @@ def test_sample_has_one_unconfirmed_typed_pay():
     assert [r["day"] for r in waiting] == [
         (last_seeded_payday(today) + timedelta(days=14)).isoformat()
     ]
+
+
+# --- Sample Daily plan ----------------------------------------------------------
+
+
+def sample_week(now: datetime = NOW):
+    from aicity.plan import PlanStore, monday_of
+
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    return PlanStore(conn, clock=lambda: now).get_week(monday_of(now.astimezone().date()))
+
+
+def test_sample_plan_has_made_up_blocks():
+    from aicity.sample_data import SAMPLE_PLAN
+
+    kinds = {rule.kind for rule in SAMPLE_PLAN.blocks}
+    assert {"work", "gym", "commute"} <= kinds
+
+
+@pytest.mark.parametrize("days_later", [0, 3, 5])  # Tuesday, Friday, Sunday
+def test_sample_plan_seeds_this_week_with_two_events(days_later):
+    now = NOW + timedelta(days=days_later)
+    seed_sample_database(clock=lambda: now)
+    week = sample_week(now)
+    today = now.astimezone().date().isoformat()
+    events = [b for _, blocks in week.days for b in blocks if b.kind == "event"]
+    assert [e.title for e in events] == ["Book club", "Five-a-side"]
+    assert all(e.day >= today for e in events)  # still editable
+    assert any(b.kind == "gym" for _, blocks in week.days for b in blocks)
+
+
+def test_sample_plan_is_seeded_once():
+    from aicity.sample_data import seed_plan
+
+    seed_sample_database(clock=lambda: NOW)
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    assert seed_plan(conn, NOW) is False
+    week = sample_week()
+    assert sum(b.kind == "event" for _, blocks in week.days for b in blocks) == 2
+
+
+def test_seed_plan_refuses_the_personal_database():
+    from aicity.sample_data import seed_plan
+
+    conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
+    with pytest.raises(DatabaseError):
+        seed_plan(conn, NOW)
