@@ -99,3 +99,23 @@ def arrival_window(period_end: date, schedule: PaySchedule) -> tuple[date, date]
 def is_overdue(window: tuple[date, date] | None, paid: bool, today: date) -> bool:
     """Unpaid after the last day it could have landed. No window means never overdue."""
     return window is not None and not paid and today > window[1]
+
+
+def split_bonus(
+    expected_cad: int | None,
+    received_cad: int | None,
+    includes_bonus: bool,
+    bonus_cad: int | None,
+) -> tuple[int | None, int | None]:
+    """(difference, bonus) for a payment, honouring the "includes a bonus" box.
+
+    With the box ticked and a bonus amount, the bonus is taken out before comparing
+    with expected pay. With no amount, anything above expected counts as the bonus
+    (a shortfall is never hidden). Without the box, it's the plain difference.
+    """
+    difference = difference_cents(expected_cad, received_cad)
+    if difference is None or not includes_bonus:
+        return difference, None
+    if bonus_cad is not None:
+        return difference - bonus_cad, bonus_cad
+    return (0, difference) if difference > 0 else (difference, 0)
