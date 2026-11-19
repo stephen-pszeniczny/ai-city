@@ -101,6 +101,7 @@ def test_get_week_reads_only_and_open_creates(client):
         "today": "2026-11-25",
         "exists": False,
         "checked_in": False,
+        "grocery_day": None,
         "days": [],
     }
     week = opened(client)
@@ -257,3 +258,116 @@ def test_sample_mode_uses_its_own_plan(tmp_path, monkeypatch):
     week = opened(client)
     assert (week["configured"], week["exists"]) == (True, True)
     assert weeks_saved(DbKind.PERSONAL) == 0
+
+
+# --- Sunday check-in ----------------------------------------------------------------
+
+SUNDAY_1PM = datetime(2026, 11, 29, 13, 0).astimezone()
+USUAL = """
+[[plan.usual_events]]
+title = "Hockey"
+day = "thu"
+start = "21:00"
+end = "22:00"
+
+[[plan.usual_events]]
+title = "Games night"
+start = "19:00"
+end = "21:00"
+"""
+
+
+@pytest.fixture
+def sunday(tmp_path, monkeypatch):
+    path = _data_dir(tmp_path, monkeypatch, with_plan=True) / "settings" / "settings.toml"
+    path.write_text(path.read_text() + USUAL)
+    client = _client()
+    client.app.state.clock.now = SUNDAY_1PM
+    return client
+
+
+def test_checkin_status_reads_only(sunday):
+    status = sunday.get("/api/plan/checkin").json()
+    assert status == {
+        "configured": True,
+        "week_start": "2026-11-30",
+        "due": True,
+        "checked_in": False,
+        "opens": "12:00",
+        "usual_events": [
+            {
+                "title": "Hockey",
+                "kind": "event",
+                "day": "2026-12-03",
+                "start": "21:00",
+                "end": "22:00",
+            },
+            {
+                "title": "Games night",
+                "kind": "event",
+                "day": None,
+                "start": "19:00",
+                "end": "21:00",
+            },
+        ],
+    }
+    assert weeks_saved() == 0
+
+
+def test_checkin_open_creates_the_coming_week(sunday):
+    week = sunday.post("/api/plan/checkin/open").json()
+    assert (week["week_start"], week["exists"], week["grocery_day"]) == ("2026-11-30", True, None)
+    assert [e["title"] for e in week["usual_events"]] == ["Hockey", "Games night"]
+    assert weeks_saved() == 1
+
+
+def test_grocery_day_route(sunday):
+    sunday.post("/api/plan/checkin/open")
+    url = "/api/plan/week/2026-11-30/grocery-day"
+    assert sunday.post(url, json={"day": "2026-12-02"}).json()["grocery_day"] == "2026-12-02"
+    assert sunday.post(url, json={"day": None}).json()["grocery_day"] is None
+    outside = sunday.post(url, json={"day": "2026-12-07"})
+    assert outside.status_code == 409
+    assert "today or later" in outside.json()["detail"]
+    assert sunday.post(url, json={"day": "soon"}).status_code == 422
+
+
+def test_finish_twice_keeps_the_first_time_and_clears_the_reminder(sunday):
+    sunday.post("/api/plan/checkin/open")
+    conn = sqlite3.connect(db_path(DbKind.PERSONAL))
+    conn.execute(
+        "INSERT INTO notifications (kind, title, due_at, created_at) "
+        "VALUES ('checkin', 'x', '2026-11-29T16:00', '2026-11-29T16:00:00Z')"
+    )
+    conn.commit()
+    first = sunday.post("/api/plan/week/2026-11-30/checkin").json()
+    assert first["checked_in"] is True
+    stamp = conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0]
+    sunday.app.state.clock.now = datetime(2026, 11, 29, 18, 0).astimezone()
+    sunday.post("/api/plan/week/2026-11-30/checkin")
+    assert conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0] == stamp
+    assert conn.execute("SELECT cleared_at IS NOT NULL FROM notifications").fetchone() == (1,)
+    status = sunday.get("/api/plan/checkin").json()
+    assert (status["due"], status["checked_in"]) == (False, True)
+    conn.close()
+
+
+def test_week_json_has_grocery_day(client):
+    assert opened(client)["grocery_day"] is None
+
+
+def test_checkin_without_a_plan(tmp_path, monkeypatch):
+    _data_dir(tmp_path, monkeypatch, with_plan=False)
+    client = _client()
+    status = client.get("/api/plan/checkin").json()
+    assert (status["configured"], status["due"]) == (False, False)
+    opened_ = client.post("/api/plan/checkin/open").json()
+    assert (opened_["configured"], opened_["exists"]) == (False, False)
+    assert client.post("/api/plan/week/2026-11-23/checkin").json()["configured"] is False
+    assert weeks_saved() == 0
+
+
+def test_checkin_in_sample_mode(tmp_path, monkeypatch):
+    _data_dir(tmp_path, monkeypatch, with_plan=False)
+    client = _client(DbKind.SAMPLE)
+    assert client.post("/api/plan/checkin/open").json()["exists"] is True
