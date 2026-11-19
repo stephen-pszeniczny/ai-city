@@ -255,19 +255,37 @@ export type IncomeView = {
     rate_cad_cents: number | null;
   }[];
   set_aside: { cents: number; percent: string; is_placeholder: boolean };
-  main_job_pay: {
-    deposit_id: number;
-    day: string;
-    net_cents: number;
-    gross_cents: number | null;
-    rrsp_cents: number | null;
-    match_cents: number | null;
-    deductions_cents: number | null;
-    notes: string | null;
-  }[];
+  main_job_pay: MainJobPay[];
 };
 
+/** One main-job pay: typed in on payday, or from a statement deposit. */
+export type MainJobPay = {
+  id: number;
+  /** The payday (the typed date, kept when a statement confirms it). */
+  day: string;
+  net_cents: number;
+  gross_cents: number | null;
+  rrsp_cents: number | null;
+  match_cents: number | null;
+  deductions_cents: number | null;
+  notes: string | null;
+  /** A statement deposit has confirmed it. */
+  confirmed: boolean;
+};
+
+export type MainJobAdd = {
+  paid_on: string;
+  net: string;
+  gross: string | null;
+  rrsp: string | null;
+  match: string | null;
+  notes: string | null;
+};
+
+/** Stub details replace what's there; paid_on and net only change before confirmation. */
 export type MainJobEdit = {
+  paid_on?: string | null;
+  net?: string | null;
   gross: string | null;
   rrsp: string | null;
   match: string | null;
@@ -284,11 +302,19 @@ export type Proposal = {
 
 export type PreviewRow = { ref: string; day: string; amount_cents: number };
 
+export type MainJobProposal = {
+  kind: "link" | "new";
+  pay_id: number | null;
+  pay: { paid_on: string; net_cents: number } | null;
+};
+
 export type StatementPreview = {
   token: string;
   first_day: string;
   last_day: string;
-  main_job: PreviewRow[];
+  main_job: (PreviewRow & { proposal: MainJobProposal })[];
+  /** Main-job pay typed in and not yet confirmed, to link a deposit to by hand. */
+  typed_pay: { id: number; paid_on: string; net_cents: number }[];
   platform: (PreviewRow & { schedule_id: string; proposal: Proposal })[];
   other_income: PreviewRow[];
   weeks: { schedule_id: string; start: string; window: [string, string] }[];
@@ -308,6 +334,8 @@ export type ConfirmBody = {
   token: string;
   main_job: {
     ref: string;
+    action?: "new" | "link" | "skip";
+    pay_id?: number | null;
     gross?: string | null;
     rrsp?: string | null;
     match?: string | null;
@@ -395,8 +423,10 @@ export const editPayment = (id: number, edit: PaymentEdit) =>
   vault<unknown>("PATCH", `/payments/${id}`, edit);
 
 export const getIncome = () => vaultAt<IncomeView>("GET", "/api/vault/income");
-export const editMainJob = (depositId: number, edit: MainJobEdit) =>
-  vaultAt<unknown>("PATCH", `/api/vault/income/main-job/${depositId}`, edit);
+export const addMainJob = (pay: MainJobAdd) =>
+  vaultAt<MainJobPay>("POST", "/api/vault/income/main-job", pay);
+export const editMainJob = (payId: number, edit: MainJobEdit) =>
+  vaultAt<MainJobPay>("PATCH", `/api/vault/income/main-job/${payId}`, edit);
 export const listStatements = () => vaultAt<StatementImport[]>("GET", "/api/vault/statements");
 export const confirmStatement = (body: ConfirmBody) =>
   vaultAt<{ import_id: number; kept: number; duplicates: number; skipped: number }>(

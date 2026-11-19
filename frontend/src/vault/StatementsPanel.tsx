@@ -14,6 +14,7 @@ import {
   type StatementPreview,
 } from "../api";
 import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
+import { linkNote } from "./income";
 import { formatCad, formatDay, formatMoney, formatWindow } from "./sideWork";
 import { errorText, VaultGate } from "./VaultGate";
 
@@ -127,7 +128,8 @@ function Statements() {
 // --- Review --------------------------------------------------------------------------------
 
 type PlatformChoice = { action: string; extra: BonusNotes }; // action: week:<start> | bonus | link | skip
-type MainChoice = { gross: string; rrsp: string; match: string; notes: string };
+/** action: "new", "skip", or "link:<pay id>" (confirms pay typed in by hand). */
+type MainChoice = { action: string; gross: string; rrsp: string; match: string; notes: string };
 type OtherChoice = { add: boolean; company: string; notes: string };
 
 function Review({
@@ -157,7 +159,16 @@ function Review({
   );
   const [main, setMain] = useState<Record<string, MainChoice>>(() =>
     Object.fromEntries(
-      preview.main_job.map((r) => [r.ref, { gross: "", rrsp: "", match: "", notes: "" }]),
+      preview.main_job.map((r) => [
+        r.ref,
+        {
+          action: r.proposal.kind === "link" ? `link:${r.proposal.pay_id}` : "new",
+          gross: "",
+          rrsp: "",
+          match: "",
+          notes: "",
+        },
+      ]),
     ),
   );
   const [other, setOther] = useState<Record<string, OtherChoice>>(() =>
@@ -175,8 +186,13 @@ function Review({
         token: preview.token,
         main_job: preview.main_job.map((r) => {
           const c = main[r.ref]!;
+          if (c.action.startsWith("link:")) {
+            return { ref: r.ref, action: "link" as const, pay_id: Number(c.action.slice(5)) };
+          }
+          if (c.action === "skip") return { ref: r.ref, action: "skip" as const };
           return {
             ref: r.ref,
+            action: "new" as const,
             gross: c.gross.trim() || null,
             rrsp: c.rrsp.trim() || null,
             match: c.match.trim() || null,
@@ -228,53 +244,83 @@ function Review({
           <h3 id="rv-main" className="sw-h">
             Main-job pay
           </h3>
-          <p className="sw-hint">Gross, RRSP and match are optional; add them now or later.</p>
+          <p className="sw-hint">
+            Link a deposit to the pay you typed in, or add it as new. Stub details are optional; add
+            them now or later.
+          </p>
           <ul className="sw-groups">
             {preview.main_job.map((r) => {
               const c = main[r.ref]!;
               const set = (patch: Partial<MainChoice>) =>
                 setMain({ ...main, [r.ref]: { ...c, ...patch } });
+              const linked = c.action.startsWith("link:")
+                ? preview.typed_pay.find((t) => `link:${t.id}` === c.action)
+                : undefined;
+              const note = linked ? linkNote(r.amount_cents, linked.net_cents) : null;
               return (
                 <li key={r.ref} className="sw-group">
                   <header className="sw-group__head">
                     <strong>{formatDay(r.day)}</strong>
                     <span>Net {formatCad(r.amount_cents)}</span>
+                    {r.proposal.pay && (
+                      <span className="sw-chip">
+                        Matches the pay you typed in ({formatDay(r.proposal.pay.paid_on)},{" "}
+                        {formatCad(r.proposal.pay.net_cents)})
+                      </span>
+                    )}
                   </header>
                   <div className="sw-pay">
                     <label>
-                      Gross
-                      <input
-                        inputMode="decimal"
-                        value={c.gross}
-                        onChange={(e) => set({ gross: e.target.value })}
-                      />
+                      This is
+                      <select value={c.action} onChange={(e) => set({ action: e.target.value })}>
+                        {preview.typed_pay.map((t) => (
+                          <option key={t.id} value={`link:${t.id}`}>
+                            The pay I typed in ({formatDay(t.paid_on)}, {formatCad(t.net_cents)})
+                          </option>
+                        ))}
+                        <option value="new">New pay (not typed in)</option>
+                        <option value="skip">Skip (don't store)</option>
+                      </select>
                     </label>
-                    <label>
-                      Your RRSP
-                      <input
-                        inputMode="decimal"
-                        value={c.rrsp}
-                        onChange={(e) => set({ rrsp: e.target.value })}
-                      />
-                    </label>
-                    <label>
-                      Employer contributions (match + flex)
-                      <input
-                        inputMode="decimal"
-                        value={c.match}
-                        onChange={(e) => set({ match: e.target.value })}
-                      />
-                    </label>
-                    <label className="sw-notes">
-                      Notes (optional)
-                      <input
-                        value={c.notes}
-                        maxLength={500}
-                        onChange={(e) => set({ notes: e.target.value })}
-                        placeholder="Never day-job details"
-                      />
-                    </label>
+                    {linked && note && <span className="sw-hint">{note}</span>}
                   </div>
+                  {c.action === "new" && (
+                    <div className="sw-pay">
+                      <label>
+                        Gross
+                        <input
+                          inputMode="decimal"
+                          value={c.gross}
+                          onChange={(e) => set({ gross: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Your RRSP
+                        <input
+                          inputMode="decimal"
+                          value={c.rrsp}
+                          onChange={(e) => set({ rrsp: e.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Employer contributions (match + flex)
+                        <input
+                          inputMode="decimal"
+                          value={c.match}
+                          onChange={(e) => set({ match: e.target.value })}
+                        />
+                      </label>
+                      <label className="sw-notes">
+                        Notes (optional)
+                        <input
+                          value={c.notes}
+                          maxLength={500}
+                          onChange={(e) => set({ notes: e.target.value })}
+                          placeholder="Never day-job details"
+                        />
+                      </label>
+                    </div>
+                  )}
                 </li>
               );
             })}

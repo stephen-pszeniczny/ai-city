@@ -380,3 +380,8 @@
 .st-done {
   color: #7fd8a4;
 }
+
+/* Main-job pay typed in by hand, waiting for the statement to confirm it. */
+.sw-dim.in-unconfirmed {
+  color: var(--warn, #ffb340);
+}

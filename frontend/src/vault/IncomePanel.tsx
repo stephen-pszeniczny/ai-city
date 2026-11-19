@@ -1,14 +1,15 @@
 // The Vault's Income app: this month against the goal (gross, with net beside
 // it), recent months stacked by source, side work by platform, the tax
-// set-aside, and main-job pay with its stub details.
+// set-aside, and main-job pay with its stub details. Main-job pay can be typed in
+// on payday ("not yet confirmed"); the month-end statement confirms it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { editMainJob, getIncome, type IncomeView } from "../api";
+import { addMainJob, editMainJob, getIncome, type IncomeView, type MainJobPay } from "../api";
 import { StackedMonths } from "./charts";
-import { goalProgress } from "./income";
+import { goalProgress, payStatus } from "./income";
 import { formatCad, formatDay } from "./sideWork";
-import { errorText, VaultGate } from "./VaultGate";
+import { errorText, todayIso, VaultGate } from "./VaultGate";
 
 const KEY = ["income"];
 
@@ -35,7 +36,7 @@ function Income() {
         <StackedMonths months={v.months} goalCents={v.month.goal_cents} />
       </section>
       <Platforms v={v} />
-      <MainJobPay v={v} />
+      <MainJobPays v={v} />
     </div>
   );
 }
@@ -106,42 +107,169 @@ function Platforms({ v }: { v: IncomeView }) {
   );
 }
 
-function MainJobPay({ v }: { v: IncomeView }) {
-  if (v.main_job_pay.length === 0) {
-    return (
-      <p className="sw-note">No main-job pay yet. Import a statement from the Statements app.</p>
-    );
-  }
+function MainJobPays({ v }: { v: IncomeView }) {
+  const [adding, setAdding] = useState(false);
   return (
     <section aria-labelledby="in-pay">
       <h3 id="in-pay" className="sw-h">
         Main-job pay
       </h3>
-      <ul className="sw-entries sw-entries--stacked">
-        {v.main_job_pay.map((row) => (
-          <PayRow key={row.deposit_id} row={row} />
-        ))}
-      </ul>
+      {adding ? (
+        <AddPay onDone={() => setAdding(false)} />
+      ) : (
+        <button type="button" onClick={() => setAdding(true)}>
+          Add pay
+        </button>
+      )}
+      {v.main_job_pay.length === 0 ? (
+        <p className="sw-note">
+          No main-job pay yet. Add it on payday, or import a statement from the Statements app.
+        </p>
+      ) : (
+        <ul className="sw-entries sw-entries--stacked">
+          {v.main_job_pay.map((row) => (
+            <PayRow key={row.id} row={row} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
 
 const dollars = (cents: number | null) => (cents === null ? "" : (cents / 100).toFixed(2));
+const blankIsNull = (text: string) => text.trim() || null;
 
-function PayRow({ row }: { row: IncomeView["main_job_pay"][number] }) {
+type PayValues = {
+  day: string;
+  net: string;
+  gross: string;
+  rrsp: string;
+  match: string;
+  notes: string;
+};
+
+function valuesOf(row: MainJobPay | null): PayValues {
+  return {
+    day: row ? row.day : todayIso(),
+    net: row ? dollars(row.net_cents) : "",
+    gross: dollars(row?.gross_cents ?? null),
+    rrsp: dollars(row?.rrsp_cents ?? null),
+    match: dollars(row?.match_cents ?? null),
+    notes: row?.notes ?? "",
+  };
+}
+
+/** The pay form: payday and net (when they can still change), then the stub details. */
+function PayForm({
+  initial,
+  dayAndNet,
+  submitLabel,
+  pending,
+  error,
+  onSubmit,
+  onCancel,
+}: {
+  initial: PayValues;
+  dayAndNet: boolean;
+  submitLabel: string;
+  pending: boolean;
+  error: unknown;
+  onSubmit: (v: PayValues) => void;
+  onCancel: () => void;
+}) {
+  const [v, setV] = useState(initial);
+  const field = (key: keyof PayValues) => ({
+    value: v[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setV({ ...v, [key]: e.target.value }),
+  });
+  return (
+    <form
+      className="sw-pay"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit(v);
+      }}
+    >
+      {dayAndNet && (
+        <>
+          <label>
+            Payday
+            <input type="date" required {...field("day")} />
+          </label>
+          <label>
+            Net (deposit)
+            <input inputMode="decimal" required {...field("net")} />
+          </label>
+        </>
+      )}
+      <label>
+        Gross
+        <input inputMode="decimal" {...field("gross")} />
+      </label>
+      <label>
+        Your RRSP
+        <input inputMode="decimal" {...field("rrsp")} />
+      </label>
+      <label>
+        Employer contributions (match + flex)
+        <input inputMode="decimal" {...field("match")} />
+      </label>
+      <label className="sw-notes">
+        Notes (optional)
+        <input maxLength={500} placeholder="Never day-job details" {...field("notes")} />
+      </label>
+      <button type="submit" disabled={pending}>
+        {submitLabel}
+      </button>
+      <button type="button" className="sw-link" onClick={onCancel}>
+        Cancel
+      </button>
+      {error ? <span className="sw-error">{errorText(error)}</span> : null}
+    </form>
+  );
+}
+
+function AddPay({ onDone }: { onDone: () => void }) {
+  const client = useQueryClient();
+  const add = useMutation({
+    mutationFn: (v: PayValues) =>
+      addMainJob({
+        paid_on: v.day,
+        net: v.net.trim(),
+        gross: blankIsNull(v.gross),
+        rrsp: blankIsNull(v.rrsp),
+        match: blankIsNull(v.match),
+        notes: blankIsNull(v.notes),
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: KEY });
+      onDone();
+    },
+  });
+  return (
+    <PayForm
+      initial={valuesOf(null)}
+      dayAndNet
+      submitLabel="Add pay"
+      pending={add.isPending}
+      error={add.error}
+      onSubmit={(v) => add.mutate(v)}
+      onCancel={onDone}
+    />
+  );
+}
+
+function PayRow({ row }: { row: MainJobPay }) {
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [gross, setGross] = useState(dollars(row.gross_cents));
-  const [rrsp, setRrsp] = useState(dollars(row.rrsp_cents));
-  const [match, setMatch] = useState(dollars(row.match_cents));
-  const [notes, setNotes] = useState(row.notes ?? "");
   const save = useMutation({
-    mutationFn: () =>
-      editMainJob(row.deposit_id, {
-        gross: gross.trim() || null,
-        rrsp: rrsp.trim() || null,
-        match: match.trim() || null,
-        notes: notes.trim() || null,
+    mutationFn: (v: PayValues) =>
+      editMainJob(row.id, {
+        ...(row.confirmed ? {} : { paid_on: v.day, net: v.net.trim() }),
+        gross: blankIsNull(v.gross),
+        rrsp: blankIsNull(v.rrsp),
+        match: blankIsNull(v.match),
+        notes: blankIsNull(v.notes),
       }),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: KEY });
@@ -157,6 +285,9 @@ function PayRow({ row }: { row: IncomeView["main_job_pay"][number] }) {
           ? ` · gross ${formatCad(row.gross_cents)}`
           : " · gross not entered"}
       </span>
+      <span className={row.confirmed ? "sw-dim" : "sw-dim in-unconfirmed"}>
+        {payStatus(row.confirmed)}
+      </span>
       {row.rrsp_cents ? <span className="sw-dim">RRSP {formatCad(row.rrsp_cents)}</span> : null}
       {row.match_cents ? (
         <span className="sw-dim">+ employer {formatCad(row.match_cents)}</span>
@@ -166,42 +297,15 @@ function PayRow({ row }: { row: IncomeView["main_job_pay"][number] }) {
       )}
       {row.notes && !editing && <span className="sw-dim">“{row.notes}”</span>}
       {editing ? (
-        <form
-          className="sw-pay"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate();
-          }}
-        >
-          <label>
-            Gross
-            <input inputMode="decimal" value={gross} onChange={(e) => setGross(e.target.value)} />
-          </label>
-          <label>
-            Your RRSP
-            <input inputMode="decimal" value={rrsp} onChange={(e) => setRrsp(e.target.value)} />
-          </label>
-          <label>
-            Employer contributions (match + flex)
-            <input inputMode="decimal" value={match} onChange={(e) => setMatch(e.target.value)} />
-          </label>
-          <label className="sw-notes">
-            Notes (optional)
-            <input
-              value={notes}
-              maxLength={500}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Never day-job details"
-            />
-          </label>
-          <button type="submit" disabled={save.isPending}>
-            Save
-          </button>
-          <button type="button" className="sw-link" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-          {save.error && <span className="sw-error">{errorText(save.error)}</span>}
-        </form>
+        <PayForm
+          initial={valuesOf(row)}
+          dayAndNet={!row.confirmed}
+          submitLabel="Save"
+          pending={save.isPending}
+          error={save.error}
+          onSubmit={(v) => save.mutate(v)}
+          onCancel={() => setEditing(false)}
+        />
       ) : (
         <button type="button" className="sw-link" onClick={() => setEditing(true)}>
           {row.gross_cents === null ? "Add stub details" : "Edit"}
