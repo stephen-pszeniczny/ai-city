@@ -17,6 +17,7 @@ from aicity.settings import (
     BlockRule,
     PlanSettings,
     SettingsError,
+    UsualEvent,
     load_settings,
     parse_settings,
     settings_path,
@@ -423,3 +424,62 @@ def test_plan_refuses(example_data, plan, fragment, secret):
     assert fragment in message
     if secret:
         assert secret not in message
+
+
+# --- [plan]: check-in times and usual events -------------------------------------
+
+HOCKEY = {"title": "Hockey", "day": "thu", "start": "21:00", "end": "22:00"}
+
+
+def test_checkin_times_default(example_data):
+    plan = parse_settings(with_plan(example_data, {"blocks": []})).plan
+    assert (plan.checkin_opens, plan.checkin_reminder, plan.usual_events) == (
+        time(12),
+        time(16),
+        (),
+    )
+
+
+def test_checkin_times_read(example_data):
+    data = {"blocks": [], "checkin_opens": "10:30", "checkin_reminder": "15:00"}
+    plan = parse_settings(with_plan(example_data, data)).plan
+    assert (plan.checkin_opens, plan.checkin_reminder) == (time(10, 30), time(15))
+
+
+def test_usual_events_parse(example_data):
+    games = {"title": "Games night", "start": "19:00", "end": "21:00"}
+    data = {"blocks": [], "usual_events": [HOCKEY, {**games, "kind": "other"}, games]}
+    events = parse_settings(with_plan(example_data, data)).plan.usual_events
+    assert events == (
+        UsualEvent("Hockey", "event", 3, time(21), time(22)),
+        UsualEvent("Games night", "other", None, time(19), time(21)),
+        UsualEvent("Games night", "event", None, time(19), time(21)),
+    )
+
+
+@pytest.mark.parametrize(
+    ("event", "fragment", "secret"),
+    [
+        ({**HOCKEY, "colour": "red"}, "usual_events", None),
+        ({**HOCKEY, "kind": "gym"}, "kind", None),
+        ({**HOCKEY, "day": "thursday"}, "day", "thursday"),
+        ({**HOCKEY, "day": ["thu"]}, "day", None),
+        ({**HOCKEY, "end": "20:00"}, "end", "20:00"),
+        ({k: v for k, v in HOCKEY.items() if k != "title"}, "title", None),
+    ],
+)
+def test_usual_event_refuses(example_data, event, fragment, secret):
+    message = error_for(with_plan(example_data, {"blocks": [], "usual_events": [event]}))
+    assert fragment in message
+    if secret:
+        assert secret not in message
+
+
+def test_usual_events_must_be_a_list(example_data):
+    message = error_for(with_plan(example_data, {"blocks": [], "usual_events": HOCKEY}))
+    assert "plan.usual_events" in message
+
+
+def test_checkin_time_refuses(example_data):
+    message = error_for(with_plan(example_data, {"blocks": [], "checkin_reminder": "4pm"}))
+    assert "checkin_reminder" in message and "4pm" not in message
