@@ -146,6 +146,21 @@ class PlanSettings:
 
 
 @dataclass(frozen=True)
+class Routine:
+    """A repeating prep checklist (e.g. "Evening prep"), ticked off each day it runs.
+
+    days are date.weekday() numbers (Monday = 0), sorted and unique.
+    """
+
+    id: str
+    title: str
+    days: tuple[int, ...]
+    shows_from: time
+    remind_at: time | None
+    items: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Settings:
     buildings: dict[str, str]
     location: Location
@@ -156,6 +171,8 @@ class Settings:
     main_job: MainJob | None = None
     # Mission Control's Daily plan (optional: None when the file has no [plan]).
     plan: PlanSettings | None = None
+    # Routines (optional): checklists shown in the Daily plan's Today list.
+    routines: tuple[Routine, ...] = ()
 
 
 def settings_path() -> Path:
@@ -196,6 +213,7 @@ def parse_settings(data: dict) -> Settings:
             "pay_schedules",
             "main_job",
             "plan",
+            "routines",
         },
     )
     return Settings(
@@ -207,6 +225,7 @@ def parse_settings(data: dict) -> Settings:
         pay_schedules=_pay_schedules(data.get("pay_schedules", {})),
         main_job=_main_job(data["main_job"]) if "main_job" in data else None,
         plan=_plan(data["plan"]) if "plan" in data else None,
+        routines=_routines(data.get("routines", [])),
     )
 
 
@@ -412,6 +431,70 @@ def _usual_event(t: dict, n: int) -> UsualEvent:
     )
 
 
+ROUTINE_ITEMS_MAX = 20
+
+
+def _routines(t) -> tuple[Routine, ...]:
+    if not isinstance(t, list) or not all(isinstance(r, dict) for r in t):
+        raise SettingsError("routines must be a list of [[routines]] entries.")
+    routines = tuple(_routine(r, n) for n, r in enumerate(t, start=1))
+    ids = [r.id for r in routines]
+    if len(set(ids)) != len(ids):
+        raise SettingsError("Each routine needs a different id.")
+    return routines
+
+
+def _routine(t: dict, n: int) -> Routine:
+    where = f"routines (entry {n})"
+    required = {"id", "title", "days", "shows_from", "items"}
+    _only_keys(t, where, required | {"remind_at"})
+    missing = sorted(required - set(t))
+    if missing:
+        raise SettingsError(f"Missing setting(s) in {where}: {', '.join(missing)}.")
+    routine_id = t["id"]
+    if not isinstance(routine_id, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,30}", routine_id):
+        raise SettingsError(
+            f"{where}.id must be lowercase letters, digits or _ (up to 31), starting with a letter."
+        )
+    title = _text(t, where, "title")
+    if len(title) > PLAN_TITLE_MAX:
+        raise SettingsError(f"{where}.title must be at most {PLAN_TITLE_MAX} characters.")
+    items = t["items"]
+    if (
+        not isinstance(items, list)
+        or not 1 <= len(items) <= ROUTINE_ITEMS_MAX
+        or not all(isinstance(i, str) and 1 <= len(i.strip()) <= PLAN_TITLE_MAX for i in items)
+        or len({i.strip() for i in items}) != len(items)
+    ):
+        raise SettingsError(
+            f"{where}.items must be a list of 1 to {ROUTINE_ITEMS_MAX} different texts "
+            f"of up to {PLAN_TITLE_MAX} characters."
+        )
+    return Routine(
+        id=routine_id,
+        title=title,
+        days=_days(t, where),
+        shows_from=_clock_time(t, where, "shows_from"),
+        remind_at=_clock_time(t, where, "remind_at") if "remind_at" in t else None,
+        items=tuple(i.strip() for i in items),
+    )
+
+
+def _days(t: dict, where: str) -> tuple[int, ...]:
+    """A list of different day codes, as sorted weekday numbers."""
+    days = t["days"]
+    if (
+        not isinstance(days, list)
+        or not days
+        or not all(isinstance(d, str) and d in DAY_CODES for d in days)
+        or len(set(days)) != len(days)
+    ):
+        raise SettingsError(
+            f"{where}.days must be a list of different days from: {', '.join(DAY_CODES)}."
+        )
+    return tuple(sorted(DAY_CODES.index(d) for d in days))
+
+
 def _block_rule(t: dict, n: int) -> BlockRule:
     where = f"plan.blocks (entry {n})"
     required = {"title", "kind", "days", "start", "end"}
@@ -425,16 +508,7 @@ def _block_rule(t: dict, n: int) -> BlockRule:
     kind = t["kind"]
     if kind not in PLAN_RULE_KINDS:
         raise SettingsError(f"{where}.kind must be one of: {', '.join(PLAN_RULE_KINDS)}.")
-    days = t["days"]
-    if (
-        not isinstance(days, list)
-        or not days
-        or not all(isinstance(d, str) and d in DAY_CODES for d in days)
-        or len(set(days)) != len(days)
-    ):
-        raise SettingsError(
-            f"{where}.days must be a list of different days from: {', '.join(DAY_CODES)}."
-        )
+    days = _days(t, where)
     start = _clock_time(t, where, "start")
     end = _clock_time(t, where, "end")
     if end <= start:
@@ -442,7 +516,7 @@ def _block_rule(t: dict, n: int) -> BlockRule:
     return BlockRule(
         title=title,
         kind=kind,
-        days=tuple(sorted(DAY_CODES.index(d) for d in days)),
+        days=days,
         start=start,
         end=end,
     )

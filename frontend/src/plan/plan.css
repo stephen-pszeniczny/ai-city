@@ -223,3 +223,89 @@
   margin: 0;
   font-size: 0.9rem;
 }
+
+/* Routine cards (Today list) */
+
+.routines {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.routine {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.routine--later {
+  opacity: 0.55;
+}
+
+.routine--done {
+  border-color: rgba(52, 199, 89, 0.45);
+}
+
+.routine__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.routine__title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.routine__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.routine__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #34c759;
+  transition: width 0.3s ease;
+}
+
+.routine__count {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.routine__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.routine__chip {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.routine__chip.is-on {
+  background: rgba(52, 199, 89, 0.25);
+  border-color: rgba(52, 199, 89, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routine__bar > span {
+    transition: none;
+  }
+}

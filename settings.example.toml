@@ -117,3 +117,15 @@ tax_set_aside_is_placeholder = true
 # title = "Games night"
 # start = "19:00"
 # end = "21:00"
+
+# Optional: routines, repeating prep checklists shown in the Daily plan's Today list.
+# Ticks reset every day. id: lowercase letters, digits or _. days as for [[plan.blocks]].
+# shows_from: when the card lights up; remind_at (optional): one reminder that day if anything
+# is still unticked. items: 1 to 20 different short texts. Example values only.
+# [[routines]]
+# id = "evening_prep"
+# title = "Evening prep"
+# days = ["sun", "mon", "tue", "wed", "thu"]
+# shows_from = "19:00"
+# remind_at = "21:30"
+# items = ["Lunch made", "Keys by the door", "Clothes laid out"]

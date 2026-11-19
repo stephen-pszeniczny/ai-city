@@ -407,3 +407,12 @@ def test_sample_plan_has_usual_events():
     from aicity.sample_data import SAMPLE_PLAN
 
     assert [e.title for e in SAMPLE_PLAN.usual_events] == ["Book club", "Five-a-side"]
+
+
+def test_sample_routines_are_made_up():
+    from aicity.sample_data import SAMPLE_ROUTINES
+
+    [routine] = SAMPLE_ROUTINES
+    assert (routine.id, routine.title) == ("evening_prep", "Evening prep")
+    assert 6 in routine.days  # Sunday
+    assert routine.items == ("Lunch packed", "Water bottle filled", "Bag by the door")

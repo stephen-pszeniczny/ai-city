@@ -36,6 +36,7 @@ EXPECTED_AT_LEAST = {
     "/api/vault/statements/sample.csv",
     "/api/plan/week",
     "/api/plan/checkin",
+    "/api/plan/routines",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {

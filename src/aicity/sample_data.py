@@ -32,6 +32,7 @@ from aicity.settings import (
     MainJob,
     PaySchedule,
     PlanSettings,
+    Routine,
     UsualEvent,
 )
 from aicity.side_work import SideWorkStore
@@ -60,6 +61,18 @@ SAMPLE_PLAN = PlanSettings(
     usual_events=(
         UsualEvent("Book club", "event", None, time(19), time(20, 30)),
         UsualEvent("Five-a-side", "event", 4, time(20), time(21)),
+    ),
+)
+
+# Sample mode's routines: invented items, never the private settings.
+SAMPLE_ROUTINES: tuple[Routine, ...] = (
+    Routine(
+        id="evening_prep",
+        title="Evening prep",
+        days=(6, 0, 1, 2, 3),
+        shows_from=time(19),
+        remind_at=time(21, 30),
+        items=("Lunch packed", "Water bottle filled", "Bag by the door"),
     ),
 )
 
