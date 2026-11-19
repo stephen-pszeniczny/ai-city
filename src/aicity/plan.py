@@ -78,26 +78,41 @@ def monday_of(day: date) -> date:
     return day - timedelta(days=day.weekday())
 
 
-def settings_key(kind: str, title: str) -> str:
-    """Which settings rule a block came from, as stored in plan_blocks.settings_key."""
-    return f"{kind}|{title}"
+def settings_key(kind: str, title: str, n: int) -> str:
+    """Which settings rule a block came from, as stored in plan_blocks.settings_key.
+
+    n counts rules with the same kind and title on that day, earliest first, so a
+    morning and an afternoon "Work" are told apart ("work|Work|1", "work|Work|2"),
+    and changing a rule's time in settings keeps its key.
+    """
+    return f"{kind}|{title}|{n}"
 
 
 def blocks_for_week(rules: PlanSettings, week_start: date) -> list[NewBlock]:
     """One block per rule per listed day, sorted by day, then start time."""
-    blocks = [
-        NewBlock(
-            day=week_start + timedelta(days=weekday),
-            start=rule.start,
-            end=rule.end,
-            title=rule.title,
-            kind=rule.kind,
-            settings_key=settings_key(rule.kind, rule.title),
+    placed = sorted(
+        (
+            (week_start + timedelta(days=weekday), rule)
+            for rule in rules.blocks
+            for weekday in rule.days
+        ),
+        key=lambda pair: (pair[0], pair[1].start),
+    )
+    seen: dict[tuple[date, str, str], int] = {}
+    blocks = []
+    for day, rule in placed:
+        n = seen[(day, rule.kind, rule.title)] = seen.get((day, rule.kind, rule.title), 0) + 1
+        blocks.append(
+            NewBlock(
+                day=day,
+                start=rule.start,
+                end=rule.end,
+                title=rule.title,
+                kind=rule.kind,
+                settings_key=settings_key(rule.kind, rule.title, n),
+            )
         )
-        for rule in rules.blocks
-        for weekday in rule.days
-    ]
-    return sorted(blocks, key=lambda b: (b.day, b.start))
+    return blocks
 
 
 class PlanStore:
@@ -227,6 +242,20 @@ class PlanStore:
             today,
         )
         kind = fields.get("kind", block.kind)
+        if block.source == "settings" and day.isoformat() != block.day:
+            # A rebuild matches fixed blocks by their day, so they stay on it.
+            raise PlanError(
+                "A fixed block can't move to another day. Remove it and add one on the other day."
+            )
+        same = (day.isoformat(), f"{start:%H:%M}", f"{end:%H:%M}", title, kind) == (
+            block.day,
+            block.start,
+            block.end,
+            block.title,
+            block.kind,
+        )
+        if same:
+            return block  # nothing changed: a settings block keeps following settings
 
         def work() -> None:
             self._conn.execute(

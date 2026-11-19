@@ -65,9 +65,9 @@ def test_blocks_for_week():
     blocks = blocks_for_week(PlanSettings(blocks=(WORK, COMMUTE)), THIS_MONDAY)
     assert len(blocks) == 7
     assert blocks[0] == NewBlock(
-        THIS_MONDAY, time(7, 30), time(8), "Commute", "commute", "commute|Commute"
+        THIS_MONDAY, time(7, 30), time(8), "Commute", "commute", "commute|Commute|1"
     )
-    assert blocks[1] == NewBlock(THIS_MONDAY, time(9), time(12), "Work", "work", "work|Work")
+    assert blocks[1] == NewBlock(THIS_MONDAY, time(9), time(12), "Work", "work", "work|Work|1")
     assert [b.day for b in blocks] == sorted(b.day for b in blocks)
     assert {b.day for b in blocks} == {date(2026, 11, d) for d in range(23, 28)}
 
@@ -199,11 +199,11 @@ def test_editing_with_unknown_field_is_refused(store, week):
 
 
 def test_moving_a_block_to_another_day_of_the_week(store, week):
-    work = block_on(store, "2026-11-26", "Work")
-    moved = store.edit_block(work.id, TODAY, day=date(2026, 11, 28))
+    hockey = store.add_block(THIS_MONDAY, THU, time(21), time(22), "Hockey", "event", TODAY)
+    moved = store.edit_block(hockey.id, TODAY, day=date(2026, 11, 28))
     assert moved.day == "2026-11-28"
     with pytest.raises(PlanError):
-        store.edit_block(work.id, TODAY, day=date(2026, 12, 1))
+        store.edit_block(hockey.id, TODAY, day=date(2026, 12, 1))
 
 
 def test_past_days_are_read_only(store, week):
@@ -310,3 +310,46 @@ def test_rebuild_adds_new_rules_and_drops_deleted_ones(store, week):
 def test_rebuild_of_an_unsaved_week_is_refused(store):
     with pytest.raises(PlanError):
         store.rebuild_week(THIS_MONDAY, RULES, TODAY)
+
+
+# --- Final review fixes ------------------------------------------------------
+
+WORK_PM = BlockRule("Work", "work", (0, 1, 2, 3, 4), time(13), time(17))
+COMMUTE_PM = BlockRule("Commute", "commute", (0, 1), time(17), time(17, 30))
+TWO_OF_EACH = PlanSettings(blocks=(COMMUTE, WORK, GYM, WORK_PM, COMMUTE_PM))
+
+
+def test_rebuild_keeps_untouched_blocks_that_share_a_title(store):
+    tuesday = date(2026, 11, 24)
+    store.ensure_week(THIS_MONDAY, TWO_OF_EACH, tuesday)
+    blocks = day_blocks(store.get_week(THIS_MONDAY), "2026-11-24")
+    morning_work = next(b for b in blocks if b.title == "Work" and b.start == "09:00")
+    morning_commute = next(b for b in blocks if b.title == "Commute" and b.start == "07:30")
+    store.edit_block(morning_work.id, tuesday, start=time(9, 30))
+    store.remove_block(morning_commute.id, tuesday)
+
+    rebuilt = store.rebuild_week(THIS_MONDAY, TWO_OF_EACH, tuesday)
+
+    assert [(b.title, b.start) for b in day_blocks(rebuilt, "2026-11-24")] == [
+        ("Work", "09:30"),
+        ("Gym", "12:00"),
+        ("Work", "13:00"),
+        ("Commute", "17:00"),
+    ]
+
+
+def test_a_settings_block_cannot_move_to_another_day(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    with pytest.raises(PlanError, match="can't move to another day"):
+        store.edit_block(work.id, TODAY, day=date(2026, 11, 27))
+
+
+def test_an_added_block_can_move_to_another_day(store, week):
+    hockey = store.add_block(THIS_MONDAY, THU, time(21), time(22), "Hockey", "event", TODAY)
+    assert store.edit_block(hockey.id, TODAY, day=date(2026, 11, 27)).day == "2026-11-27"
+
+
+def test_saving_a_settings_block_unchanged_does_not_mark_it_edited(store, week):
+    work = block_on(store, "2026-11-26", "Work")
+    same = store.edit_block(work.id, TODAY, title="Work", kind="work", start=time(9), end=time(12))
+    assert same.edited is False

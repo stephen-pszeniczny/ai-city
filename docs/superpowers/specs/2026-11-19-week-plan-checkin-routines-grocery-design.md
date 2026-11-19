@@ -143,8 +143,9 @@ and nothing else breaks.
   null).
 - `plan_blocks`: `week_id`, `day` (date), `start`, `end`, `title` (1–100 chars), `kind`
   (`work | commute | gym | event | side_work | build | other`), `source`
-  (`settings | added`), `settings_key` (for settings blocks: the block's `kind` and `title`, e.g.
-  `gym|Gym`; null for added blocks), `status` (`planned | done | skipped | removed | replaced`; `replaced` only by a rebuild), `edited`
+  (`settings | added`), `settings_key` (for settings blocks: the block's `kind`, `title` and its order among
+  same-named blocks that day, e.g. `work|Work|2` for the afternoon Work; null for added blocks;
+  fixed blocks can't move to another day, so the key stays true), `status` (`planned | done | skipped | removed | replaced`; `replaced` only by a rebuild), `edited`
   (true once Steve changes a settings block), `created_at`, `updated_at`. Never deleted: removing sets
   `status = 'removed'`. Done/skipped are allowed only on gym blocks.
 - `routine_ticks`: `day`, `routine_id`, `item` (the item's text as listed), `ticked_at`. Unticking
