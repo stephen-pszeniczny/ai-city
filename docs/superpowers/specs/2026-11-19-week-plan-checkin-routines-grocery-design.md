@@ -227,6 +227,15 @@ Week of Nov 23                                [Check-in] [Rebuild this week]
   time order with a small "overlaps" marker.
 - Ticking a to-do here completes it in the To-do list (same task, same history).
 
+### Routines (PR 3 calls)
+
+- A routine belongs to a calendar day: ticks are stored with the date, so each day starts fresh.
+- Only today's routines can be ticked; past days are read-only.
+- In the Today list each routine is a compact card (progress bar, item chips, `done/total`);
+  before `shows_from` it's dimmed with a "from" tag, and ticking early still works.
+- Notifications gain a `routine_id` column (migration 012); one routine reminder per routine per
+  day. Ticking only clears reminders; the background check makes them.
+
 ### Grocery list app
 
 A new Mission Control desktop app: add an item, tick it, "Clear ticked". Nothing else (no
