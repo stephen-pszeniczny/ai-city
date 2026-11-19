@@ -12,6 +12,7 @@ import {
   addPlanBlock,
   completeTask,
   editPlanBlock,
+  getGrocery,
   getPlanWeek,
   listTasks,
   openPlanWeek,
@@ -24,6 +25,7 @@ import {
 } from "../api";
 import { categoryLabel } from "../todo/categories";
 import { BlockForm } from "./BlockForm";
+import { itemCountLabel } from "./grocery";
 import { TodayRoutines } from "./RoutineCard";
 import { canMarkGym, dayLabel, isPast, overlapping, shiftWeek, todosFor } from "./week";
 import "./plan.css";
@@ -45,6 +47,7 @@ export function PlanPanel() {
 
   const week = useQuery({ queryKey: ["plan", weekStart], queryFn: () => loadWeek(weekStart) });
   const tasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
+  const grocery = useQuery({ queryKey: ["grocery"], queryFn: getGrocery });
 
   const refresh = () => {
     setError(null);
@@ -188,7 +191,11 @@ export function PlanPanel() {
             ))}
           </ul>
 
-          {w.grocery_day === day && <p className="plan__grocery">🛒 Grocery day</p>}
+          {w.grocery_day === day && (
+            <p className="plan__grocery">
+              🛒 Grocery day{grocery.data ? ` · ${itemCountLabel(grocery.data.open)}` : ""}
+            </p>
+          )}
 
           {!isPast(day, today) && (
             <AddBlock weekStart={w.week_start} day={day} onDone={refresh} onError={onError} />

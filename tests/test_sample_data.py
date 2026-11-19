@@ -416,3 +416,23 @@ def test_sample_routines_are_made_up():
     assert (routine.id, routine.title) == ("evening_prep", "Evening prep")
     assert 6 in routine.days  # Sunday
     assert routine.items == ("Lunch packed", "Water bottle filled", "Bag by the door")
+
+
+def test_sample_grocery_list_is_seeded_once():
+    from aicity.grocery import GroceryStore
+
+    seed_sample_database(clock=lambda: NOW)
+    seed_sample_database(clock=lambda: NOW)
+    store = GroceryStore(open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE))
+    items = store.items()
+    assert len(items) == 6
+    assert store.open_count() == 5
+    assert [i.name for i in items if i.ticked] == ["Rice"]
+
+
+def test_seed_grocery_refuses_the_personal_database():
+    from aicity.sample_data import seed_grocery
+
+    conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
+    with pytest.raises(DatabaseError):
+        seed_grocery(conn, NOW)

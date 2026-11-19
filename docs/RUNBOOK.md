@@ -138,6 +138,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Routines (Daily plan)** → repeating checklists like "Evening prep". Add one `[[routines]]` block per routine to the settings file (see the commented example in `settings.example.toml`): `id` (lowercase, e.g. `evening_prep`), `title`, `days`, `shows_from` (when the card lights up), optional `remind_at`, and `items` (1 to 20). They show as cards in the Daily plan's **Today** list on the days they run: tap a chip to tick it. Before `shows_from` the card is faded, but ticking still works. Ticks belong to the day and reset the next day; only today can be ticked. At `remind_at`, if anything is unticked, one reminder comes (shuttle, ticker, Mac notification); it clears once everything is ticked or the day ends. No restart needed: reopen the Daily plan.
 
+**Grocery list (Mission Control)** → open Mission Control's computer → **Grocery list**. Type an item and press Enter. Tap a chip to tick it (tap again to untick); **×** takes one item off the list; **Clear ticked** takes off everything you've bought. Typing a name that's already on the list (any capitals) doesn't add it twice; if it was ticked, it comes back unticked. Nothing is deleted, only hidden. The Daily plan's grocery day shows how many items are left ("🛒 Grocery day · 5 items"), and so does the Sunday check-in. The list reaches the phone in Phase 2.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---

@@ -12,6 +12,7 @@ import { useState } from "react";
 import {
   addPlanBlock,
   finishCheckin,
+  getGrocery,
   listTasks,
   openCheckin,
   removePlanBlock,
@@ -22,6 +23,7 @@ import {
 } from "../api";
 import { BlockForm, EVENT_KINDS } from "./BlockForm";
 import { addedEvents, chipState, needsAttention } from "./checkin";
+import { itemCountLabel } from "./grocery";
 import { dayLabel, isPast } from "./week";
 import "./plan.css";
 
@@ -46,6 +48,7 @@ export function CheckinPanel() {
     placeholderData: (previous) => previous, // no "Opening…" flash when the week is pinned
   });
   const tasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
+  const groceryList = useQuery({ queryKey: ["grocery"], queryFn: getGrocery });
 
   const refresh = () => {
     setError(null);
@@ -222,6 +225,9 @@ export function CheckinPanel() {
             </option>
           ))}
         </select>
+        {groceryList.data && (
+          <span className="plan__tag"> 🛒 {itemCountLabel(groceryList.data.open)}</span>
+        )}
       </section>
 
       <section aria-labelledby="ci-todo">

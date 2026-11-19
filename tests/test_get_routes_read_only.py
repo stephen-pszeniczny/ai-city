@@ -37,6 +37,7 @@ EXPECTED_AT_LEAST = {
     "/api/plan/week",
     "/api/plan/checkin",
     "/api/plan/routines",
+    "/api/grocery",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {
