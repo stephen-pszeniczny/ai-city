@@ -374,3 +374,30 @@ def test_two_decimal_hours_give_exact_pay(unlocked):
     add(unlocked, worked_on="2026-03-10", hours="1.33", rate="40", currency="CAD")
     [g] = view(unlocked)["groups"]
     assert (g["entries"][0]["hours"], g["expected_cad_cents"]) == ("1.33", 5320)
+
+
+def test_one_deposit_can_pay_several_sessions_without_a_schedule(unlocked):
+    a = add(
+        unlocked, worked_on="2026-03-10", company="Some Co", hours="2", rate="30", currency="CAD"
+    )
+    b = add(
+        unlocked, worked_on="2026-03-12", company="Some Co", hours="1", rate="30", currency="CAD"
+    )
+    add(unlocked, worked_on="2026-03-11", company="Other Co", hours="1", rate="30", currency="CAD")
+    groups = view(unlocked)["groups"]
+    some = [g for g in groups if g["company"] == "Some Co"]
+    assert len(some) == 1 and [e["id"] for e in some[0]["entries"]] == [a["id"], b["id"]]
+    assert some[0]["expected_cad_cents"] == 9000
+    record(
+        unlocked,
+        kind="pay",
+        company="Some Co",
+        received_on="2026-03-20",
+        amount="90",
+        currency="CAD",
+        entry_ids=[a["id"], b["id"]],
+    )
+    paid = [g for g in view(unlocked)["groups"] if g["company"] == "Some Co"]
+    assert len(paid) == 1
+    assert (paid[0]["status"], paid[0]["difference_cad_cents"]) == ("paid", 0)
+    assert view(unlocked)["summary"]["still_expected_cad_cents"] == 3000  # only Other Co

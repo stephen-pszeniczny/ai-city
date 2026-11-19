@@ -330,8 +330,8 @@ def side_work_view(
 ) -> dict:
     """Everything the Side work screen shows, as plain JSON-ready data.
 
-    Entries for a platform with a pay schedule are grouped by pay week (and by
-    payment, if a week was paid in parts); any other entry stands alone. Paid
+    Entries for a platform with a pay schedule are grouped by pay week; any
+    others by company. Either way, entries paid separately form separate groups. Paid
     groups are valued at the payment's rate (the received day's), unpaid USD
     at the newest known rate, marked as an estimate.
     """
@@ -347,7 +347,9 @@ def side_work_view(
     for e in store.entries():
         schedule = schedules.get(e.company or "")
         if schedule is None:
-            key = ("single", e.id)
+            # No schedule: one group per company (and per payment), so one deposit
+            # can cover several sessions.
+            key = ("company", e.company, e.payment_id)
         else:
             key = ("week", e.company, pay_period(e.worked_on, schedule)[0], e.payment_id)
         buckets.setdefault(key, []).append(e)
@@ -408,7 +410,7 @@ def side_work_view(
                 "difference_cad_cents": None
                 if partial
                 else difference_cents(expected_cad, received),
-                "_sort": (period[0] if period else first.worked_on, first.id),
+                "_sort": (period[0] if period else entries[-1].worked_on, first.id),
             }
         )
     groups.sort(key=lambda g: g.pop("_sort"), reverse=True)
