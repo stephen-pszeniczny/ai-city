@@ -13,7 +13,8 @@ runs in the background every 30 seconds (src/aicity/reminder_loop.py) and:
     no longer has that reminder time (until then the row stops a second firing).
 
 The monthly "import last month's statement" reminder (kind 'statement', no task)
-is made by statement_reminder.py; the checks above only touch 'reminder' rows,
+is made by statement_reminder.py, and the weekly check-in reminder (kind 'checkin',
+no task) by checkin_reminder.py; the checks above only touch 'reminder' rows,
 apart from the 90-day tidy-up.
 
 Reminder times are local Mac time to the minute ("2026-11-30T09:00"), so "due"
