@@ -170,3 +170,13 @@ def test_loop_without_a_plan_makes_no_checkin_reminder(data_dir):
     make_db(DbKind.PERSONAL)
     check_all_databases(lambda: datetime(2026, 11, 29, 16, 5, tzinfo=UTC), LOCAL)
     assert "checkin" not in kinds_in(DbKind.PERSONAL)
+
+
+def test_a_missed_weeks_reminder_clears_when_that_week_is_checked_in_midweek(conn):
+    check(conn, at(23, 8, 0))  # made Monday for this week (Sunday was missed)
+    store = PlanStore(conn, clock=lambda: at(25, 19, 0))
+    store.ensure_week(THIS_MONDAY, RULES, date(2026, 11, 25))
+    store.finish_checkin(THIS_MONDAY)
+    # Wednesday: the check-in now looks at next week (not due until Sunday).
+    assert check(conn, at(25, 19, 5)) == 0
+    assert rows(conn) == [("checkin", None, CHECKIN_TITLE, "2026-11-22T16:00", False, True)]

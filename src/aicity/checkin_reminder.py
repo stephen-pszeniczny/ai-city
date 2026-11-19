@@ -5,7 +5,7 @@ passed (the Sunday before that week, at plan.checkin_reminder), one 'checkin'
 notification is made: the shuttle, the ticker and a Mac notification show it like
 a task reminder. A Mac asleep at that moment gets it at the next check (on Monday
 it's for this week, still not planned). Only one per week, ever: dismissing it
-doesn't bring it back. Once the week is checked in, it's cleared.
+doesn't bring it back. Once its week is checked in (even mid-week), it's cleared.
 Runs from the background reminder check.
 """
 
@@ -28,13 +28,17 @@ def check_checkin_reminder(
     stamp = clock_utc.strftime(_STAMP_FORMAT)
 
     def work() -> int:
+        # Clear any check-in reminder whose week is now checked in. A reminder's
+        # moment is the Sunday before the week it's for, so that week starts a day later.
+        conn.execute(
+            "UPDATE notifications SET cleared_at = ? WHERE kind = 'checkin' "
+            "AND dismissed_at IS NULL AND cleared_at IS NULL "
+            "AND date(substr(due_at, 1, 10), '+1 day') IN "
+            "(SELECT week_start FROM plan_weeks WHERE checked_in_at IS NOT NULL)",
+            (stamp,),
+        )
         status = PlanStore(conn).checkin_status(now_local, rules)
         if status.checked_in:
-            conn.execute(
-                "UPDATE notifications SET cleared_at = ? WHERE kind = 'checkin' "
-                "AND dismissed_at IS NULL AND cleared_at IS NULL",
-                (stamp,),
-            )
             return 0
         if now_local.replace(tzinfo=None) < status.reminder_at:
             return 0
