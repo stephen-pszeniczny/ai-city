@@ -70,6 +70,7 @@ class Block:
 class Week:
     week_start: str
     checked_in: bool
+    grocery_day: str | None
     # Always seven (day, blocks) pairs, Monday first; hidden blocks left out.
     days: list[tuple[str, list[Block]]]
 
@@ -157,12 +158,12 @@ class PlanStore:
 
     def get_week(self, week_start: date) -> Week | None:
         row = self._conn.execute(
-            "SELECT id, week_start, checked_in_at FROM plan_weeks WHERE week_start = ?",
+            "SELECT id, week_start, checked_in_at, grocery_day FROM plan_weeks WHERE week_start = ?",
             (week_start.isoformat(),),
         ).fetchone()
         if row is None:
             return None
-        week_id, start, checked_in_at = row
+        week_id, start, checked_in_at, grocery_day = row
         rows = self._conn.execute(
             f"SELECT {_BLOCK_COLUMNS} FROM plan_blocks "
             f"WHERE week_id = ? AND status NOT IN {_HIDDEN} ORDER BY day, start_time, id",
@@ -174,7 +175,10 @@ class PlanStore:
         for r in rows:
             by_day[r[1]].append(_to_block(r))
         return Week(
-            week_start=start, checked_in=checked_in_at is not None, days=list(by_day.items())
+            week_start=start,
+            checked_in=checked_in_at is not None,
+            grocery_day=grocery_day,
+            days=list(by_day.items()),
         )
 
     def checkin_status(self, now_local: datetime, rules: PlanSettings) -> CheckinStatus:
@@ -351,6 +355,40 @@ class PlanStore:
         self._write(lambda: self._set_status(block_id, status))
         return self.get_block(block_id)
 
+    # --- The Sunday check-in ----------------------------------------------
+
+    def set_grocery_day(self, week_start: date, day: date | None, today: date) -> Week:
+        """The week's grocery day (a day of that week, today or later), or None for none."""
+        _require_monday(week_start)
+        if day is not None and not (
+            week_start <= day <= week_start + timedelta(days=6) and day >= today
+        ):
+            raise PlanError("The grocery day must be a day of that week, today or later.")
+
+        def work() -> None:
+            week_id = self._week_id(week_start)
+            self._conn.execute(
+                "UPDATE plan_weeks SET grocery_day = ? WHERE id = ?",
+                (None if day is None else day.isoformat(), week_id),
+            )
+
+        self._write(work)
+        return self._saved_week(week_start)
+
+    def finish_checkin(self, week_start: date) -> Week:
+        """Mark the week checked in. Finishing again keeps the first time."""
+        _require_monday(week_start)
+
+        def work() -> None:
+            week_id = self._week_id(week_start)
+            self._conn.execute(
+                "UPDATE plan_weeks SET checked_in_at = ? WHERE id = ? AND checked_in_at IS NULL",
+                (self._stamp(), week_id),
+            )
+
+        self._write(work)
+        return self._saved_week(week_start)
+
     # --- Rebuilding a week ------------------------------------------------
 
     def rebuild_week(self, week_start: date, rules: PlanSettings, today: date) -> Week:
@@ -388,11 +426,14 @@ class PlanStore:
                         self._insert_settings_block(week_id, block, stamp)
 
         self._write(work)
-        week = self.get_week(week_start)
-        assert week is not None  # _week_id above proved it's saved
-        return week
+        return self._saved_week(week_start)
 
     # --- Helpers ----------------------------------------------------------
+
+    def _saved_week(self, week_start: date) -> Week:
+        week = self.get_week(week_start)
+        assert week is not None  # callers have just proved it's saved
+        return week
 
     def _changeable(self, block_id: int, today: date) -> Block:
         block = self.get_block(block_id)

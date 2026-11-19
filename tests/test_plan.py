@@ -420,3 +420,43 @@ def test_checkin_uses_the_settings_times(store):
     rules = PlanSettings(blocks=(), checkin_opens=time(10), checkin_reminder=time(18, 30))
     status = store.checkin_status(datetime(2026, 11, 29, 10, 0), rules)
     assert (status.week_start, status.reminder_at) == (NEXT_MONDAY, datetime(2026, 11, 29, 18, 30))
+
+
+# --- Check-in: grocery day and finishing ----------------------------------------------
+
+
+def test_grocery_day_set_and_cleared(store, week):
+    assert store.set_grocery_day(THIS_MONDAY, THU, TODAY).grocery_day == "2026-11-26"
+    assert store.set_grocery_day(THIS_MONDAY, TODAY, TODAY).grocery_day == "2026-11-25"
+    assert store.set_grocery_day(THIS_MONDAY, None, TODAY).grocery_day is None
+    assert store.get_week(THIS_MONDAY).grocery_day is None
+
+
+@pytest.mark.parametrize("day", [date(2026, 11, 24), date(2026, 11, 30)])
+def test_grocery_day_refuses_past_or_outside(store, week, day):
+    with pytest.raises(PlanError, match="today or later"):
+        store.set_grocery_day(THIS_MONDAY, day, TODAY)
+
+
+def test_grocery_day_needs_a_saved_week(store):
+    with pytest.raises(PlanError):
+        store.set_grocery_day(NEXT_MONDAY, date(2026, 12, 1), TODAY)
+
+
+def test_finish_checkin_keeps_the_first_time(store, conn, week):
+    clock = FakeClock()
+    store = PlanStore(conn, clock=clock)
+    assert store.finish_checkin(THIS_MONDAY).checked_in is True
+    first = conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0]
+    clock.now = NOW.replace(hour=20)
+    store.finish_checkin(THIS_MONDAY)
+    assert (
+        conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0]
+        == first
+        == ("2026-11-25T15:00:00Z")
+    )
+
+
+def test_finish_unsaved_week_is_refused(store):
+    with pytest.raises(PlanError):
+        store.finish_checkin(NEXT_MONDAY)
