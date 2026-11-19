@@ -102,10 +102,11 @@ export const getDaylight = () => request<Daylight>("GET", "/api/daylight");
 
 /** Something needing attention: a task's reminder has come due, last month's
  * statement is waiting to be imported ("statement", no task), or the coming week
- * isn't planned yet ("checkin", no task). */
+ * isn't planned yet ("checkin", no task), or a routine still has unticked items
+ * ("routine", no task). */
 export type NotificationItem = {
   id: number;
-  kind: "reminder" | "statement" | "checkin";
+  kind: "reminder" | "statement" | "checkin" | "routine";
   task_id: number | null;
   title: string;
   /** The reminder's local time, "2026-11-30T09:00". */
