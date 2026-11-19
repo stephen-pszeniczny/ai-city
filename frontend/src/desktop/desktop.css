@@ -150,7 +150,7 @@
 .desktop {
   position: relative;
   min-height: 0;
-  padding: 14px 18px 8px;
+  padding: 6px 6px 4px; /* the window fills the screen; its content keeps a 5% margin */
   display: grid;
 }
 
@@ -175,7 +175,6 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto 1fr;
-  max-width: 850px; /* 12% bigger than before */
   width: 100%;
   justify-self: center;
   border-radius: 12px;
