@@ -28,11 +28,13 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from aicity import sample_data
 from aicity.db import DbKind, db_path, open_database
 from aicity.fx import rate_on, refresh_rates, save_manual_rate, valet_fetcher
-from aicity.settings import load_settings
+from aicity.income import IncomeError, IncomeStore
+from aicity.settings import MainJob, PaySchedule, load_settings
 from aicity.side_work import (
     SideWorkConflict,
     SideWorkError,
@@ -41,6 +43,18 @@ from aicity.side_work import (
     side_work_view,
 )
 from aicity.side_work_math import hours_to_hundredths, money_to_cents
+from aicity.statement_csv import MAX_BYTES, StatementError, classify, read_statement
+from aicity.statement_import import (
+    ImportConflict,
+    ImportExpired,
+    MainJobChoice,
+    NoDeposits,
+    OtherChoice,
+    PendingImports,
+    PlatformChoice,
+    build_preview,
+    confirm_import,
+)
 
 KEY_HEADER = "X-Vault-Key"
 
@@ -57,6 +71,7 @@ def _require_key(request: Request) -> None:
 
 
 router = APIRouter(prefix="/api/vault/side-work", dependencies=[Depends(_require_key)])
+statements_router = APIRouter(prefix="/api/vault/statements", dependencies=[Depends(_require_key)])
 unlock_router = APIRouter(prefix="/api/vault")
 
 
@@ -264,6 +279,130 @@ def put_rate(request: Request, day: str, body: RateIn) -> dict[str, str]:
     return {"day": when.isoformat(), "rate": body.rate.strip()}
 
 
+# --- Statements -----------------------------------------------------------------------
+
+
+def _sources(request: Request) -> tuple[dict[str, PaySchedule], MainJob | None]:
+    """(pay schedules, main job): Sample mode's own, or the private settings."""
+    if _sample(request):
+        return sample_data.SAMPLE_PAY_SCHEDULES, sample_data.SAMPLE_MAIN_JOB
+    settings = load_settings()
+    return settings.pay_schedules, settings.main_job
+
+
+def _preview(request: Request, data: bytes) -> dict:
+    rows = read_statement(data)
+    schedules, main_job = _sources(request)
+    classified = classify(rows, main_job, schedules)
+    with _open(request) as (side, conn):
+        days = {r.day for rs in classified.platform.values() for r in rs}
+        if days:
+            _get_rates(request, conn, days)
+        income = IncomeStore(conn, clock=request.app.state.clock)
+        pending, body = build_preview(
+            conn,
+            side,
+            income,
+            rows,
+            classified,
+            schedules,
+            request.app.state.db_kind,
+            request.app.state.clock(),
+        )
+    body["token"] = request.app.state.pending_imports.put(pending)
+    return body
+
+
+@statements_router.post("/preview")
+async def preview_statement(request: Request) -> dict:
+    """Read a statement CSV (the raw request body) and propose; nothing is stored."""
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The file is too big (over 2 MB).")
+    data = await request.body()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="The file is too big (over 2 MB).")
+    return await run_in_threadpool(_preview, request, data)
+
+
+Notes = Annotated[str | None, Field(max_length=500)]
+
+
+class MainJobIn(_Body):
+    ref: str
+    gross: Money = None
+    rrsp: Money = None
+    match: Money = None
+    notes: Notes = None
+
+
+class PlatformIn(_Body):
+    ref: str
+    action: Literal["week", "bonus", "link", "skip"]
+    week_start: Day | None = None
+    payment_id: int | None = None
+    includes_bonus: bool = False
+    bonus: Money = None
+    notes: Notes = None
+
+
+class OtherIn(_Body):
+    ref: str
+    action: Literal["add", "skip"]
+    company: Text = None
+    notes: Notes = None
+
+
+class ConfirmIn(_Body):
+    token: str
+    main_job: list[MainJobIn] = Field(default_factory=list, max_length=2000)
+    platform: list[PlatformIn] = Field(default_factory=list, max_length=2000)
+    other_income: list[OtherIn] = Field(default_factory=list, max_length=2000)
+
+
+@statements_router.post("/confirm")
+def confirm_statement(request: Request, body: ConfirmIn) -> dict:
+    pending_imports = request.app.state.pending_imports
+    pending = pending_imports.get(body.token, request.app.state.db_kind)
+    schedules, _main_job = _sources(request)
+    with _open(request) as (side, conn):
+        result = confirm_import(
+            conn,
+            side,
+            IncomeStore(conn, clock=request.app.state.clock),
+            pending,
+            schedules,
+            [MainJobChoice(m.ref, m.gross, m.rrsp, m.match, m.notes) for m in body.main_job],
+            [
+                PlatformChoice(
+                    p.ref, p.action, p.week_start, p.payment_id, p.includes_bonus, p.bonus, p.notes
+                )
+                for p in body.platform
+            ],
+            [OtherChoice(o.ref, o.action, o.company, o.notes) for o in body.other_income],
+        )
+    pending_imports.discard(body.token)
+    return result
+
+
+@statements_router.get("")
+def list_statements(request: Request) -> list[dict]:
+    with _open(request) as (_side, conn):
+        return [
+            {
+                "id": i.id,
+                "first_day": i.first_day.isoformat(),
+                "last_day": i.last_day.isoformat(),
+                "kept": i.kept,
+                "duplicates": i.duplicates,
+                "skipped": i.skipped,
+                "spending": i.spending,
+                "created_at": i.created_at,
+            }
+            for i in IncomeStore(conn).imports()
+        ]
+
+
 def _entry_out(e) -> dict:
     return {
         "id": e.id,
@@ -280,8 +419,30 @@ def _entry_out(e) -> dict:
 
 def register(app: FastAPI) -> None:
     app.state.fx_fetcher = valet_fetcher
+    app.state.pending_imports = PendingImports(lambda: app.state.clock())
     app.include_router(unlock_router)
     app.include_router(router)
+    app.include_router(statements_router)
+
+    @app.exception_handler(StatementError)
+    def _statement(_request: Request, exc: StatementError) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=422)
+
+    @app.exception_handler(NoDeposits)
+    def _no_deposits(_request: Request, exc: NoDeposits) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=422)
+
+    @app.exception_handler(IncomeError)
+    def _income(_request: Request, exc: IncomeError) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=422)
+
+    @app.exception_handler(ImportExpired)
+    def _expired(_request: Request, exc: ImportExpired) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(ImportConflict)
+    def _stale(_request: Request, exc: ImportConflict) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=409)
 
     @app.exception_handler(SideWorkNotFound)
     def _not_found(_request: Request, exc: SideWorkNotFound) -> JSONResponse:

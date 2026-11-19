@@ -193,8 +193,5 @@ class IncomeStore:
                 (deposit_id, gross_cents, rrsp_cents, match_cents, notes),
             )
 
-        if self._conn.in_transaction:
-            work()
-        else:
-            with_transaction(self._conn, work, immediate=True)
+        with_transaction(self._conn, work, immediate=True)
         return next(r for r in self.main_job_pay() if r.deposit_id == deposit_id)

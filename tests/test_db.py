@@ -432,3 +432,22 @@ def test_foreign_keys_are_enforced(conn):
 def test_meta_table_is_strict(conn):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO meta VALUES ('k', NULL)")
+
+
+def test_with_transaction_joins_an_outer_one(tmp_path):
+    from aicity.db import with_transaction
+
+    conn = open_database(tmp_path / "sample.db", DbKind.SAMPLE)
+
+    def inner():
+        conn.execute("INSERT INTO meta (key, value) VALUES ('inner', '1')")
+
+    def outer():
+        with_transaction(conn, inner)
+        raise RuntimeError("fail after the inner work")
+
+    with pytest.raises(RuntimeError):
+        with_transaction(conn, outer, immediate=True)
+    # The inner work rolled back with the outer transaction.
+    assert conn.execute("SELECT 1 FROM meta WHERE key = 'inner'").fetchone() is None
+    conn.close()

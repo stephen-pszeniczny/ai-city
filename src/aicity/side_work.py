@@ -372,6 +372,23 @@ class SideWorkStore:
         with_transaction(self._conn, work, immediate=True)
         return self._get_payment(payment_id)
 
+    def link_deposit(self, payment_id: int, deposit_id: int, *, company: str) -> Payment:
+        """Mark a payment typed in by hand as proven by an imported deposit."""
+
+        def work() -> None:
+            current = self._get_payment(payment_id)
+            if current.company != company:
+                raise SideWorkError("That payment is from another company.")
+            if current.deposit_id is not None:
+                raise SideWorkConflict("That payment is already linked to a deposit.")
+            self._conn.execute(
+                "UPDATE side_work_payments SET deposit_id = ? WHERE id = ?",
+                (deposit_id, payment_id),
+            )
+
+        with_transaction(self._conn, work, immediate=True)
+        return self._get_payment(payment_id)
+
     @staticmethod
     def _refuse_if_settled(current: Entry, action: str) -> None:
         if current.payment_id is not None:
