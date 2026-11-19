@@ -9,7 +9,16 @@ from datetime import UTC, date, datetime, time
 import pytest
 
 from aicity.db import DbKind, open_database
-from aicity.plan import BlockNotFound, NewBlock, PlanError, PlanStore, blocks_for_week, monday_of
+from aicity.plan import (
+    BlockNotFound,
+    CheckinStatus,
+    NewBlock,
+    PlanError,
+    PlanStore,
+    blocks_for_week,
+    checkin_target,
+    monday_of,
+)
 from aicity.settings import BlockRule, PlanSettings
 
 TODAY = date(2026, 11, 25)
@@ -353,3 +362,101 @@ def test_saving_a_settings_block_unchanged_does_not_mark_it_edited(store, week):
     work = block_on(store, "2026-11-26", "Work")
     same = store.edit_block(work.id, TODAY, title="Work", kind="work", start=time(9), end=time(12))
     assert same.edited is False
+
+
+# --- Check-in: which week, and is it due --------------------------------------------
+
+SUNDAY = date(2026, 11, 29)
+
+
+def test_checkin_target_flips_at_opening_time_on_sunday():
+    assert checkin_target(datetime(2026, 11, 29, 11, 59), time(12), False) == THIS_MONDAY
+    assert checkin_target(datetime(2026, 11, 29, 12, 0), time(12), False) == NEXT_MONDAY
+    assert checkin_target(datetime(2026, 11, 29, 11, 59), time(12), True) == NEXT_MONDAY
+
+
+def test_checkin_target_midweek():
+    assert checkin_target(datetime(2026, 11, 25, 9, 0), time(12), False) == THIS_MONDAY
+    assert checkin_target(datetime(2026, 11, 25, 9, 0), time(12), True) == NEXT_MONDAY
+
+
+def test_checkin_due_on_sunday_afternoon(store):
+    status = store.checkin_status(datetime(2026, 11, 29, 12, 0), RULES)
+    assert status == CheckinStatus(
+        week_start=NEXT_MONDAY,
+        due=True,
+        checked_in=False,
+        reminder_at=datetime(2026, 11, 29, 16, 0),
+    )
+
+
+def mark_checked_in(conn, week_start: date) -> None:
+    conn.execute(
+        "UPDATE plan_weeks SET checked_in_at = '2026-11-29T18:00:00Z' WHERE week_start = ?",
+        (week_start.isoformat(),),
+    )
+
+
+def test_checkin_not_due_once_next_week_is_checked_in(store, conn):
+    store.ensure_week(NEXT_MONDAY, RULES, SUNDAY)
+    mark_checked_in(conn, NEXT_MONDAY)
+    status = store.checkin_status(datetime(2026, 11, 29, 13, 0), RULES)
+    assert (status.week_start, status.due, status.checked_in) == (NEXT_MONDAY, False, True)
+
+
+def test_checkin_midweek_after_checking_in_looks_ahead_but_is_not_due(store, conn, week):
+    mark_checked_in(conn, THIS_MONDAY)
+    status = store.checkin_status(datetime(2026, 11, 25, 9, 0), RULES)
+    assert (status.week_start, status.due, status.checked_in) == (NEXT_MONDAY, False, False)
+
+
+def test_checkin_midweek_without_checking_in_is_due(store):
+    status = store.checkin_status(datetime(2026, 11, 25, 9, 0), RULES)
+    assert (status.week_start, status.due) == (THIS_MONDAY, True)
+    assert status.reminder_at == datetime(2026, 11, 22, 16, 0)
+
+
+def test_checkin_uses_the_settings_times(store):
+    rules = PlanSettings(blocks=(), checkin_opens=time(10), checkin_reminder=time(18, 30))
+    status = store.checkin_status(datetime(2026, 11, 29, 10, 0), rules)
+    assert (status.week_start, status.reminder_at) == (NEXT_MONDAY, datetime(2026, 11, 29, 18, 30))
+
+
+# --- Check-in: grocery day and finishing ----------------------------------------------
+
+
+def test_grocery_day_set_and_cleared(store, week):
+    assert store.set_grocery_day(THIS_MONDAY, THU, TODAY).grocery_day == "2026-11-26"
+    assert store.set_grocery_day(THIS_MONDAY, TODAY, TODAY).grocery_day == "2026-11-25"
+    assert store.set_grocery_day(THIS_MONDAY, None, TODAY).grocery_day is None
+    assert store.get_week(THIS_MONDAY).grocery_day is None
+
+
+@pytest.mark.parametrize("day", [date(2026, 11, 24), date(2026, 11, 30)])
+def test_grocery_day_refuses_past_or_outside(store, week, day):
+    with pytest.raises(PlanError, match="today or later"):
+        store.set_grocery_day(THIS_MONDAY, day, TODAY)
+
+
+def test_grocery_day_needs_a_saved_week(store):
+    with pytest.raises(PlanError):
+        store.set_grocery_day(NEXT_MONDAY, date(2026, 12, 1), TODAY)
+
+
+def test_finish_checkin_keeps_the_first_time(store, conn, week):
+    clock = FakeClock()
+    store = PlanStore(conn, clock=clock)
+    assert store.finish_checkin(THIS_MONDAY).checked_in is True
+    first = conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0]
+    clock.now = NOW.replace(hour=20)
+    store.finish_checkin(THIS_MONDAY)
+    assert (
+        conn.execute("SELECT checked_in_at FROM plan_weeks").fetchone()[0]
+        == first
+        == ("2026-11-25T15:00:00Z")
+    )
+
+
+def test_finish_unsaved_week_is_refused(store):
+    with pytest.raises(PlanError):
+        store.finish_checkin(NEXT_MONDAY)

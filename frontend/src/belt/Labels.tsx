@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, RefObject } from "react";
 
-import { getBuildings, getVaultBadge, listTasks, type BuildingId } from "../api";
+import { getBuildings, getCheckin, getVaultBadge, listTasks, type BuildingId } from "../api";
 import { plannerBadge } from "./badges";
 import { BUILT } from "./built";
 import { tintOf } from "./tints";
@@ -34,8 +34,15 @@ export function Labels({
     refetchInterval: 60_000,
     retry: false,
   });
+  // "Check-in due" from Sunday noon until the coming week is planned (read only).
+  const checkin = useQuery({
+    queryKey: ["plan-checkin"],
+    queryFn: getCheckin,
+    refetchInterval: 60_000,
+    retry: false,
+  });
   const badges: Partial<Record<BuildingId, string | null>> = {
-    planner: open.data ? plannerBadge(open.data) : null,
+    planner: open.data ? plannerBadge(open.data, new Date(), checkin.data?.due ?? false) : null,
     finance: vault.data?.text ?? null,
   };
 

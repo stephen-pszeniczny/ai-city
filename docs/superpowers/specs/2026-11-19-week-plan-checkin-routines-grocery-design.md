@@ -87,7 +87,8 @@ Steve chose neither: changes are made on the Mac at home.
 
 ```toml
 [plan]
-checkin_day = "sunday"
+# The check-in day is always Sunday (PR 2 ruling: a movable day complicated the
+# "which week" rule for no use); only its times are settings.
 checkin_opens = "12:00"      # check-in available from this time
 checkin_reminder = "16:00"   # one reminder at this time if not done
 
@@ -171,7 +172,7 @@ and nothing else breaks.
 
 ### The Sunday check-in (Mac)
 
-**Which week** (designer's call): on `checkin_day` from `checkin_opens`, the check-in is for the
+**Which week** (designer's call): on Sunday from `checkin_opens`, the check-in is for the
 week starting the next day. On any other day (or Sunday before `checkin_opens`), it's for the
 current week if that week isn't checked in yet; otherwise it shows next week. The week is created
 from settings first if it doesn't exist yet.
@@ -180,13 +181,15 @@ from settings first if it doesn't exist yet.
 again any time; events already in the week show there with edit and remove, so nothing is added
 twice. Finishing the first time sets `checked_in_at`; later finishes just save.
 
-**Reminder and badge** (designer's call): the check-in reminder is keyed on the target week's
-Monday, so it's made once per week. If the Mac was asleep at `checkin_reminder`, it's made on the
+**Reminder and badge** (designer's call): the check-in reminder's moment is the Sunday before the
+target week at `checkin_reminder`, so it's made once per week. If the Mac was asleep at `checkin_reminder`, it's made on the
 next background check, like other missed reminders. It's cleared once that week is checked in.
 "Check-in due" shows on the badge from `checkin_opens` on Sunday, and on any later day while the
 current week isn't checked in. It's never stronger than that (no repeat reminders). Check-in and
 routine reminders run in Personal mode only, like the statement reminder. Sample mode shows one
-pre-made check-in notification so demos still look alive.
+pre-made check-in notification so demos still look alive; finishing the check-in clears it
+(in Sample mode the finish only clears, never makes). A reminder is cleared once its own week is
+checked in, even mid-week.
 
 Steps on one screen, top to bottom:
 

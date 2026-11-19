@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { BuildingId } from "../api";
+import { CheckinPanel } from "../plan/CheckinPanel";
 import { PlanPanel } from "../plan/PlanPanel";
 import { TodoPanel } from "../todo/TodoPanel";
 import { IncomePanel } from "../vault/IncomePanel";
@@ -90,6 +91,8 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                     <TodoPanel />
                   ) : openApp === "plan" ? (
                     <PlanPanel />
+                  ) : openApp === "checkin" ? (
+                    <CheckinPanel />
                   ) : openApp === "sidework" ? (
                     <SideWorkPanel />
                   ) : openApp === "income" ? (

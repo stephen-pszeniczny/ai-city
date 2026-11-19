@@ -73,6 +73,9 @@ tax_set_aside_is_placeholder = true
 # Times are 24-hour "HH:MM"; a block must end later than it starts (none past midnight).
 # The Daily plan builds each week from these. Example values only.
 # [plan]
+# The Sunday check-in plans the coming week. Optional times (defaults shown):
+# checkin_opens = "12:00"      # available from this time on Sunday
+# checkin_reminder = "16:00"   # one reminder at this time if the week isn't planned yet
 #
 # [[plan.blocks]]
 # title = "Commute"
@@ -101,3 +104,16 @@ tax_set_aside_is_placeholder = true
 # days = ["mon", "tue", "wed", "thu", "fri"]
 # start = "13:00"
 # end = "17:00"
+#
+# Usual events: one-tap chips at the Sunday check-in. day is optional (without it you pick a
+# day when adding). kind: event | side_work | build | other (default event).
+# [[plan.usual_events]]
+# title = "Team sport"
+# day = "thu"
+# start = "21:00"
+# end = "22:00"
+#
+# [[plan.usual_events]]
+# title = "Games night"
+# start = "19:00"
+# end = "21:00"

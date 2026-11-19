@@ -35,6 +35,8 @@ BUILDING_IDS = (
 DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 # Kinds of fixed block the Daily plan's settings may list.
 PLAN_RULE_KINDS = ("work", "commute", "gym", "other")
+# Kinds a usual event (a one-tap chip at the Sunday check-in) may be.
+USUAL_EVENT_KINDS = ("event", "side_work", "build", "other")
 PLAN_TITLE_MAX = 100
 
 SETTINGS_SUBDIR = "settings"
@@ -124,8 +126,23 @@ class BlockRule:
 
 
 @dataclass(frozen=True)
+class UsualEvent:
+    """A one-tap chip at the Sunday check-in. day is a weekday number, or None to pick one."""
+
+    title: str
+    kind: str
+    day: int | None
+    start: time
+    end: time
+
+
+@dataclass(frozen=True)
 class PlanSettings:
     blocks: tuple[BlockRule, ...]
+    # The Sunday check-in: available from checkin_opens, one reminder at checkin_reminder.
+    checkin_opens: time = time(12)
+    checkin_reminder: time = time(16)
+    usual_events: tuple[UsualEvent, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -348,11 +365,51 @@ def _day_pair(t: dict, where: str, key: str) -> tuple[int, int]:
 def _plan(t) -> PlanSettings:
     if not isinstance(t, dict):
         raise SettingsError("[plan] must be a section.")
-    _exact_keys(t, "plan", {"blocks"})
+    _only_keys(t, "[plan]", {"blocks", "checkin_opens", "checkin_reminder", "usual_events"})
+    if "blocks" not in t:
+        raise SettingsError("Missing setting(s) in [plan]: blocks.")
     blocks = t["blocks"]
     if not isinstance(blocks, list) or not all(isinstance(b, dict) for b in blocks):
         raise SettingsError("plan.blocks must be a list of [[plan.blocks]] entries.")
-    return PlanSettings(blocks=tuple(_block_rule(b, n) for n, b in enumerate(blocks, start=1)))
+    events = t.get("usual_events", [])
+    if not isinstance(events, list) or not all(isinstance(e, dict) for e in events):
+        raise SettingsError("plan.usual_events must be a list of [[plan.usual_events]] entries.")
+    return PlanSettings(
+        blocks=tuple(_block_rule(b, n) for n, b in enumerate(blocks, start=1)),
+        checkin_opens=_clock_time(t, "plan", "checkin_opens") if "checkin_opens" in t else time(12),
+        checkin_reminder=(
+            _clock_time(t, "plan", "checkin_reminder") if "checkin_reminder" in t else time(16)
+        ),
+        usual_events=tuple(_usual_event(e, n) for n, e in enumerate(events, start=1)),
+    )
+
+
+def _usual_event(t: dict, n: int) -> UsualEvent:
+    where = f"plan.usual_events (entry {n})"
+    _only_keys(t, where, {"title", "kind", "day", "start", "end"})
+    missing = sorted({"title", "start", "end"} - set(t))
+    if missing:
+        raise SettingsError(f"Missing setting(s) in {where}: {', '.join(missing)}.")
+    title = _text(t, where, "title")
+    if len(title) > PLAN_TITLE_MAX:
+        raise SettingsError(f"{where}.title must be at most {PLAN_TITLE_MAX} characters.")
+    kind = t.get("kind", "event")
+    if kind not in USUAL_EVENT_KINDS:
+        raise SettingsError(f"{where}.kind must be one of: {', '.join(USUAL_EVENT_KINDS)}.")
+    day = t.get("day")
+    if day is not None and not (isinstance(day, str) and day in DAY_CODES):
+        raise SettingsError(f"{where}.day must be one day from: {', '.join(DAY_CODES)}.")
+    start = _clock_time(t, where, "start")
+    end = _clock_time(t, where, "end")
+    if end <= start:
+        raise SettingsError(f"{where}.end must be later than its start (no events past midnight).")
+    return UsualEvent(
+        title=title,
+        kind=kind,
+        day=None if day is None else DAY_CODES.index(day),
+        start=start,
+        end=end,
+    )
 
 
 def _block_rule(t: dict, n: int) -> BlockRule:

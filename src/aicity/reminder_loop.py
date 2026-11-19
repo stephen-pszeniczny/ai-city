@@ -6,7 +6,8 @@ mode is on (they show after switching back). It runs once straight away at
 start, which also catches reminders that came due while the app or Mac was off.
 
 In the Personal database it also makes the monthly "import last month's statement"
-reminder (statement_reminder.py), using the due day and reminder time from the
+reminder (statement_reminder.py) and the weekly Sunday check-in reminder
+(checkin_reminder.py), using the due day and reminder time from the
 private settings; a settings problem is logged (by type only) and task reminders
 still go ahead.
 
@@ -20,6 +21,7 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, tzinfo
 
+from aicity.checkin_reminder import check_checkin_reminder
 from aicity.db import DatabaseError, DbKind, db_path, open_database
 from aicity.notifications import Notification, NotificationStore
 from aicity.settings import SettingsError, load_settings
@@ -61,6 +63,7 @@ def check_all_databases(
             made[kind] = store.check_reminders()
             if kind is DbKind.PERSONAL:
                 made[kind] += _statement(conn, clock, local_tz, load)
+                made[kind] += _checkin(conn, clock, local_tz, load)
             if notify is not None and kind is DbKind.PERSONAL:
                 new = store.created_after(before)
                 if new:
@@ -90,6 +93,21 @@ def _statement(
         settings.tasks.reminder_time,
         now.astimezone(UTC),
     )
+
+
+def _checkin(
+    conn: sqlite3.Connection, clock: Clock, local_tz: tzinfo | None, load: Callable[[], object]
+) -> int:
+    try:
+        settings = load()
+    except (SettingsError, OSError) as exc:
+        log.warning("Check-in reminder skipped (%s).", type(exc).__name__)
+        return 0
+    rules = getattr(settings, "plan", None)
+    if rules is None:  # no [plan] in the settings: no Daily plan, no check-in
+        return 0
+    now = clock()
+    return check_checkin_reminder(conn, now.astimezone(local_tz), rules, now.astimezone(UTC))
 
 
 def _tell(notify: Callable[[list[Notification]], None], new: list[Notification]) -> None:

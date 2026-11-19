@@ -100,11 +100,12 @@ export type Daylight = {
 
 export const getDaylight = () => request<Daylight>("GET", "/api/daylight");
 
-/** Something needing attention: a task's reminder has come due, or last month's
- * statement is waiting to be imported ("statement", no task). */
+/** Something needing attention: a task's reminder has come due, last month's
+ * statement is waiting to be imported ("statement", no task), or the coming week
+ * isn't planned yet ("checkin", no task). */
 export type NotificationItem = {
   id: number;
-  kind: "reminder" | "statement";
+  kind: "reminder" | "statement" | "checkin";
   task_id: number | null;
   title: string;
   /** The reminder's local time, "2026-11-30T09:00". */
@@ -166,8 +167,30 @@ export type PlanWeek = {
   today: string;
   exists: boolean; // false: not saved (and not created)
   checked_in: boolean;
+  grocery_day: string | null;
   days: { day: string; blocks: PlanBlock[] }[]; // seven days, or none when not saved
 };
+
+/** A one-tap chip at the Sunday check-in. day is a date of the target week, or null to pick. */
+export type UsualEvent = {
+  title: string;
+  kind: PlanKind;
+  day: string | null;
+  start: string;
+  end: string;
+};
+
+/** Which week the Sunday check-in plans, and whether it's due (the badge). */
+export type CheckinStatus = {
+  configured: boolean;
+  week_start: string;
+  due: boolean;
+  checked_in: boolean;
+  opens: string;
+  usual_events: UsualEvent[];
+};
+
+export type CheckinWeek = PlanWeek & { usual_events: UsualEvent[] };
 
 export type NewPlanBlock = {
   week_start: string;
@@ -194,6 +217,18 @@ export const removePlanBlock = (id: number) =>
   request<PlanBlock>("POST", `/api/plan/blocks/${id}/remove`);
 export const setGym = (id: number, status: GymStatus) =>
   request<PlanBlock>("POST", `/api/plan/blocks/${id}/gym`, { status });
+
+export const getCheckin = () => request<CheckinStatus>("GET", "/api/plan/checkin");
+/** Opens (creates if needed) the week the check-in plans; with start, that week instead. */
+export const openCheckin = (start?: string) =>
+  request<CheckinWeek>(
+    "POST",
+    start ? `/api/plan/checkin/open?start=${start}` : "/api/plan/checkin/open",
+  );
+export const setGroceryDay = (weekStart: string, day: string | null) =>
+  request<PlanWeek>("POST", `/api/plan/week/${weekStart}/grocery-day`, { day });
+export const finishCheckin = (weekStart: string) =>
+  request<PlanWeek>("POST", `/api/plan/week/${weekStart}/checkin`);
 
 // --- Plumbing ----------------------------------------------------------------
 

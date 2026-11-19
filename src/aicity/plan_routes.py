@@ -9,6 +9,13 @@
     POST  /api/plan/blocks/{id}/remove          remove it (kept, hidden)
     POST  /api/plan/blocks/{id}/gym             mark a gym block planned, done or skipped
 
+    GET   /api/plan/checkin                     which week the Sunday check-in plans, and
+                                                whether it's due; reads only
+    POST  /api/plan/checkin/open[?start=…]      that week (created if needed) + usual events;
+                                                start keeps a week the panel already shows
+    POST  /api/plan/week/{start}/grocery-day    set or clear the week's grocery day
+    POST  /api/plan/week/{start}/checkin        finish the check-in (first time is kept)
+
 Answers: 404 no such block, 409 change not allowed (past day, unsaved week, ...),
 422 bad input, 503 settings file missing or invalid.
 
@@ -21,7 +28,7 @@ import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import date, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -29,7 +36,8 @@ from fastapi.responses import JSONResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, model_validator
 
 from aicity import sample_data
-from aicity.db import DbKind, db_path, open_database
+from aicity.checkin_reminder import clear_checkin_reminders
+from aicity.db import DbKind, db_path, open_database, with_transaction
 from aicity.plan import BLOCK_KINDS, Block, BlockNotFound, PlanError, PlanStore, Week, monday_of
 from aicity.settings import PlanSettings, load_settings
 
@@ -84,6 +92,11 @@ class BlockEdit(BaseModel):
         return self
 
 
+class GroceryDay(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    day: Day | None
+
+
 class GymMark(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: Literal["planned", "done", "skipped"]
@@ -103,8 +116,13 @@ def _week_start(value: str) -> date:
     return day
 
 
+def _now(request: Request) -> datetime:
+    """Local Mac time now."""
+    return request.app.state.clock().astimezone()
+
+
 def _today(request: Request) -> date:
-    return request.app.state.clock().astimezone().date()
+    return _now(request).date()
 
 
 def _rules(request: Request) -> PlanSettings | None:
@@ -116,14 +134,20 @@ def _rules(request: Request) -> PlanSettings | None:
 
 
 @contextmanager
-def _store(request: Request) -> Iterator[PlanStore]:
+def _open(request: Request) -> Iterator[sqlite3.Connection]:
     """Open the active database for this request and close it afterwards."""
     state = request.app.state
     conn: sqlite3.Connection = open_database(db_path(state.db_kind), state.db_kind)
     try:
-        yield PlanStore(conn, clock=state.clock)
+        yield conn
     finally:
         conn.close()
+
+
+@contextmanager
+def _store(request: Request) -> Iterator[PlanStore]:
+    with _open(request) as conn:
+        yield PlanStore(conn, clock=request.app.state.clock)
 
 
 def _block_json(block: Block) -> dict:
@@ -141,6 +165,7 @@ def _week_json(
         "today": today.isoformat(),
         "exists": week is not None,
         "checked_in": week.checked_in if week else False,
+        "grocery_day": week.grocery_day if week else None,
         "days": [
             {"day": day, "blocks": [_block_json(b) for b in blocks]}
             for day, blocks in (week.days if week else [])
@@ -234,3 +259,82 @@ def register(app: FastAPI) -> None:
     @app.exception_handler(PlanError)
     def _not_allowed(_request: Request, exc: PlanError) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=409)
+
+
+# --- The Sunday check-in -------------------------------------------------------------
+
+
+def _usual_events_json(rules: PlanSettings, week_start: date) -> list[dict]:
+    """The usual events as chips, each default weekday turned into a date of that week."""
+    return [
+        {
+            "title": e.title,
+            "kind": e.kind,
+            "day": None if e.day is None else (week_start + timedelta(days=e.day)).isoformat(),
+            "start": f"{e.start:%H:%M}",
+            "end": f"{e.end:%H:%M}",
+        }
+        for e in rules.usual_events
+    ]
+
+
+@router.get("/checkin")
+def checkin_status(request: Request) -> dict:
+    now = _now(request)
+    rules = _rules(request)
+    if rules is None:
+        return {
+            "configured": False,
+            "week_start": monday_of(now.date()).isoformat(),
+            "due": False,
+            "checked_in": False,
+            "opens": "12:00",
+            "usual_events": [],
+        }
+    with _store(request) as store:
+        status = store.checkin_status(now, rules)
+    return {
+        "configured": True,
+        "week_start": status.week_start.isoformat(),
+        "due": status.due,
+        "checked_in": status.checked_in,
+        "opens": f"{rules.checkin_opens:%H:%M}",
+        "usual_events": _usual_events_json(rules, status.week_start),
+    }
+
+
+@router.post("/checkin/open")
+def open_checkin(request: Request, start: str | None = None) -> dict:
+    """The week the check-in plans; or, with start, that week (a panel keeps its week)."""
+    now = _now(request)
+    today = now.date()
+    pinned = _week_start(start) if start is not None else None
+    rules = _rules(request)
+    if rules is None:
+        return _week_json(monday_of(today), today, None, configured=False) | {"usual_events": []}
+    with _store(request) as store:
+        target = pinned or store.checkin_status(now, rules).week_start
+        week = store.ensure_week(target, rules, today)
+    return _week_json(target, today, week) | {"usual_events": _usual_events_json(rules, target)}
+
+
+@router.post("/week/{start}/grocery-day")
+def grocery_day(request: Request, start: str, body: GroceryDay) -> dict:
+    week_start, today = _week_start(start), _today(request)
+    day = None if body.day is None else date.fromisoformat(body.day)
+    with _store(request) as store:
+        return _week_json(week_start, today, store.set_grocery_day(week_start, day, today))
+
+
+@router.post("/week/{start}/checkin")
+def finish_checkin(request: Request, start: str) -> dict:
+    week_start, now = _week_start(start), _now(request)
+    rules = _rules(request)
+    if rules is None:
+        return _week_json(week_start, now.date(), None, configured=False)
+    with _open(request) as conn:
+        week = PlanStore(conn, clock=request.app.state.clock).finish_checkin(week_start)
+        # Clear its reminder now rather than at the next background check. Only clear:
+        # making reminders is the background check's job (it also posts the Mac notification).
+        with_transaction(conn, lambda: clear_checkin_reminders(conn, now.astimezone(UTC)))
+    return _week_json(week_start, now.date(), week)
