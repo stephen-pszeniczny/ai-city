@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date
 from decimal import Decimal
 
-from aicity.income import IncomeStore
+from aicity.income import IncomeStore, MainJobPayRow
 from aicity.settings import IncomeSettings, PaySchedule
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import hourly_rate_cents, is_overdue, set_aside_cents, to_cad_cents
@@ -67,7 +67,7 @@ def income_view(
 
     pay_rows = income.main_job_pay()
     for row in pay_rows:
-        m = _month(row.posted_on)
+        m = _month(row.paid_on)  # the typed date, even when the deposit came a day early
         if row.gross_cents is None:
             missing_gross.add(m)
         add(m, "main_job", row.gross_cents if row.gross_cents is not None else row.net_cents)
@@ -153,19 +153,21 @@ def income_view(
             "percent": format(settings.tax_set_aside_percent.normalize(), "f"),
             "is_placeholder": settings.tax_set_aside_is_placeholder,
         },
-        "main_job_pay": [
-            {
-                "deposit_id": r.deposit_id,
-                "day": r.posted_on.isoformat(),
-                "net_cents": r.net_cents,
-                "gross_cents": r.gross_cents,
-                "rrsp_cents": r.rrsp_cents,
-                "match_cents": r.match_cents,
-                "deductions_cents": r.deductions_cents,
-                "notes": r.notes,
-            }
-            for r in reversed(pay_rows)
-        ],
+        "main_job_pay": [main_job_pay_json(r) for r in reversed(pay_rows)],
+    }
+
+
+def main_job_pay_json(r: MainJobPayRow) -> dict:
+    return {
+        "id": r.id,
+        "day": r.paid_on.isoformat(),
+        "net_cents": r.net_cents,
+        "gross_cents": r.gross_cents,
+        "rrsp_cents": r.rrsp_cents,
+        "match_cents": r.match_cents,
+        "deductions_cents": r.deductions_cents,
+        "notes": r.notes,
+        "confirmed": r.confirmed,
     }
 
 

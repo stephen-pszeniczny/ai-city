@@ -33,23 +33,29 @@ def stores(conn):
     return SideWorkStore(conn, clock=lambda: NOW), IncomeStore(conn, clock=lambda: NOW)
 
 
-def main_pay(income, day, net, gross=None, rrsp=None, match=None, ch="a"):
+def main_pay(income, day, net, gross=None, rrsp=None, match=None):
+    return income.add_main_job_pay(
+        paid_on=day,
+        net_cents=net,
+        gross_cents=gross,
+        rrsp_cents=rrsp,
+        match_cents=match,
+        notes=None,
+    )
+
+
+def deposit(income, day, cents, ch="a"):
     imp = income.record_import(
         first_day=day, last_day=day, kept=1, duplicates=0, skipped=0, spending=0
     )
-    d = income.add_deposit(
+    return income.add_deposit(
         posted_on=day,
-        amount_cents=net,
+        amount_cents=cents,
         kind="main_job",
         source="main_job",
         row_key=ch * 64,
         import_id=imp,
     )
-    if gross is not None:
-        income.set_main_job_pay(
-            d.id, gross_cents=gross, rrsp_cents=rrsp, match_cents=match, notes=None
-        )
-    return d
 
 
 def side_pay(side, day, cents, hundredths=None, company="platform_a"):
@@ -109,6 +115,38 @@ def test_main_job_pay_list_has_deductions(conn, stores):
     main_pay(income, date(2026, 3, 6), 210000, gross=300000, rrsp=15000, match=7500)
     [row] = view(conn, stores)["main_job_pay"]
     assert (row["net_cents"], row["deductions_cents"], row["match_cents"]) == (210000, 75000, 7500)
+
+
+def test_view_typed_pay_counts_and_is_unconfirmed(conn, stores):
+    _side, income = stores
+    pay = main_pay(income, date(2026, 3, 20), 210000, gross=300000)
+    v = view(conn, stores)
+    assert v["month"]["gross_cents"] == 300000  # counts toward the goal at once
+    assert v["main_job_pay"] == [
+        {
+            "id": pay.id,
+            "day": "2026-03-20",
+            "net_cents": 210000,
+            "gross_cents": 300000,
+            "rrsp_cents": None,
+            "match_cents": None,
+            "deductions_cents": 90000,
+            "notes": None,
+            "confirmed": False,
+        }
+    ]
+
+
+def test_view_counts_linked_pay_in_the_typed_month(conn, stores):
+    _side, income = stores
+    pay = main_pay(income, date(2026, 3, 1), 210000)
+    income.link_main_job_pay(pay.id, deposit(income, date(2026, 2, 28), 210000))
+    v = view(conn, stores)
+    assert v["month"]["gross_cents"] == 210000
+    feb = next(m for m in v["months"] if m["month"] == "2026-02")
+    assert feb["total_cents"] == 0
+    assert v["main_job_pay"][0]["confirmed"] is True
+    assert v["main_job_pay"][0]["day"] == "2026-03-01"
 
 
 def test_six_months_oldest_first_with_empty_months(conn, stores):
