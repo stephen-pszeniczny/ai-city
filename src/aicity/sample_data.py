@@ -23,6 +23,7 @@ from pathlib import Path
 from aicity.checkin_reminder import CHECKIN_TITLE
 from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
 from aicity.fx import rate_on
+from aicity.grocery import GroceryStore
 from aicity.income import IncomeStore
 from aicity.notifications import SINCE_KEY
 from aicity.plan import PlanStore, monday_of
@@ -147,6 +148,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         seed_income(conn, now)
         seed_plan(conn, now)
         seed_checkin_notification(conn, now)
+        seed_grocery(conn, now)
         return seeded
     finally:
         conn.close()
@@ -259,6 +261,28 @@ def seed_plan(conn: sqlite3.Connection, now: datetime) -> bool:
             week_start, next_day, time(20, 30), time(21, 30), "Five-a-side", "event", today
         )
         conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (PLAN_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
+    return True
+
+
+GROCERY_SEEDED_KEY = "sample_grocery_seeded"
+SAMPLE_GROCERY = ("Oat milk", "Bananas", "Rice", "Spinach", "Coffee beans", "Lemons")
+
+
+def seed_grocery(conn: sqlite3.Connection, now: datetime) -> bool:
+    """A made-up grocery list (one item already ticked), once. Sample database only."""
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("The sample grocery list only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (GROCERY_SEEDED_KEY,)).fetchone():
+        return False
+    store = GroceryStore(conn, clock=lambda: now)
+
+    def work() -> None:
+        items = {name: store.add(name) for name in SAMPLE_GROCERY}
+        store.set_ticked(items["Rice"].id, True)
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (GROCERY_SEEDED_KEY,))
 
     with_transaction(conn, work, immediate=True)
     return True
