@@ -70,6 +70,20 @@ function ThisMonth({ v }: { v: IncomeView }) {
           {progress.label} ({formatCad(m.goal_cents)})
           {m.gross_missing && <span className="sw-chip">gross missing</span>}
         </span>
+        {m.goal_split && (
+          <>
+            <GoalPart
+              label="Main job"
+              cents={m.main_job_gross_cents}
+              goalCents={m.goal_split.main_job_cents}
+            />
+            <GoalPart
+              label="Side income"
+              cents={m.side_gross_cents}
+              goalCents={m.goal_split.side_income_cents}
+            />
+          </>
+        )}
       </div>
       <div className="sw-tile">
         <span className="sw-tile__label">Net (after the tax set-aside)</span>
@@ -88,6 +102,37 @@ function ThisMonth({ v }: { v: IncomeView }) {
         <strong>{formatCad(v.set_aside.cents)}</strong>
       </div>
     </section>
+  );
+}
+
+/** One part of the split goal: a small bar toward that part's goal, "$X / $Y". */
+function GoalPart({
+  label,
+  cents,
+  goalCents,
+}: {
+  label: string;
+  cents: number;
+  goalCents: number;
+}) {
+  const p = goalProgress(cents, goalCents);
+  return (
+    <div className="in-part">
+      <span className="sw-tile__label">{label}</span>
+      <div
+        className="in-bar in-bar--small"
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(100, p.percent)}
+        aria-label={`${label}: ${p.label}`}
+      >
+        <span style={{ width: `${p.fill * 100}%` }} />
+      </div>
+      <span className="sw-tile__label">
+        {formatCad(cents)} / {formatCad(goalCents)}
+      </span>
+    </div>
   );
 }
 

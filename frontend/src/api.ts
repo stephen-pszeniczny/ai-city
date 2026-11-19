@@ -245,6 +245,11 @@ export type IncomeView = {
     goal_cents: number;
     employer_match_cents: number;
     by_source: SourceCents[];
+    /** This month's main-job gross (net where gross isn't typed) and all side income. */
+    main_job_gross_cents: number;
+    side_gross_cents: number;
+    /** The goal split into main job and side income, when set in the settings. */
+    goal_split: { main_job_cents: number; side_income_cents: number } | null;
   };
   months: { month: string; by_source: SourceCents[]; total_cents: number }[];
   platforms: {

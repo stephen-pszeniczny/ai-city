@@ -391,3 +391,16 @@
 .sw-dim.in-unconfirmed {
   color: var(--warn, #ffb340);
 }
+
+/* The split goal: main job and side income, each toward its part of the goal. */
+.in-goal .in-part {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.in-goal .in-bar--small {
+  height: 5px;
+}

@@ -187,6 +187,54 @@ def test_statement_due_day_out_of_range_is_refused(example_data, value):
     assert "income.statement_due_day must be a whole number from 1 to 28" in msg
 
 
+def test_goal_without_split_is_as_before(example_data):
+    goals = parse_settings(example_data).goals
+    assert (goals.monthly_income_cents, goals.main_job_cents, goals.side_income_cents) == (
+        400_000,
+        None,
+        None,
+    )
+
+
+def split_goals(example_data, **extra):
+    data = copy.deepcopy(example_data)
+    data["goals"].pop("monthly_income")
+    data["goals"].update({"main_job_monthly": "6500.00", "side_income_monthly": "1000.00"})
+    data["goals"].update(extra)
+    return data
+
+
+def test_goal_split_sets_the_total(example_data):
+    goals = parse_settings(split_goals(example_data)).goals
+    assert (goals.monthly_income_cents, goals.main_job_cents, goals.side_income_cents) == (
+        750_000,
+        650_000,
+        100_000,
+    )
+
+
+def test_goal_split_may_repeat_a_matching_total(example_data):
+    goals = parse_settings(split_goals(example_data, monthly_income="7500.00")).goals
+    assert goals.monthly_income_cents == 750_000
+
+
+def test_goal_split_needs_both(example_data):
+    data = split_goals(example_data)
+    del data["goals"]["side_income_monthly"]
+    assert "Set both goals.main_job_monthly and goals.side_income_monthly" in error_for(data)
+
+
+def test_goal_split_must_match_monthly_income(example_data):
+    msg = error_for(split_goals(example_data, monthly_income="7000.00"))
+    assert "goals.monthly_income must equal" in msg
+
+
+def test_goal_needs_a_total_or_a_split(example_data):
+    data = copy.deepcopy(example_data)
+    data["goals"].pop("monthly_income")
+    assert "monthly_income" in error_for(data)
+
+
 # --- Privacy ---------------------------------------------------------------
 
 
