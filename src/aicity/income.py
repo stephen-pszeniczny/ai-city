@@ -8,7 +8,7 @@ rows, balances or descriptions. Nothing here is deleted.
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from aicity.db import with_transaction
 from aicity.side_work import MAX_NOTES
@@ -113,6 +113,14 @@ class IncomeStore:
             StatementImport(r[0], date.fromisoformat(r[1]), date.fromisoformat(r[2]), *r[3:7], r[7])
             for r in rows
         ]
+
+    def covers_month_before(self, today: date) -> bool:
+        """Whether a stored import covers at least one day of the month before today's."""
+        last_month_end = today.replace(day=1) - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        return any(
+            i.first_day <= last_month_end and i.last_day >= last_month_start for i in self.imports()
+        )
 
     # --- Writing (callers run these inside one transaction for an import) --
 

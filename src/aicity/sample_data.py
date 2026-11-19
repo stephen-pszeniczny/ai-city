@@ -37,7 +37,9 @@ SAMPLE_PAY_SCHEDULES: dict[str, PaySchedule] = {
 }
 SAMPLE_MAIN_JOB = MainJob(name="Day job", deposit_match="DAY JOB PAY")
 SAMPLE_GOAL_CENTS = 650000
-SAMPLE_INCOME = IncomeSettings(tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True)
+SAMPLE_INCOME = IncomeSettings(
+    tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
+)
 
 
 @dataclass(frozen=True)

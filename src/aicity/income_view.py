@@ -7,7 +7,7 @@ never counts toward the goal. The badge shows counts only, never amounts.
 """
 
 import sqlite3
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from aicity.income import IncomeStore
@@ -18,7 +18,6 @@ from aicity.statement_import import open_weeks
 
 MONTHS_SHOWN = 6
 PLATFORM_MONTHS = 3
-STATEMENT_DUE_DAY = 5
 
 
 def _month(d: date) -> str:
@@ -171,17 +170,17 @@ def income_view(
 
 
 def vault_badge(
-    side: SideWorkStore, income: IncomeStore, schedules: dict[str, PaySchedule], today: date
+    side: SideWorkStore,
+    income: IncomeStore,
+    schedules: dict[str, PaySchedule],
+    today: date,
+    due_day: int,
 ) -> str | None:
-    """'N overdue', else 'Statement due', else nothing. Counts only, never amounts."""
+    """'N overdue', else 'Statement due' (from due_day until last month is imported), else
+    nothing. Counts only, never amounts."""
     overdue = sum(1 for w in open_weeks(side, schedules) if is_overdue(w.window, False, today))
     if overdue:
         return f"{overdue} overdue"
-    if today.day < STATEMENT_DUE_DAY:
+    if today.day < due_day or income.covers_month_before(today):
         return None
-    last_month_end = today.replace(day=1) - timedelta(days=1)
-    last_month_start = last_month_end.replace(day=1)
-    covered = any(
-        i.first_day <= last_month_end and i.last_day >= last_month_start for i in income.imports()
-    )
-    return None if covered else "Statement due"
+    return "Statement due"

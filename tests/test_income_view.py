@@ -150,12 +150,44 @@ def test_platform_hours_and_effective_rate(conn, stores):
 
 def badge(conn, stores, today):
     side, income = stores
-    return vault_badge(side, income, SCHED, today)
+    return vault_badge(side, income, SCHED, today, 8)
 
 
-def test_badge_statement_due_from_the_fifth(conn, stores):
-    assert badge(conn, stores, date(2026, 3, 4)) is None
-    assert badge(conn, stores, date(2026, 3, 5)) == "Statement due"
+def test_badge_statement_due_from_the_due_day(conn, stores):
+    _side, income = stores
+    assert badge(conn, stores, date(2026, 3, 7)) is None
+    assert badge(conn, stores, date(2026, 3, 8)) == "Statement due"
+    income.record_import(
+        first_day=date(2026, 2, 28),
+        last_day=date(2026, 2, 28),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert badge(conn, stores, date(2026, 3, 8)) is None
+
+
+def test_covers_month_before_handles_january(stores):
+    _side, income = stores
+    income.record_import(
+        first_day=date(2027, 1, 1),
+        last_day=date(2027, 1, 5),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert income.covers_month_before(date(2027, 1, 9)) is False
+    income.record_import(
+        first_day=date(2026, 12, 31),
+        last_day=date(2026, 12, 31),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert income.covers_month_before(date(2027, 1, 9)) is True
 
 
 def test_badge_clears_once_last_month_is_imported(conn, stores):

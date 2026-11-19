@@ -464,11 +464,15 @@ def edit_main_job(request: Request, deposit_id: int, body: MainJobEdit) -> dict:
 @unlock_router.get("/badge")
 def badge(request: Request) -> dict[str, str | None]:
     """The Vault's belt badge. No Touch ID needed: counts only, never amounts."""
-    schedules, _income = _settings_for(request)
+    schedules, income = _settings_for(request)
     with _open(request) as (side, conn):
         return {
             "text": vault_badge(
-                side, IncomeStore(conn, clock=request.app.state.clock), schedules, _today(request)
+                side,
+                IncomeStore(conn, clock=request.app.state.clock),
+                schedules,
+                _today(request),
+                income.statement_due_day,
             )
         }
 

@@ -41,6 +41,9 @@ reminder_time = "09:00"
 # Shown in the app with a "placeholder" label while is_placeholder is true.
 tax_set_aside_percent = "20"
 tax_set_aside_is_placeholder = true
+# Optional: day of the month the chequing statement is due (1 to 28, default 8).
+# The Vault shows "Statement due" and sends one reminder from this day.
+# statement_due_day = 8
 
 # Optional: when each side-work platform pays, one block per platform.
 # The id after "pay_schedules." is a short code; "name" is what the app shows.
