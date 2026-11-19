@@ -53,8 +53,8 @@ def test_unknown_currency_is_refused():
 
 
 def test_set_aside_rounds_half_up():
-    assert set_aside_cents(10001, Decimal("25")) == 2500  # 25.0025
-    assert set_aside_cents(10002, Decimal("25")) == 2501  # 25.005
+    assert set_aside_cents(10001, Decimal(25)) == 2500  # 25.0025
+    assert set_aside_cents(10002, Decimal(25)) == 2501  # 25.005
 
 
 def test_week_runs_saturday_to_friday():
