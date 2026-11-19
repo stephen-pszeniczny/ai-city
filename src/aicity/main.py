@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from aicity import (
     config,
+    grocery_routes,
     mac_notify,
     notification_routes,
     page,
@@ -126,6 +127,7 @@ def create_app(
     vault_routes.register(app)
     plan_routes.register(app)
     routine_routes.register(app)
+    grocery_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
