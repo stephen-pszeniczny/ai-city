@@ -210,6 +210,7 @@ def build_preview(
                 "pay": None
                 if pay is None
                 else {"paid_on": pay.paid_on.isoformat(), "net_cents": pay.net_cents},
+                "check_amount": mp.check_amount,
             }
         }
 

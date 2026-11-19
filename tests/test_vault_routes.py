@@ -158,6 +158,7 @@ LOCKED_CALLS = [
     ("put", "/api/vault/side-work/rates/2026-03-10", {"rate": "1.37"}),
     ("post", "/api/vault/income/main-job", {"paid_on": "2026-03-20", "net": "2100"}),
     ("patch", "/api/vault/income/main-job/1", {"notes": "x"}),
+    ("post", "/api/vault/income/main-job/1/archive", None),
 ]
 
 
@@ -600,3 +601,11 @@ def test_edit_confirmed_net_is_refused(app, unlocked):
     assert "confirmed by the statement" in r.json()["detail"]
     ok = unlocked.patch(f"/api/vault/income/main-job/{pay_id}", json={"gross": "3000"})
     assert ok.status_code == 200 and ok.json()["confirmed"] is True
+
+
+def test_archive_typed_pay_route(unlocked):
+    pay_id = add_pay(unlocked).json()["id"]
+    r = unlocked.post(f"/api/vault/income/main-job/{pay_id}/archive")
+    assert r.status_code == 200, r.text
+    assert unlocked.get("/api/vault/income").json()["main_job_pay"] == []
+    assert unlocked.post("/api/vault/income/main-job/999/archive").status_code == 404

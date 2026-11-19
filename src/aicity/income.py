@@ -108,23 +108,25 @@ class IncomeStore:
         return [Deposit(r[0], date.fromisoformat(r[1]), r[2], r[3], r[4], r[5]) for r in rows]
 
     def main_job_pay(self) -> list[MainJobPayRow]:
-        """Every main-job pay, typed in or from a statement, oldest first."""
+        """Every main-job pay, typed in or from a statement, oldest first (not removed ones)."""
         return self._pay_rows("")
 
     def unconfirmed_main_job_pay(self) -> list[MainJobPayRow]:
         """Pay typed in by hand that no statement deposit has confirmed yet."""
-        return self._pay_rows("WHERE deposit_id IS NULL")
+        return self._pay_rows("AND deposit_id IS NULL")
 
-    def _pay_rows(self, where: str, args: tuple = ()) -> list[MainJobPayRow]:
+    def _pay_rows(self, more: str, args: tuple = ()) -> list[MainJobPayRow]:
         rows = self._conn.execute(
             "SELECT id, paid_on, net_cents, gross_cents, rrsp_cents, match_cents, notes, "
-            f"deposit_id FROM main_job_payments {where} ORDER BY paid_on, id",
+            f"deposit_id FROM main_job_payments WHERE archived_at IS NULL {more} "
+            "ORDER BY paid_on, id",
             args,
         ).fetchall()
         return [MainJobPayRow(r[0], date.fromisoformat(r[1]), *r[2:]) for r in rows]
 
     def _pay(self, pay_id: int) -> MainJobPayRow | None:
-        found = self._pay_rows("WHERE id = ?", (pay_id,))
+        """One pay by ID; a removed (archived) pay counts as not there."""
+        found = self._pay_rows("AND id = ?", (pay_id,))
         return found[0] if found else None
 
     def imports(self) -> list[StatementImport]:
@@ -263,6 +265,27 @@ class IncomeStore:
 
         with_transaction(self._conn, work, immediate=True)
         return self._pay(pay_id)
+
+    def archive_main_job_pay(self, pay_id: int) -> None:
+        """Remove a typed-in pay (a typo or a duplicate) before a statement confirms it.
+
+        The row stays, marked archived: it's left out of every list and total.
+        """
+
+        def work() -> None:
+            pay = self._pay(pay_id)
+            if pay is None:
+                raise MainJobPayNotFound(f"No main-job pay with ID {pay_id}.")
+            if pay.confirmed:
+                raise IncomeError(
+                    "This pay is confirmed by the statement, so it stays. Edit its stub details."
+                )
+            self._conn.execute(
+                "UPDATE main_job_payments SET archived_at = ? WHERE id = ?",
+                (_stamp(self._clock()), pay_id),
+            )
+
+        with_transaction(self._conn, work, immediate=True)
 
     def link_main_job_pay(self, pay_id: int, deposit: Deposit) -> MainJobPayRow:
         """A statement deposit confirms a typed-in pay: its amount wins, the typed date stays.

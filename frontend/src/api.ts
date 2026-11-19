@@ -306,6 +306,8 @@ export type MainJobProposal = {
   kind: "link" | "new";
   pay_id: number | null;
   pay: { paid_on: string; net_cents: number } | null;
+  /** Near the typed pay's date but more than 1% off: likely a typo, check it. */
+  check_amount: boolean;
 };
 
 export type StatementPreview = {
@@ -425,6 +427,8 @@ export const editPayment = (id: number, edit: PaymentEdit) =>
 export const getIncome = () => vaultAt<IncomeView>("GET", "/api/vault/income");
 export const addMainJob = (pay: MainJobAdd) =>
   vaultAt<MainJobPay>("POST", "/api/vault/income/main-job", pay);
+export const archiveMainJob = (payId: number) =>
+  vaultAt<unknown>("POST", `/api/vault/income/main-job/${payId}/archive`);
 export const editMainJob = (payId: number, edit: MainJobEdit) =>
   vaultAt<MainJobPay>("PATCH", `/api/vault/income/main-job/${payId}`, edit);
 export const listStatements = () => vaultAt<StatementImport[]>("GET", "/api/vault/statements");

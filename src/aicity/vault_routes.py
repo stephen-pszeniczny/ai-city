@@ -494,6 +494,14 @@ def edit_main_job(request: Request, pay_id: int, body: MainJobEdit) -> dict:
         return main_job_pay_json(row)
 
 
+@income_router.post("/main-job/{pay_id}/archive")
+def archive_main_job(request: Request, pay_id: int) -> dict[str, bool]:
+    """Remove a typed-in pay (a typo or a duplicate) that no statement has confirmed."""
+    with _open(request) as (_side, conn):
+        IncomeStore(conn, clock=request.app.state.clock).archive_main_job_pay(pay_id)
+    return {"archived": True}
+
+
 @unlock_router.get("/badge")
 def badge(request: Request) -> dict[str, str | None]:
     """The Vault's belt badge. No Touch ID needed: counts only, never amounts."""

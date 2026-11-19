@@ -291,13 +291,19 @@ def test_preview_proposes_link_to_typed_pay(client):
         "kind": "link",
         "pay_id": pay_id,
         "pay": {"paid_on": "2026-03-20", "net_cents": 210000},
+        "check_amount": False,
     }
     assert p["typed_pay"] == [{"id": pay_id, "paid_on": "2026-03-20", "net_cents": 210000}]
 
 
 def test_preview_with_no_typed_pay_proposes_new(client):
     p = preview(client, EARLY).json()
-    assert p["main_job"][0]["proposal"] == {"kind": "new", "pay_id": None, "pay": None}
+    assert p["main_job"][0]["proposal"] == {
+        "kind": "new",
+        "pay_id": None,
+        "pay": None,
+        "check_amount": False,
+    }
     assert p["typed_pay"] == []
 
 
@@ -315,8 +321,19 @@ def test_confirm_link_confirms_typed_pay(client):
     )
 
 
-def test_confirm_links_a_pay_that_was_not_proposed(client):
+def test_preview_proposes_a_near_typed_pay_to_check(client):
     pay_id = type_pay(date(2026, 3, 20), 205000)  # a typo, over 1% off
+    p = preview(client, EARLY).json()
+    assert p["main_job"][0]["proposal"] == {
+        "kind": "link",
+        "pay_id": pay_id,
+        "pay": {"paid_on": "2026-03-20", "net_cents": 205000},
+        "check_amount": True,
+    }
+
+
+def test_confirm_links_a_pay_that_was_not_proposed(client):
+    pay_id = type_pay(date(2026, 3, 10), 205000)  # a typo in both date and amount
     p = preview(client, EARLY).json()
     assert p["main_job"][0]["proposal"]["kind"] == "new"
     r = confirm(client, main_choices(p, action="link", pay_id=pay_id))

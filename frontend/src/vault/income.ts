@@ -1,6 +1,6 @@
 // Helpers for the Vault's Income screen (pure, tested in tests/income.test.ts).
 
-import { formatCad } from "./sideWork.ts";
+import { formatCad, formatDay } from "./sideWork.ts";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -43,4 +43,20 @@ export function payStatus(confirmed: boolean): string {
 export function linkNote(depositCents: number, typedCents: number): string | null {
   if (depositCents === typedCents) return null;
   return `The statement says ${formatCad(depositCents)}; you typed ${formatCad(typedCents)}. The statement's amount will be used.`;
+}
+
+type MainJobProposalLike = {
+  kind: "link" | "new";
+  pay_id: number | null;
+  pay: { paid_on: string; net_cents: number } | null;
+  check_amount: boolean;
+};
+
+/** The review's note on a main-job deposit the app proposes linking to typed-in pay. */
+export function matchChip(p: MainJobProposalLike): string | null {
+  if (p.kind !== "link" || !p.pay) return null;
+  const which = `(${formatDay(p.pay.paid_on)}, ${formatCad(p.pay.net_cents)})`;
+  return p.check_amount
+    ? `Might be the pay you typed in ${which}: check the amount`
+    : `Matches the pay you typed in ${which}`;
 }

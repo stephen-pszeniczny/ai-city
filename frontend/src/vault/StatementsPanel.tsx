@@ -14,7 +14,7 @@ import {
   type StatementPreview,
 } from "../api";
 import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
-import { linkNote } from "./income";
+import { linkNote, matchChip } from "./income";
 import { formatCad, formatDay, formatMoney, formatWindow } from "./sideWork";
 import { errorText, VaultGate } from "./VaultGate";
 
@@ -262,11 +262,8 @@ function Review({
                   <header className="sw-group__head">
                     <strong>{formatDay(r.day)}</strong>
                     <span>Net {formatCad(r.amount_cents)}</span>
-                    {r.proposal.pay && (
-                      <span className="sw-chip">
-                        Matches the pay you typed in ({formatDay(r.proposal.pay.paid_on)},{" "}
-                        {formatCad(r.proposal.pay.net_cents)})
-                      </span>
+                    {matchChip(r.proposal) && (
+                      <span className="sw-chip">{matchChip(r.proposal)}</span>
                     )}
                   </header>
                   <div className="sw-pay">

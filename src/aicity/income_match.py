@@ -19,7 +19,10 @@ Rules (design: docs/superpowers/specs/2026-11-18-vault-income-import-design.md):
 Main-job deposits (design: docs/superpowers/specs/2026-11-19-hand-entered-pay-design.md):
   link within 3 days and 1% of a pay typed in by hand (the bank posts direct deposits
   about a day early). Closest amount wins, then closest day; each typed pay is used
-  once; oldest deposits go first. Otherwise "new".
+  once; oldest deposits go first. Then, for deposits still unmatched, a typed pay
+  within the same 3 days but more than 1% off is proposed as a link marked "check the
+  amount" (a typo), so the default is never a second pay for the same payday.
+  Otherwise "new".
 """
 
 from collections.abc import Callable
@@ -167,6 +170,7 @@ class MainJobProposal:
     row: StatementRow
     kind: Literal["link", "new"]
     pay_id: int | None = None
+    check_amount: bool = False
 
 
 def propose_main_job(rows: list[StatementRow], typed: list[TypedPay]) -> list[MainJobProposal]:
@@ -192,7 +196,32 @@ def propose_main_job(rows: list[StatementRow], typed: list[TypedPay]) -> list[Ma
             )
             used.add(best.pay_id)
             chosen[id(r)] = best.pay_id
-    return [
-        MainJobProposal(r, "link", chosen[id(r)]) if id(r) in chosen else MainJobProposal(r, "new")
-        for r in rows
-    ]
+    near: dict[int, int] = {}  # id(row) -> pay_id, amount to check
+    for r in sorted(rows, key=lambda r: (r.day, r.line)):
+        if id(r) in chosen:
+            continue
+        close_by = [
+            p
+            for p in typed
+            if p.pay_id not in used and abs((r.day - p.paid_on).days) <= MAIN_LINK_DAYS
+        ]
+        if close_by:
+            best = min(
+                close_by,
+                key=lambda p: (
+                    abs(r.amount_cents - p.net_cents),
+                    abs((r.day - p.paid_on).days),
+                    p.pay_id,
+                ),
+            )
+            used.add(best.pay_id)
+            near[id(r)] = best.pay_id
+
+    def one(r: StatementRow) -> MainJobProposal:
+        if id(r) in chosen:
+            return MainJobProposal(r, "link", chosen[id(r)])
+        if id(r) in near:
+            return MainJobProposal(r, "link", near[id(r)], check_amount=True)
+        return MainJobProposal(r, "new")
+
+    return [one(r) for r in rows]

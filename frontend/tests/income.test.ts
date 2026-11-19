@@ -6,6 +6,7 @@ import {
   formatMonth,
   goalProgress,
   linkNote,
+  matchChip,
   payStatus,
   stackSegments,
 } from "../src/vault/income.ts";
@@ -56,4 +57,17 @@ test("linking: a different statement amount is shown, and it wins", () => {
     linkNote(210050, 209900),
     "The statement says $2,100.50; you typed $2,099.00. The statement's amount will be used.",
   );
+});
+
+test("review chip: an exact match, a near one to check, or nothing", () => {
+  const pay = { paid_on: "2026-03-20", net_cents: 210000 };
+  assert.equal(
+    matchChip({ kind: "link", pay_id: 7, pay, check_amount: false }),
+    "Matches the pay you typed in (Mar 20, $2,100.00)",
+  );
+  assert.equal(
+    matchChip({ kind: "link", pay_id: 7, pay, check_amount: true }),
+    "Might be the pay you typed in (Mar 20, $2,100.00): check the amount",
+  );
+  assert.equal(matchChip({ kind: "new", pay_id: null, pay: null, check_amount: false }), null);
 });

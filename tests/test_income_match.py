@@ -165,16 +165,17 @@ def test_main_job_deposit_a_day_early_links():
 
 def test_main_job_link_edges():
     typed = [TypedPay(7, PAYDAY, 150000)]
-    assert kinds(propose_main_job([row(PAYDAY + timedelta(days=3), 150000)], typed)) == [
-        ("link", 7)
-    ]
-    assert kinds(propose_main_job([row(PAYDAY - timedelta(days=4), 150000)], typed)) == [
-        ("new", None)
-    ]
-    assert kinds(propose_main_job([row(PAYDAY, 151500)], typed)) == [("link", 7)]  # exactly 1%
-    assert kinds(propose_main_job([row(PAYDAY, 151501)], typed)) == [("new", None)]
-    assert kinds(propose_main_job([row(PAYDAY, 148500)], typed)) == [("link", 7)]
-    assert kinds(propose_main_job([row(PAYDAY, 148499)], typed)) == [("new", None)]
+
+    def got(day, cents):
+        [p] = propose_main_job([row(day, cents)], typed)
+        return (p.kind, p.pay_id, p.check_amount)
+
+    assert got(PAYDAY + timedelta(days=3), 150000) == ("link", 7, False)
+    assert got(PAYDAY - timedelta(days=4), 150000) == ("new", None, False)
+    assert got(PAYDAY, 151500) == ("link", 7, False)  # exactly 1%
+    assert got(PAYDAY, 151501) == ("link", 7, True)  # over 1%: a link to check
+    assert got(PAYDAY, 148500) == ("link", 7, False)
+    assert got(PAYDAY, 148499) == ("link", 7, True)
 
 
 def test_main_job_two_paydays_each_link_once():
@@ -205,3 +206,26 @@ def test_main_job_closest_day_breaks_an_amount_tie():
 
 def test_main_job_no_typed_pay_is_new():
     assert kinds(propose_main_job([row(PAYDAY, 150000)], [])) == [("new", None)]
+
+
+def test_main_job_near_typed_pay_over_1_percent_is_a_link_to_check():
+    # A typo (2% off) on the right payday: proposed as the link, flagged, so the
+    # default isn't a second pay for the same day.
+    out = propose_main_job([row(PAYDAY, 153000)], [TypedPay(7, PAYDAY, 150000)])
+    assert [(p.kind, p.pay_id, p.check_amount) for p in out] == [("link", 7, True)]
+
+
+def test_main_job_exact_match_wins_over_a_near_one():
+    typed = [TypedPay(7, PAYDAY, 150000)]
+    out = propose_main_job(
+        [row(PAYDAY - timedelta(days=1), 160000, line=2), row(PAYDAY, 150000, line=3)], typed
+    )
+    assert [(p.kind, p.pay_id, p.check_amount) for p in out] == [
+        ("new", None, False),
+        ("link", 7, False),
+    ]
+
+
+def test_main_job_near_needs_the_same_three_days():
+    out = propose_main_job([row(PAYDAY + timedelta(days=4), 153000)], [TypedPay(7, PAYDAY, 150000)])
+    assert [(p.kind, p.check_amount) for p in out] == [("new", False)]

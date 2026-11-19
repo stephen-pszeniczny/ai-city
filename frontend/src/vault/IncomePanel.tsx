@@ -5,7 +5,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { addMainJob, editMainJob, getIncome, type IncomeView, type MainJobPay } from "../api";
+import {
+  addMainJob,
+  archiveMainJob,
+  editMainJob,
+  getIncome,
+  type IncomeView,
+  type MainJobPay,
+} from "../api";
 import { StackedMonths } from "./charts";
 import { goalProgress, payStatus } from "./income";
 import { formatCad, formatDay } from "./sideWork";
@@ -276,6 +283,10 @@ function PayRow({ row }: { row: MainJobPay }) {
       setEditing(false);
     },
   });
+  const remove = useMutation({
+    mutationFn: () => archiveMainJob(row.id),
+    onSuccess: () => client.invalidateQueries({ queryKey: KEY }),
+  });
   return (
     <li>
       <span>{formatDay(row.day)}</span>
@@ -307,9 +318,27 @@ function PayRow({ row }: { row: MainJobPay }) {
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <button type="button" className="sw-link" onClick={() => setEditing(true)}>
-          {row.gross_cents === null ? "Add stub details" : "Edit"}
-        </button>
+        <>
+          <button type="button" className="sw-link" onClick={() => setEditing(true)}>
+            {row.gross_cents === null ? "Add stub details" : "Edit"}
+          </button>
+          {!row.confirmed && (
+            <button
+              type="button"
+              className="sw-link"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (window.confirm(`Remove the pay typed in for ${formatDay(row.day)}?`)) {
+                  remove.mutate();
+                }
+              }}
+              aria-label={`Remove the pay typed in for ${formatDay(row.day)}`}
+            >
+              Remove
+            </button>
+          )}
+          {remove.error ? <span className="sw-error">{errorText(remove.error)}</span> : null}
+        </>
       )}
     </li>
   );

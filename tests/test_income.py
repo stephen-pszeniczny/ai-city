@@ -252,3 +252,44 @@ def test_view_lists_extra_income_and_counts_it(conn):
     v = side_work_view(side, conn, {}, INCOME, date(2026, 3, 25))
     assert [x["notes"] for x in v["extras"]] == ["One-off"]
     assert v["summary"]["month_received_cad_cents"] == 5000
+
+
+# --- Removing a typed-in pay (a typo or a duplicate), before any statement confirms it ------
+
+
+def test_archive_unconfirmed_pay_hides_it(store):
+    keep = typed(store, day=date(2026, 3, 6))
+    dup = typed(store)
+    store.archive_main_job_pay(dup.id)
+    assert [p.id for p in store.main_job_pay()] == [keep.id]
+    assert [p.id for p in store.unconfirmed_main_job_pay()] == [keep.id]
+
+
+def test_archive_confirmed_pay_is_refused(store):
+    pay = typed(store)
+    store.link_main_job_pay(pay.id, main_deposit(store))
+    with pytest.raises(IncomeError, match="confirmed by the statement"):
+        store.archive_main_job_pay(pay.id)
+    assert len(store.main_job_pay()) == 1
+
+
+def test_archived_pay_cannot_be_linked_or_edited(store):
+    pay = typed(store)
+    store.archive_main_job_pay(pay.id)
+    with pytest.raises(MainJobPayTaken):
+        store.link_main_job_pay(pay.id, main_deposit(store))
+    with pytest.raises(MainJobPayNotFound):
+        store.edit_main_job_pay(
+            pay.id,
+            paid_on=None,
+            net_cents=None,
+            gross_cents=None,
+            rrsp_cents=None,
+            match_cents=None,
+            notes=None,
+        )
+
+
+def test_archive_unknown_pay_is_not_found(store):
+    with pytest.raises(MainJobPayNotFound):
+        store.archive_main_job_pay(42)
