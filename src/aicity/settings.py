@@ -78,6 +78,16 @@ class PaySchedule:
     week_starts: int
     release_after: tuple[int, int]
     arrive_after: tuple[int, int]
+    # Text found in a statement deposit's description from this platform (optional).
+    deposit_match: str | None = None
+
+
+@dataclass(frozen=True)
+class MainJob:
+    """The main job's pay, as recognised in a statement: name shown, text to look for."""
+
+    name: str
+    deposit_match: str
 
 
 @dataclass(frozen=True)
@@ -88,6 +98,7 @@ class Settings:
     tasks: TaskDefaults
     income: IncomeSettings
     pay_schedules: dict[str, PaySchedule] = field(default_factory=dict)
+    main_job: MainJob | None = None
 
 
 def settings_path() -> Path:
@@ -119,7 +130,7 @@ def parse_settings(data: dict) -> Settings:
     _only_keys(
         data,
         "settings file",
-        {"buildings", "location", "goals", "tasks", "income", "pay_schedules"},
+        {"buildings", "location", "goals", "tasks", "income", "pay_schedules", "main_job"},
     )
     return Settings(
         buildings=_buildings(_table(data, "buildings")),
@@ -128,6 +139,7 @@ def parse_settings(data: dict) -> Settings:
         tasks=_tasks(_table(data, "tasks")),
         income=_income(_table(data, "income")),
         pay_schedules=_pay_schedules(data.get("pay_schedules", {})),
+        main_job=_main_job(data["main_job"]) if "main_job" in data else None,
     )
 
 
@@ -199,6 +211,17 @@ _SCHEDULE_KEYS = {
     "released_days_after_period_end",
     "arrives_days_after_release",
 }
+_SCHEDULE_OPTIONAL = {"deposit_match"}
+
+
+def _main_job(t) -> MainJob:
+    if not isinstance(t, dict):
+        raise SettingsError("main_job must be a section.")
+    _exact_keys(t, "main_job", {"name", "deposit_match"})
+    return MainJob(
+        name=_text(t, "main_job", "name"),
+        deposit_match=_text(t, "main_job", "deposit_match"),
+    )
 
 
 def _pay_schedules(t) -> dict[str, PaySchedule]:
@@ -214,7 +237,10 @@ def _pay_schedules(t) -> dict[str, PaySchedule]:
         where = f"pay_schedules.{schedule_id}"
         if not isinstance(block, dict):
             raise SettingsError(f"{where} must be a section.")
-        _exact_keys(block, where, _SCHEDULE_KEYS)
+        _only_keys(block, f"[{where}]", _SCHEDULE_KEYS | _SCHEDULE_OPTIONAL)
+        missing = sorted(_SCHEDULE_KEYS - set(block))
+        if missing:
+            raise SettingsError(f"Missing setting(s) in [{where}]: {', '.join(missing)}.")
         if block["period"] != "weekly":
             raise SettingsError(f'{where}.period must be "weekly".')
         start = block["week_starts"]
@@ -226,6 +252,9 @@ def _pay_schedules(t) -> dict[str, PaySchedule]:
             week_starts=WEEKDAYS.index(start.strip().lower()),
             release_after=_day_pair(block, where, "released_days_after_period_end"),
             arrive_after=_day_pair(block, where, "arrives_days_after_release"),
+            deposit_match=_text(block, where, "deposit_match")
+            if "deposit_match" in block
+            else None,
         )
     return schedules
 

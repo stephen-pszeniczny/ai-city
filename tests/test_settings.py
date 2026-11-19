@@ -258,3 +258,45 @@ def test_pay_schedules_must_be_a_section(example_data):
     data = copy.deepcopy(example_data)
     data["pay_schedules"] = "weekly"
     assert "pay_schedules" in error_for(data)
+
+
+# --- Deposit matching words --------------------------------------------------------
+
+
+def test_main_job_is_read(example_data):
+    data = copy.deepcopy(example_data)
+    data["main_job"] = {"name": "Day job", "deposit_match": " DAY JOB PAY "}
+    mj = parse_settings(data).main_job
+    assert (mj.name, mj.deposit_match) == ("Day job", "DAY JOB PAY")
+
+
+def test_main_job_is_optional(example_data):
+    data = {k: v for k, v in example_data.items() if k != "main_job"}
+    assert parse_settings(data).main_job is None
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"name": "Day job", "deposit_match": "  "},
+        {"name": "Day job"},
+        {"name": "Day job", "deposit_match": "X", "surprise": 1},
+    ],
+)
+def test_bad_main_job_is_refused(example_data, block):
+    data = copy.deepcopy(example_data)
+    data["main_job"] = block
+    assert "main_job" in error_for(data)
+
+
+def test_schedule_deposit_match_is_read_and_optional(example_data):
+    assert (
+        parse_settings(with_schedule(example_data)).pay_schedules["platform_a"].deposit_match
+        is None
+    )
+    s = parse_settings(with_schedule(example_data, deposit_match="NIMBUS LABS"))
+    assert s.pay_schedules["platform_a"].deposit_match == "NIMBUS LABS"
+
+
+def test_blank_schedule_deposit_match_is_refused(example_data):
+    assert "pay_schedules.platform_a" in error_for(with_schedule(example_data, deposit_match=" "))
