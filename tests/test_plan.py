@@ -151,7 +151,12 @@ def block_on(store, day: str, title: str):
 
 def test_add_edit_remove_block(store, conn, week):
     hockey = store.add_block(THIS_MONDAY, THU, time(21), time(22), "Hockey", "event", TODAY)
-    assert (hockey.source, hockey.kind, hockey.start, hockey.end) == ("added", "event", "21:00", "22:00")
+    assert (hockey.source, hockey.kind, hockey.start, hockey.end) == (
+        "added",
+        "event",
+        "21:00",
+        "22:00",
+    )
     assert titles(store.get_week(THIS_MONDAY), "2026-11-26") == ["Work", "Gym", "Hockey"]
 
     renamed = store.edit_block(hockey.id, TODAY, title="Hockey (away)")
@@ -270,14 +275,20 @@ def test_rebuild_keeps_steves_choices(store, week):
     before_monday = day_blocks(store.get_week(THIS_MONDAY), "2026-11-23")
 
     later_gym = BlockRule("Gym", "gym", (0, 1, 2, 3, 4), time(12, 30), time(13, 30))
-    rebuilt = store.rebuild_week(THIS_MONDAY, PlanSettings(blocks=(WORK, COMMUTE, later_gym)), TODAY)
+    rebuilt = store.rebuild_week(
+        THIS_MONDAY, PlanSettings(blocks=(WORK, COMMUTE, later_gym)), TODAY
+    )
 
     assert titles(rebuilt, "2026-11-26") == ["Work"]
     assert day_blocks(rebuilt, "2026-11-26")[0].end == "11:30"
     wed_gym = next(b for b in day_blocks(rebuilt, "2026-11-25") if b.kind == "gym")
     assert (wed_gym.status, wed_gym.start) == ("done", "12:00")
     fri = day_blocks(rebuilt, "2026-11-27")
-    assert [(b.title, b.start) for b in fri] == [("Work", "09:00"), ("Gym", "12:30"), ("Hockey", "21:00")]
+    assert [(b.title, b.start) for b in fri] == [
+        ("Work", "09:00"),
+        ("Gym", "12:30"),
+        ("Hockey", "21:00"),
+    ]
     assert day_blocks(rebuilt, "2026-11-23") == before_monday
 
 

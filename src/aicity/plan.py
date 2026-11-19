@@ -193,7 +193,16 @@ class PlanStore:
             return self._conn.execute(
                 "INSERT INTO plan_blocks (week_id, day, start_time, end_time, title, kind, "
                 "source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'added', ?, ?)",
-                (week_id, day.isoformat(), f"{start:%H:%M}", f"{end:%H:%M}", title, kind, stamp, stamp),
+                (
+                    week_id,
+                    day.isoformat(),
+                    f"{start:%H:%M}",
+                    f"{end:%H:%M}",
+                    title,
+                    kind,
+                    stamp,
+                    stamp,
+                ),
             ).lastrowid
 
         return self.get_block(self._write(work))
@@ -209,8 +218,13 @@ class PlanStore:
         start = fields.get("start", time.fromisoformat(block.start))
         end = fields.get("end", time.fromisoformat(block.end))
         title = _check_fields(
-            day, start, end, fields.get("title", block.title), fields.get("kind", block.kind),
-            week_start, today,
+            day,
+            start,
+            end,
+            fields.get("title", block.title),
+            fields.get("kind", block.kind),
+            week_start,
+            today,
         )
         kind = fields.get("kind", block.kind)
 
@@ -219,7 +233,15 @@ class PlanStore:
                 "UPDATE plan_blocks SET day = ?, start_time = ?, end_time = ?, title = ?, kind = ?, "
                 "edited = CASE WHEN source = 'settings' THEN 1 ELSE 0 END, updated_at = ? "
                 "WHERE id = ?",
-                (day.isoformat(), f"{start:%H:%M}", f"{end:%H:%M}", title, kind, self._stamp(), block_id),
+                (
+                    day.isoformat(),
+                    f"{start:%H:%M}",
+                    f"{end:%H:%M}",
+                    title,
+                    kind,
+                    self._stamp(),
+                    block_id,
+                ),
             )
 
         self._write(work)

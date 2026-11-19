@@ -361,7 +361,13 @@ def test_blank_schedule_deposit_match_is_refused(example_data):
 
 # --- [plan]: fixed blocks for the Daily plan ---------------------------------------
 
-WORK_BLOCK = {"title": "Work", "kind": "work", "days": ["mon", "wed"], "start": "09:00", "end": "12:00"}
+WORK_BLOCK = {
+    "title": "Work",
+    "kind": "work",
+    "days": ["mon", "wed"],
+    "start": "09:00",
+    "end": "12:00",
+}
 
 
 def with_plan(example_data: dict, plan) -> dict:
