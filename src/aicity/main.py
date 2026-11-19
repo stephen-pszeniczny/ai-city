@@ -139,6 +139,7 @@ def create_app(
         switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
         # Any switch locks the Vault again, so Touch ID is asked afresh.
         request.app.state.vault_lock.forget()
+        request.app.state.pending_imports.clear()
         if switched is DbKind.SAMPLE:
             # Take any real reminder titles off the screen before a demo.
             mac_notify.clear()

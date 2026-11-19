@@ -177,3 +177,52 @@ def test_rate_can_be_filled_in_later(store):
 def test_unknown_currency_is_refused(store):
     with pytest.raises(SideWorkError):
         entry(store, currency="EUR")
+
+
+# --- Part B: bonus checkbox, notes, extras, deposit links ---------------------------
+
+
+def test_payment_with_bonus_and_notes(store):
+    e = entry(store, currency="CAD")
+    p = pay(
+        store, [e.id], amount_cents=9000, includes_bonus=True, bonus_cents=1000, notes="Holiday"
+    )
+    assert (p.includes_bonus, p.bonus_cents, p.notes) == (True, 1000, "Holiday")
+
+
+def test_bonus_amount_needs_the_checkbox(store):
+    e = entry(store)
+    with pytest.raises(SideWorkError):
+        pay(store, [e.id], bonus_cents=100)
+
+
+@pytest.mark.parametrize("bad", [0, -5, 1001])
+def test_bonus_amount_must_fit_the_payment(store, bad):
+    e = entry(store)
+    with pytest.raises(SideWorkError):
+        pay(store, [e.id], amount_cents=1000, includes_bonus=True, bonus_cents=bad)
+
+
+def test_long_notes_are_refused(store):
+    with pytest.raises(SideWorkError):
+        pay(store, [entry(store).id], notes="x" * 501)
+
+
+def test_extra_income_needs_no_entries(store):
+    x = pay(store, [], kind="extra", company="Some Co")
+    assert x.kind == "extra"
+    with pytest.raises(SideWorkError):
+        pay(store, [entry(store).id], kind="extra")
+
+
+def test_edit_payment_changes_notes_and_bonus_only(store):
+    p = pay(store, [entry(store).id], amount_cents=5000)
+    edited = store.edit_payment(p.id, notes="  Paid late  ", includes_bonus=True, bonus_cents=500)
+    assert (edited.notes, edited.includes_bonus, edited.bonus_cents, edited.amount_cents) == (
+        "Paid late",
+        True,
+        500,
+        5000,
+    )
+    cleared = store.edit_payment(p.id, notes="", includes_bonus=False, bonus_cents=None)
+    assert (cleared.notes, cleared.includes_bonus, cleared.bonus_cents) == (None, False, None)

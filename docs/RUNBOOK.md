@@ -112,6 +112,14 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Side work says "rate pending"** → the app couldn't get that day's USD→CAD rate from the Bank of Canada (no internet, or the day's rate isn't published yet: it appears late afternoon). It fills in on its own the next time you open Side work. If it's urgent, type the rate into the box that appears (the Bank of Canada's daily rate for that day). Weekends and holidays use the last business day's rate.
 
+**Monthly statement import (the Vault)** → download last month's chequing statement as **CSV** (not PDF). Open the Vault computer → **Statements** → *Choose statement (CSV)*. Check the review screen: main-job pay (type gross, RRSP and match from the stub now or later in **Income**), each side-work deposit's match (a week, a bonus, "the payment I typed in", or skip), and other money in (skipped unless you tick "add as side income"). Then **Confirm import**. Nothing is stored before that, the file isn't kept, and spending rows are only counted. The Vault's label shows "Statement due" from the 5th until last month is imported.
+
+**The import says "already imported"** → those rows were stored by an earlier import (re-downloads and overlapping months are recognised), so they're left out and nothing doubles.
+
+**A deposit says "check the amount"** → the week it matches is missing hours or a rate, so the app couldn't compare amounts; it's proposed only because it's the one week that fits the dates. Confirm it if it's right, or pick another week.
+
+**"No deposits found. Is this the chequing statement?"** → the file had no money coming in (a credit-card statement looks like this). Matching words for pay deposits live in the settings file: `[main_job] deposit_match` and `deposit_match` in each `[pay_schedules.<id>]` block.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---

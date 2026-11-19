@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 
 import type { BuildingId } from "../api";
 import { TodoPanel } from "../todo/TodoPanel";
+import { IncomePanel } from "../vault/IncomePanel";
 import { SideWorkPanel } from "../vault/SideWorkPanel";
+import { StatementsPanel } from "../vault/StatementsPanel";
 import { useSampleReminder } from "../todo/useMode";
 import { appsFor, type App } from "./apps";
 import "./desktop.css";
@@ -19,7 +21,6 @@ const ICONS: Record<string, string> = {
   sidework: "⏱",
   income: "$",
   statements: "▤",
-  goals: "◎",
   construction: "⚠",
 };
 
@@ -88,6 +89,10 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                     <TodoPanel />
                   ) : openApp === "sidework" ? (
                     <SideWorkPanel />
+                  ) : openApp === "income" ? (
+                    <IncomePanel />
+                  ) : openApp === "statements" ? (
+                    <StatementsPanel />
                   ) : (
                     <UnderConstruction name={name} />
                   )}

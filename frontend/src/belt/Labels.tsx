@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, RefObject } from "react";
 
-import { getBuildings, listTasks, type BuildingId } from "../api";
+import { getBuildings, getVaultBadge, listTasks, type BuildingId } from "../api";
 import { plannerBadge } from "./badges";
 import { BUILT } from "./built";
 import { tintOf } from "./tints";
@@ -27,8 +27,16 @@ export function Labels({
     staleTime: Infinity,
   });
   const open = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
+  // The Vault's badge is counts only ("2 overdue", "Statement due"), so it needs no Touch ID.
+  const vault = useQuery({
+    queryKey: ["vault-badge"],
+    queryFn: getVaultBadge,
+    refetchInterval: 60_000,
+    retry: false,
+  });
   const badges: Partial<Record<BuildingId, string | null>> = {
     planner: open.data ? plannerBadge(open.data) : null,
+    finance: vault.data?.text ?? null,
   };
 
   return (

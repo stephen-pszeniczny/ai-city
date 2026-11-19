@@ -162,7 +162,7 @@ export type SideWorkEntry = {
 
 export type SideWorkPayment = {
   id: number;
-  kind: "pay" | "bonus";
+  kind: "pay" | "bonus" | "extra";
   company: string | null;
   received_on: string;
   amount_cents: number;
@@ -170,6 +170,10 @@ export type SideWorkPayment = {
   rate: string | null;
   rate_date: string | null;
   received_cad_cents: number | null;
+  includes_bonus: boolean;
+  bonus_cents: number | null;
+  notes: string | null;
+  deposit_id: number | null;
 };
 
 export type SideWorkGroup = {
@@ -185,6 +189,7 @@ export type SideWorkGroup = {
   expected_is_estimate: boolean;
   payment: SideWorkPayment | null;
   difference_cad_cents: number | null;
+  bonus_cad_cents: number | null;
 };
 
 export type SideWorkView = {
@@ -200,6 +205,7 @@ export type SideWorkView = {
   schedules: { id: string; name: string }[];
   groups: SideWorkGroup[];
   bonuses: SideWorkPayment[];
+  extras: SideWorkPayment[];
 };
 
 export type NewEntry = {
@@ -212,12 +218,126 @@ export type NewEntry = {
 };
 
 export type NewPayment = {
-  kind: "pay" | "bonus";
+  kind: "pay" | "bonus" | "extra";
   company?: string | null;
   received_on: string;
   amount: string;
   currency: Currency;
   entry_ids: number[];
+  includes_bonus?: boolean;
+  bonus?: string | null;
+  notes?: string | null;
+};
+
+export type PaymentEdit = { includes_bonus: boolean; bonus: string | null; notes: string | null };
+
+// --- The Vault's income (part B) ---
+
+export type SourceCents = { key: string; name: string; cents: number };
+
+export type IncomeView = {
+  month: {
+    month: string;
+    gross_cents: number;
+    net_cents: number;
+    gross_missing: boolean;
+    goal_cents: number;
+    employer_match_cents: number;
+    by_source: SourceCents[];
+  };
+  months: { month: string; by_source: SourceCents[]; total_cents: number }[];
+  platforms: {
+    id: string;
+    name: string;
+    hours: string;
+    received_cad_cents: number;
+    rate_cad_cents: number | null;
+  }[];
+  set_aside: { cents: number; percent: string; is_placeholder: boolean };
+  main_job_pay: {
+    deposit_id: number;
+    day: string;
+    net_cents: number;
+    gross_cents: number | null;
+    rrsp_cents: number | null;
+    match_cents: number | null;
+    deductions_cents: number | null;
+    notes: string | null;
+  }[];
+};
+
+export type MainJobEdit = {
+  gross: string | null;
+  rrsp: string | null;
+  match: string | null;
+  notes: string | null;
+};
+
+export type Proposal = {
+  kind: "week" | "bonus" | "link" | "unmatched";
+  week_start: string | null;
+  payment_id: number | null;
+  check_amount: boolean;
+  payment?: { received_on: string; amount_cents: number; currency: Currency };
+};
+
+export type PreviewRow = { ref: string; day: string; amount_cents: number };
+
+export type StatementPreview = {
+  token: string;
+  first_day: string;
+  last_day: string;
+  main_job: PreviewRow[];
+  platform: (PreviewRow & { schedule_id: string; proposal: Proposal })[];
+  other_income: PreviewRow[];
+  weeks: { schedule_id: string; start: string; window: [string, string] }[];
+  hand_payments: {
+    id: number;
+    schedule_id: string;
+    received_on: string;
+    amount_cents: number;
+    currency: Currency;
+  }[];
+  already_imported: number;
+  spending: number;
+  other_currency: number;
+};
+
+export type ConfirmBody = {
+  token: string;
+  main_job: {
+    ref: string;
+    gross?: string | null;
+    rrsp?: string | null;
+    match?: string | null;
+    notes?: string | null;
+  }[];
+  platform: {
+    ref: string;
+    action: "week" | "bonus" | "link" | "skip";
+    week_start?: string | null;
+    payment_id?: number | null;
+    includes_bonus?: boolean;
+    bonus?: string | null;
+    notes?: string | null;
+  }[];
+  other_income: {
+    ref: string;
+    action: "add" | "skip";
+    company?: string | null;
+    notes?: string | null;
+  }[];
+};
+
+export type StatementImport = {
+  id: number;
+  first_day: string;
+  last_day: string;
+  kept: number;
+  duplicates: number;
+  skipped: number;
+  spending: number;
+  created_at: string;
 };
 
 // The Vault key from Touch ID lives only in this variable: never in storage,
@@ -243,10 +363,14 @@ export async function unlockVault(): Promise<void> {
 }
 
 async function vault<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return vaultAt<T>(method, `/api/vault/side-work${path}`, body);
+}
+
+async function vaultAt<T>(method: string, fullPath: string, body?: unknown): Promise<T> {
   try {
     return await request<T>(
       method,
-      `/api/vault/side-work${path}`,
+      fullPath,
       body,
       vaultKey ? { "X-Vault-Key": vaultKey } : undefined,
     );
@@ -266,6 +390,52 @@ export const archiveEntry = (id: number) => vault<unknown>("POST", `/entries/${i
 export const recordPayment = (p: NewPayment) => vault<unknown>("POST", "/payments", p);
 export const setManualRate = (day: string, rate: string) =>
   vault<unknown>("PUT", `/rates/${day}`, { rate });
+export const editPayment = (id: number, edit: PaymentEdit) =>
+  vault<unknown>("PATCH", `/payments/${id}`, edit);
+
+export const getIncome = () => vaultAt<IncomeView>("GET", "/api/vault/income");
+export const editMainJob = (depositId: number, edit: MainJobEdit) =>
+  vaultAt<unknown>("PATCH", `/api/vault/income/main-job/${depositId}`, edit);
+export const listStatements = () => vaultAt<StatementImport[]>("GET", "/api/vault/statements");
+export const confirmStatement = (body: ConfirmBody) =>
+  vaultAt<{ import_id: number; kept: number; duplicates: number; skipped: number }>(
+    "POST",
+    "/api/vault/statements/confirm",
+    body,
+  );
+
+/** Send a statement CSV as it is (the raw file) and get the proposals back. */
+export async function previewStatement(csv: Blob | string): Promise<StatementPreview> {
+  let response: Response;
+  try {
+    response = await fetch("/api/vault/statements/preview", {
+      method: "POST",
+      headers: { "Content-Type": "text/csv", ...(vaultKey ? { "X-Vault-Key": vaultKey } : {}) },
+      body: csv,
+    });
+  } catch {
+    throw new ApiError(0, "The engine isn't reachable. Is the backend running?");
+  }
+  if (!response.ok) {
+    const err = new ApiError(response.status, await errorMessage(response));
+    if (response.status === 403) {
+      vaultKey = null;
+      lockListeners.forEach((listener) => listener());
+    }
+    throw err;
+  }
+  return (await response.json()) as StatementPreview;
+}
+
+/** Sample mode's made-up statement, for trying the import. */
+export async function getSampleStatement(): Promise<string> {
+  const response = await fetch("/api/vault/statements/sample.csv");
+  if (!response.ok) throw new ApiError(response.status, await errorMessage(response));
+  return response.text();
+}
+
+/** The Vault's belt badge: counts only, so no key is needed. */
+export const getVaultBadge = () => request<{ text: string | null }>("GET", "/api/vault/badge");
 
 // --- Shared plumbing ----------------------------------------------------------
 

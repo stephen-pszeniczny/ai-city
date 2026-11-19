@@ -288,6 +288,10 @@ def with_transaction(conn: sqlite3.Connection, work, *, immediate: bool = False)
     something and then writes based on it, so another program can't change
     the data in between.
     """
+    if conn.in_transaction:
+        # Already inside one (e.g. a statement import saving many things at once):
+        # join it, so everything is saved or undone together.
+        return work()
     conn.execute("BEGIN IMMEDIATE" if immediate else "BEGIN")
     try:
         result = work()

@@ -52,3 +52,10 @@ tax_set_aside_is_placeholder = true
 # week_starts = "saturday"                 # pay weeks run Saturday to Friday
 # released_days_after_period_end = [5, 6]  # [earliest, latest] days after the week's last day
 # arrives_days_after_release = [3, 4]      # [earliest, latest] days after release
+# deposit_match = "PLATFORM A"           # optional: text in a statement deposit from this platform
+
+# Optional: the main job's pay as it appears in a chequing statement (for the Vault's import).
+# Example values only.
+# [main_job]
+# name = "Day job"
+# deposit_match = "DAY JOB PAY"          # text found in the pay deposit's description

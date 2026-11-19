@@ -258,3 +258,125 @@
 .sw-lock__icon {
   font-size: 2.2rem;
 }
+
+.sw-check {
+  display: flex !important;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: end;
+  padding-bottom: 0.45rem;
+}
+
+.sw-check input {
+  width: auto;
+}
+
+.sw-notes {
+  flex: 1 1 14rem;
+}
+
+.sw-note-line {
+  flex-basis: 100%;
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+}
+
+.sw-entries--stacked li {
+  flex-wrap: wrap;
+}
+
+/* Income app */
+.in-goal .in-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.in-goal .in-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c9a24a, #e8c46a);
+}
+
+.in-chart {
+  margin: 0;
+}
+
+.in-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.in-chart__label {
+  fill: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.in-chart__goal {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+
+.in-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.in-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 0.35rem;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.in-legend .in-legend__goal {
+  height: 0;
+  border-top: 2px dashed rgba(255, 255, 255, 0.55);
+  border-radius: 0;
+}
+
+/* Statements app */
+.st-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.st-file {
+  display: inline-flex !important;
+  align-items: center;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 196, 106, 0.55);
+  background: rgba(232, 196, 106, 0.14);
+  color: inherit !important;
+  font-size: 0.92rem !important;
+  cursor: pointer;
+}
+
+.st-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.st-file:focus-within {
+  outline: 2px solid #8aa4ff;
+  outline-offset: 2px;
+}
+
+.st-done {
+  color: #7fd8a4;
+}

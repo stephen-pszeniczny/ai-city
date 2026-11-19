@@ -1,0 +1,186 @@
+"""Tests for the Income screen (income_view) and the Vault badge (vault_badge).
+
+Every database is temporary and every value invented. "Today" is 2026-03-25.
+"""
+
+from datetime import UTC, date, datetime
+from decimal import Decimal
+
+import pytest
+
+from aicity.db import DbKind, open_database
+from aicity.income import IncomeStore
+from aicity.income_view import income_view, vault_badge
+from aicity.settings import IncomeSettings, PaySchedule
+from aicity.side_work import SideWorkStore
+
+NOW = datetime(2026, 3, 25, 12, 0, tzinfo=UTC)
+TODAY = date(2026, 3, 25)
+INCOME = IncomeSettings(tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True)
+SCHED = {"platform_a": PaySchedule("platform_a", "Platform A", 5, (5, 6), (3, 4))}
+GOAL = 750000
+
+
+@pytest.fixture
+def conn(tmp_path):
+    c = open_database(tmp_path / "sample.db", DbKind.SAMPLE)
+    yield c
+    c.close()
+
+
+@pytest.fixture
+def stores(conn):
+    return SideWorkStore(conn, clock=lambda: NOW), IncomeStore(conn, clock=lambda: NOW)
+
+
+def main_pay(income, day, net, gross=None, rrsp=None, match=None, ch="a"):
+    imp = income.record_import(
+        first_day=day, last_day=day, kept=1, duplicates=0, skipped=0, spending=0
+    )
+    d = income.add_deposit(
+        posted_on=day,
+        amount_cents=net,
+        kind="main_job",
+        source="main_job",
+        row_key=ch * 64,
+        import_id=imp,
+    )
+    if gross is not None:
+        income.set_main_job_pay(
+            d.id, gross_cents=gross, rrsp_cents=rrsp, match_cents=match, notes=None
+        )
+    return d
+
+
+def side_pay(side, day, cents, hundredths=None, company="platform_a"):
+    ids = []
+    if hundredths:
+        ids = [
+            side.add_entry(
+                worked_on=day,
+                company=company,
+                role=None,
+                hundredths=hundredths,
+                rate_cents=4000,
+                currency="CAD",
+            ).id
+        ]
+    return side.record_payment(
+        kind="pay" if ids else "extra",
+        company=company,
+        received_on=day,
+        amount_cents=cents,
+        currency="CAD",
+        entry_ids=ids,
+        rate=None,
+        rate_date=None,
+    )
+
+
+def view(conn, stores):
+    side, income = stores
+    return income_view(conn, side, income, GOAL, INCOME, SCHED, "Day job", TODAY)
+
+
+def test_month_gross_net_and_match(conn, stores):
+    side, income = stores
+    main_pay(income, date(2026, 3, 6), 210000, gross=300000, rrsp=15000, match=7500)
+    side_pay(side, date(2026, 3, 22), 20000, hundredths=500)
+    m = view(conn, stores)["month"]
+    assert m["gross_cents"] == 300000 + 20000
+    assert m["net_cents"] == 210000 + 20000 - 4000  # side income less its 20% set-aside
+    assert m["employer_match_cents"] == 7500  # shown apart, never in the totals
+    assert m["goal_cents"] == GOAL and m["gross_missing"] is False
+    assert {s["key"]: s["cents"] for s in m["by_source"]} == {
+        "main_job": 300000,
+        "platform_a": 20000,
+    }
+
+
+def test_missing_gross_uses_net_and_says_so(conn, stores):
+    _side, income = stores
+    main_pay(income, date(2026, 3, 6), 210000)
+    m = view(conn, stores)["month"]
+    assert (m["gross_cents"], m["gross_missing"]) == (210000, True)
+
+
+def test_main_job_pay_list_has_deductions(conn, stores):
+    _side, income = stores
+    main_pay(income, date(2026, 3, 6), 210000, gross=300000, rrsp=15000, match=7500)
+    [row] = view(conn, stores)["main_job_pay"]
+    assert (row["net_cents"], row["deductions_cents"], row["match_cents"]) == (210000, 75000, 7500)
+
+
+def test_six_months_oldest_first_with_empty_months(conn, stores):
+    side, _income = stores
+    side_pay(side, date(2026, 1, 15), 5000, hundredths=100)
+    months = view(conn, stores)["months"]
+    assert [m["month"] for m in months] == [
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03",
+    ]
+    assert [m["total_cents"] for m in months] == [0, 0, 0, 5000, 0, 0]
+
+
+def test_extra_income_is_its_own_source(conn, stores):
+    side, _income = stores
+    side_pay(side, date(2026, 3, 10), 3000, company="Some Co")
+    m = view(conn, stores)["month"]
+    assert {s["key"] for s in m["by_source"]} == {"extra"}
+
+
+def test_platform_hours_and_effective_rate(conn, stores):
+    side, _income = stores
+    side_pay(side, date(2026, 3, 22), 19215, hundredths=350)
+    [p] = view(conn, stores)["platforms"]
+    assert (p["id"], p["hours"], p["received_cad_cents"], p["rate_cad_cents"]) == (
+        "platform_a",
+        "3.5",
+        19215,
+        5490,
+    )
+
+
+# --- Badge ---------------------------------------------------------------------------------
+
+
+def badge(conn, stores, today):
+    side, income = stores
+    return vault_badge(side, income, SCHED, today)
+
+
+def test_badge_statement_due_from_the_fifth(conn, stores):
+    assert badge(conn, stores, date(2026, 3, 4)) is None
+    assert badge(conn, stores, date(2026, 3, 5)) == "Statement due"
+
+
+def test_badge_clears_once_last_month_is_imported(conn, stores):
+    _side, income = stores
+    income.record_import(
+        first_day=date(2026, 2, 1),
+        last_day=date(2026, 2, 28),
+        kept=0,
+        duplicates=0,
+        skipped=0,
+        spending=0,
+    )
+    assert badge(conn, stores, date(2026, 3, 10)) is None
+
+
+def test_badge_overdue_wins_and_has_no_amounts(conn, stores):
+    side, _income = stores
+    side.add_entry(
+        worked_on=date(2026, 2, 2),
+        company="platform_a",
+        role=None,
+        hundredths=100,
+        rate_cents=4000,
+        currency="CAD",
+    )
+    text = badge(conn, stores, date(2026, 3, 10))
+    assert text == "1 overdue"
+    assert "$" not in text and "." not in text

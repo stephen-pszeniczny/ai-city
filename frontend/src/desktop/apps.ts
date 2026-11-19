@@ -14,9 +14,8 @@ const MISSION_CONTROL: readonly App[] = [
 
 const VAULT: readonly App[] = [
   { id: "sidework", name: "Side work", ready: true },
-  { id: "income", name: "Income", ready: false },
-  { id: "statements", name: "Statements", ready: false },
-  { id: "goals", name: "Goals", ready: false },
+  { id: "income", name: "Income", ready: true },
+  { id: "statements", name: "Statements", ready: true },
 ];
 
 export function appsFor(id: BuildingId): App[] {

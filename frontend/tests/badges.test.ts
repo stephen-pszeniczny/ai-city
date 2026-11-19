@@ -53,6 +53,6 @@ test("uses the local date, not UTC (9:30 PM in the evening is still today)", () 
   assert.equal(plannerBadge([task({ goal_date: "2026-11-15" })], now), null);
 });
 
-test("only Mission Control is built today", () => {
-  assert.deepEqual([...BUILT], ["planner"]);
+test("Mission Control and the Vault are built; everything else is under construction", () => {
+  assert.deepEqual([...BUILT], ["planner", "finance"]);
 });

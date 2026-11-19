@@ -58,8 +58,8 @@ def add_payment(conn, **overrides):
     ).lastrowid
 
 
-def test_new_database_reaches_version_4(conn):
-    assert schema_version(conn) == 4
+def test_new_database_has_the_side_work_tables(conn):
+    assert schema_version(conn) >= 4
 
 
 def test_minimal_entry_is_accepted(conn):

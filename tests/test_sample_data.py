@@ -255,3 +255,69 @@ def test_sample_side_work_uses_only_invented_names():
     seed_sample_database(clock=lambda: NOW)
     names = {g["company_name"] for g in sample_view()["groups"]}
     assert names <= {"Nimbus Labs", "Quill & Co"}
+
+
+# --- Sample income (the Vault, part B) ---------------------------------------------------
+
+
+def income_view_now(now=NOW):
+    from aicity.income import IncomeStore
+    from aicity.income_view import income_view
+    from aicity.sample_data import SAMPLE_GOAL_CENTS, SAMPLE_INCOME, SAMPLE_PAY_SCHEDULES
+    from aicity.side_work import SideWorkStore
+
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        return income_view(
+            conn,
+            SideWorkStore(conn, clock=lambda: now),
+            IncomeStore(conn, clock=lambda: now),
+            SAMPLE_GOAL_CENTS,
+            SAMPLE_INCOME,
+            SAMPLE_PAY_SCHEDULES,
+            "Day job",
+            now.astimezone().date(),
+        )
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("days_later", [0, 3, 9, 16])
+def test_sample_income_fills_the_charts(days_later):
+    now = NOW + timedelta(days=days_later)
+    seed_sample_database(clock=lambda: now)
+    v = income_view_now(now)
+    assert len(v["months"]) == 6
+    assert all(m["total_cents"] > 0 for m in v["months"][:-1])  # this month may be empty yet
+    assert any(r["gross_cents"] is None for r in v["main_job_pay"])  # one stub not typed in
+    assert any(r["gross_cents"] is not None for r in v["main_job_pay"])
+    assert v["platforms"] and v["platforms"][0]["rate_cad_cents"]
+
+
+def test_sample_paid_weeks_are_proven_by_deposits():
+    seed_sample_database(clock=lambda: NOW)
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        unlinked = conn.execute(
+            "SELECT count(*) FROM side_work_payments WHERE deposit_id IS NULL"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert unlinked == 0
+
+
+def test_an_older_sample_database_gets_income_too():
+    conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
+    try:
+        seed(conn, NOW)  # tasks only, as before the Vault existed
+    finally:
+        conn.close()
+    seed_sample_database(clock=lambda: NOW)
+    assert income_view_now()["main_job_pay"]
+
+
+def test_sample_income_is_seeded_once():
+    seed_sample_database(clock=lambda: NOW)
+    first = income_view_now()
+    seed_sample_database(clock=lambda: NOW)
+    assert income_view_now() == first
