@@ -154,3 +154,72 @@
   margin: 0 0 0.4rem;
   font-size: 0.95rem;
 }
+
+/* Sunday check-in */
+
+.checkin__h {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+}
+
+.checkin__glance {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.checkin__day {
+  display: inline-block;
+  min-width: 4rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.checkin__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkin__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(65, 105, 225, 0.18);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.checkin__chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.checkin__chip.is-on {
+  background: rgba(52, 199, 89, 0.22);
+  cursor: default;
+}
+
+.checkin__chip--pick .field {
+  width: auto;
+}
+
+.checkin__group ul {
+  margin: 0.2rem 0 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.plan__grocery {
+  margin: 0;
+  font-size: 0.9rem;
+}

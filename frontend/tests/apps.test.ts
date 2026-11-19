@@ -16,13 +16,13 @@ const ALL = [
   "library",
 ] as const;
 
-test("Mission Control: To-do and Daily plan are ready; Sunday check-in and Projects come later", () => {
+test("Mission Control: To-do, Daily plan and Sunday check-in are ready; Projects comes later", () => {
   assert.deepEqual(
     appsFor("planner").map((a) => [a.id, a.name, a.ready]),
     [
       ["todo", "To-do", true],
       ["plan", "Daily plan", true],
-      ["checkin", "Sunday check-in", false],
+      ["checkin", "Sunday check-in", true],
       ["projects", "Projects", false],
     ],
   );

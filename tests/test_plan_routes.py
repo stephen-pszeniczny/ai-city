@@ -371,3 +371,18 @@ def test_checkin_in_sample_mode(tmp_path, monkeypatch):
     _data_dir(tmp_path, monkeypatch, with_plan=False)
     client = _client(DbKind.SAMPLE)
     assert client.post("/api/plan/checkin/open").json()["exists"] is True
+
+
+def test_finishing_in_sample_mode_clears_its_checkin_notification(tmp_path, monkeypatch):
+    from aicity.sample_data import seed_sample_database
+
+    _data_dir(tmp_path, monkeypatch, with_plan=False)
+    seed_sample_database(clock=lambda: NOW)
+    client = _client(DbKind.SAMPLE)
+    week = client.post("/api/plan/checkin/open").json()
+    client.post(f"/api/plan/week/{week['week_start']}/checkin")
+    with sqlite3.connect(db_path(DbKind.SAMPLE)) as conn:
+        active = conn.execute(
+            "SELECT count(*) FROM notifications WHERE kind = 'checkin' AND cleared_at IS NULL"
+        ).fetchone()[0]
+    assert active == 0

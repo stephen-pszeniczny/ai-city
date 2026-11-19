@@ -6,7 +6,7 @@
 // gym can be marked for the last 7 days, far weeks aren't created); this screen
 // only hides buttons that would be refused anyway.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import {
   addPlanBlock,
@@ -20,22 +20,12 @@ import {
   setGym,
   type GymStatus,
   type PlanBlock,
-  type PlanKind,
   type PlanWeek,
 } from "../api";
 import { categoryLabel } from "../todo/categories";
+import { BlockForm } from "./BlockForm";
 import { canMarkGym, dayLabel, isPast, overlapping, shiftWeek, todosFor } from "./week";
 import "./plan.css";
-
-const KINDS: readonly { id: PlanKind; label: string }[] = [
-  { id: "event", label: "Event" },
-  { id: "side_work", label: "Side work" },
-  { id: "build", label: "Build" },
-  { id: "gym", label: "Gym" },
-  { id: "work", label: "Work" },
-  { id: "commute", label: "Commute" },
-  { id: "other", label: "Other" },
-];
 
 /** Read the week; if it isn't saved yet, ask the server to open (create) it. */
 async function loadWeek(start: string | null): Promise<PlanWeek> {
@@ -155,6 +145,10 @@ export function PlanPanel() {
         </p>
       )}
 
+      {w.exists && !w.checked_in && w.days.some((d) => !isPast(d.day, today)) && (
+        <p className="plan__note">Not checked in yet: open Sunday check-in from the dock.</p>
+      )}
+
       {!w.exists ? (
         <p className="plan__note">
           {w.days.length === 0 && w.week_start < today
@@ -192,6 +186,8 @@ export function PlanPanel() {
               />
             ))}
           </ul>
+
+          {w.grocery_day === day && <p className="plan__grocery">🛒 Grocery day</p>}
 
           {!isPast(day, today) && (
             <AddBlock weekStart={w.week_start} day={day} onDone={refresh} onError={onError} />
@@ -356,90 +352,5 @@ function AddBlock({
       }}
       onError={onError}
     />
-  );
-}
-
-type Fields = { title: string; kind: PlanKind; start: string; end: string };
-
-function BlockForm({
-  initial,
-  submitLabel,
-  onSubmit,
-  onCancel,
-  onDone,
-  onError,
-}: {
-  initial: Fields;
-  submitLabel: string;
-  onSubmit: (fields: Fields) => Promise<PlanBlock>;
-  onCancel: () => void;
-  onDone: () => void;
-  onError: (err: Error) => void;
-}) {
-  const [fields, setFields] = useState<Fields>({
-    title: initial.title,
-    kind: initial.kind,
-    start: initial.start,
-    end: initial.end,
-  });
-  const save = useMutation({ mutationFn: () => onSubmit(fields), onSuccess: onDone, onError });
-  const set = (patch: Partial<Fields>) => setFields((f) => ({ ...f, ...patch }));
-  const tooEarly = fields.end <= fields.start;
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!fields.title.trim() || tooEarly) return;
-    save.mutate();
-  }
-
-  return (
-    <form className="plan__form" onSubmit={submit}>
-      <input
-        className="field"
-        aria-label="Title"
-        placeholder="Title"
-        maxLength={100}
-        value={fields.title}
-        onChange={(e) => set({ title: e.target.value })}
-      />
-      <select
-        className="field"
-        aria-label="Kind"
-        value={fields.kind}
-        onChange={(e) => set({ kind: e.target.value as PlanKind })}
-      >
-        {KINDS.map((k) => (
-          <option key={k.id} value={k.id}>
-            {k.label}
-          </option>
-        ))}
-      </select>
-      <input
-        className="field"
-        type="time"
-        aria-label="Start"
-        value={fields.start}
-        onChange={(e) => set({ start: e.target.value })}
-      />
-      <input
-        className="field"
-        type="time"
-        aria-label="End"
-        aria-invalid={tooEarly}
-        value={fields.end}
-        onChange={(e) => set({ end: e.target.value })}
-      />
-      <button
-        type="submit"
-        className="btn"
-        disabled={save.isPending || !fields.title.trim() || tooEarly}
-      >
-        {submitLabel}
-      </button>
-      <button type="button" className="btn btn--quiet" onClick={onCancel}>
-        Cancel
-      </button>
-      {tooEarly && <span className="plan__tag plan__tag--warn">End must be after start</span>}
-    </form>
   );
 }

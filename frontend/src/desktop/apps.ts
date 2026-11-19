@@ -1,6 +1,6 @@
 // The apps on each building's desktop (its modules, spec section 7).
-// Built so far: Mission Control's To-do and Daily plan, and the Vault's Income, Side work
-// and Statements;
+// Built so far: Mission Control's To-do, Daily plan and Sunday check-in, and the Vault's
+// Income, Side work and Statements;
 // the rest is "later" or under construction.
 import type { BuildingId } from "../api";
 
@@ -9,7 +9,7 @@ export type App = { id: string; name: string; ready: boolean };
 const MISSION_CONTROL: readonly App[] = [
   { id: "todo", name: "To-do", ready: true },
   { id: "plan", name: "Daily plan", ready: true },
-  { id: "checkin", name: "Sunday check-in", ready: false },
+  { id: "checkin", name: "Sunday check-in", ready: true },
   { id: "projects", name: "Projects", ready: false },
 ];
 

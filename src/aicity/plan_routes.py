@@ -35,8 +35,8 @@ from fastapi.responses import JSONResponse
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, model_validator
 
 from aicity import sample_data
-from aicity.checkin_reminder import check_checkin_reminder
-from aicity.db import DbKind, db_path, open_database
+from aicity.checkin_reminder import check_checkin_reminder, clear_checkin_reminders
+from aicity.db import DbKind, db_path, open_database, with_transaction
 from aicity.plan import BLOCK_KINDS, Block, BlockNotFound, PlanError, PlanStore, Week, monday_of
 from aicity.settings import PlanSettings, load_settings
 
@@ -331,7 +331,10 @@ def finish_checkin(request: Request, start: str) -> dict:
         return _week_json(week_start, now.date(), None, configured=False)
     with _open(request) as conn:
         week = PlanStore(conn, clock=request.app.state.clock).finish_checkin(week_start)
+        # Clear the reminder now rather than at the next background check. Sample mode
+        # only clears (its one notification is ready-made; it never gets new ones).
         if request.app.state.db_kind == DbKind.PERSONAL:
-            # Clear the reminder now rather than at the next background check.
             check_checkin_reminder(conn, now, rules, now.astimezone(UTC))
+        else:
+            with_transaction(conn, lambda: clear_checkin_reminders(conn, now.astimezone(UTC)))
     return _week_json(week_start, now.date(), week)

@@ -266,13 +266,17 @@ def seed_checkin_notification(conn: sqlite3.Connection, now: datetime) -> bool:
     if conn.execute("SELECT 1 FROM meta WHERE key = ?", (CHECKIN_SEEDED_KEY,)).fetchone():
         return False
 
+    # Its moment is the one a real reminder for this check-in would have (the Sunday
+    # before the week it plans), so finishing that week's check-in clears it.
+    reminder_at = PlanStore(conn).checkin_status(now.astimezone(), SAMPLE_PLAN).reminder_at
+
     def work() -> None:
         conn.execute(
             "INSERT INTO notifications (kind, task_id, title, due_at, created_at) "
             "VALUES ('checkin', NULL, ?, ?, ?)",
             (
                 CHECKIN_TITLE,
-                _local_minute(now - timedelta(minutes=10)),
+                f"{reminder_at:%Y-%m-%dT%H:%M}",
                 now.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             ),
         )

@@ -21,6 +21,21 @@ CHECKIN_TITLE = "Time for your Sunday check-in"
 _STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
+def clear_checkin_reminders(conn: sqlite3.Connection, clock_utc: datetime) -> None:
+    """Clear any check-in reminder whose week is now checked in (any mode).
+
+    A reminder's moment is the Sunday before the week it's for, so that week starts
+    a day later.
+    """
+    conn.execute(
+        "UPDATE notifications SET cleared_at = ? WHERE kind = 'checkin' "
+        "AND dismissed_at IS NULL AND cleared_at IS NULL "
+        "AND date(substr(due_at, 1, 10), '+1 day') IN "
+        "(SELECT week_start FROM plan_weeks WHERE checked_in_at IS NOT NULL)",
+        (clock_utc.strftime(_STAMP_FORMAT),),
+    )
+
+
 def check_checkin_reminder(
     conn: sqlite3.Connection, now_local: datetime, rules: PlanSettings, clock_utc: datetime
 ) -> int:
@@ -28,15 +43,7 @@ def check_checkin_reminder(
     stamp = clock_utc.strftime(_STAMP_FORMAT)
 
     def work() -> int:
-        # Clear any check-in reminder whose week is now checked in. A reminder's
-        # moment is the Sunday before the week it's for, so that week starts a day later.
-        conn.execute(
-            "UPDATE notifications SET cleared_at = ? WHERE kind = 'checkin' "
-            "AND dismissed_at IS NULL AND cleared_at IS NULL "
-            "AND date(substr(due_at, 1, 10), '+1 day') IN "
-            "(SELECT week_start FROM plan_weeks WHERE checked_in_at IS NOT NULL)",
-            (stamp,),
-        )
+        clear_checkin_reminders(conn, clock_utc)
         status = PlanStore(conn).checkin_status(now_local, rules)
         if status.checked_in:
             return 0
