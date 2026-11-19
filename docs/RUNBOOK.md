@@ -106,6 +106,12 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **A reminder didn't show** → check the app is running (reminders are only checked while it is). Check you're in the right mode: Personal reminders never show in Sample. If the reminder time was before the app's very first notification check, it's skipped on purpose. A reminder you just saved fires within 30 seconds; the shuttle waits while you're inside a building and flies when you're back on the belt.
 
+**The Vault asks for Touch ID** → that's expected: once per app session in Personal mode, the first time you open Side work. Reloading the page, restarting the app or switching modes locks it again. Sample mode never asks.
+
+**Adding a side-work platform's pay schedule** → in the settings file, add a block like the commented `[pay_schedules.platform_a]` example in `settings.example.toml`: a short lowercase id, the name to show, the weekday pay weeks start on, and `[earliest, latest]` day counts for release and arrival. No restart needed: close and reopen Side work. The platform then appears in the Log work company list, and its entries get expected pay and a "lands …" window. A week only counts as overdue after the latest day.
+
+**Side work says "rate pending"** → the app couldn't get that day's USD→CAD rate from the Bank of Canada (no internet, or the day's rate isn't published yet: it appears late afternoon). It fills in on its own the next time you open Side work. If it's urgent, type the rate into the box that appears (the Bank of Canada's daily rate for that day). Weekends and holidays use the last business day's rate.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---

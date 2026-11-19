@@ -28,8 +28,20 @@ test("Mission Control: To-do is ready; Daily plan, Weekly review and Projects co
   );
 });
 
+test("The Vault: Side work is ready; Income, Statements and Goals come later", () => {
+  assert.deepEqual(
+    appsFor("finance").map((a) => [a.id, a.name, a.ready]),
+    [
+      ["sidework", "Side work", true],
+      ["income", "Income", false],
+      ["statements", "Statements", false],
+      ["goals", "Goals", false],
+    ],
+  );
+});
+
 test("every other building shows one under-construction app, not ready", () => {
-  for (const id of ALL.filter((b) => b !== "planner")) {
+  for (const id of ALL.filter((b) => b !== "planner" && b !== "finance")) {
     assert.deepEqual(
       appsFor(id),
       [{ id: "construction", name: "Under construction", ready: false }],

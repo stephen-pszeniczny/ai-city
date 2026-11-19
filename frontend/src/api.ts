@@ -143,12 +143,145 @@ export const getHistory = (id: number) =>
 
 // --- Plumbing ----------------------------------------------------------------
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// --- The Vault's Side work (spec: docs/superpowers/specs/2026-11-18-vault-side-work-design.md)
+
+export type GroupStatus = "waiting" | "overdue" | "paid" | "no_schedule";
+export type Currency = "CAD" | "USD";
+
+export type SideWorkEntry = {
+  id: number;
+  worked_on: string;
+  company: string | null;
+  role: string | null;
+  hours: string | null;
+  hundredths: number | null;
+  rate_cents: number | null;
+  currency: Currency;
+  expected_cents: number | null;
+};
+
+export type SideWorkPayment = {
+  id: number;
+  kind: "pay" | "bonus";
+  company: string | null;
+  received_on: string;
+  amount_cents: number;
+  currency: Currency;
+  rate: string | null;
+  rate_date: string | null;
+  received_cad_cents: number | null;
+};
+
+export type SideWorkGroup = {
+  company: string | null;
+  company_name: string | null;
+  schedule_id: string | null;
+  period: [string, string] | null;
+  window: [string, string] | null;
+  status: GroupStatus;
+  entries: SideWorkEntry[];
+  expected_cad_cents: number | null;
+  expected_is_partial: boolean;
+  expected_is_estimate: boolean;
+  payment: SideWorkPayment | null;
+  difference_cad_cents: number | null;
+};
+
+export type SideWorkView = {
+  summary: {
+    month_received_cad_cents: number;
+    still_expected_cad_cents: number;
+    year_received_cad_cents: number;
+    set_aside_cad_cents: number;
+    set_aside_percent: string;
+    set_aside_is_placeholder: boolean;
+    rates_pending: boolean;
+  };
+  schedules: { id: string; name: string }[];
+  groups: SideWorkGroup[];
+  bonuses: SideWorkPayment[];
+};
+
+export type NewEntry = {
+  worked_on: string;
+  company?: string | null;
+  role?: string | null;
+  hours?: string | null;
+  rate?: string | null;
+  currency: Currency;
+};
+
+export type NewPayment = {
+  kind: "pay" | "bonus";
+  company?: string | null;
+  received_on: string;
+  amount: string;
+  currency: Currency;
+  entry_ids: number[];
+};
+
+// The Vault key from Touch ID lives only in this variable: never in storage,
+// so a reload (or restart) asks for Touch ID again.
+let vaultKey: string | null = null;
+
+const lockListeners = new Set<() => void>();
+
+/** Be told when the engine says the Vault is locked again (restart, mode switch). */
+export function onVaultLocked(listener: () => void): () => void {
+  lockListeners.add(listener);
+  return () => lockListeners.delete(listener);
+}
+
+export const hasVaultKey = () => vaultKey !== null;
+export const forgetVaultKey = () => {
+  vaultKey = null;
+};
+
+export async function unlockVault(): Promise<void> {
+  const { key } = await request<{ key: string | null }>("POST", "/api/vault/unlock");
+  vaultKey = key;
+}
+
+async function vault<T>(method: string, path: string, body?: unknown): Promise<T> {
+  try {
+    return await request<T>(
+      method,
+      `/api/vault/side-work${path}`,
+      body,
+      vaultKey ? { "X-Vault-Key": vaultKey } : undefined,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) {
+      vaultKey = null; // locked again
+      lockListeners.forEach((listener) => listener());
+    }
+    throw err;
+  }
+}
+
+export const getSideWork = () => vault<SideWorkView>("GET", "");
+export const refreshRates = () => vault<{ ok: boolean }>("POST", "/rates/refresh");
+export const addEntry = (entry: NewEntry) => vault<SideWorkEntry>("POST", "/entries", entry);
+export const archiveEntry = (id: number) => vault<unknown>("POST", `/entries/${id}/archive`);
+export const recordPayment = (p: NewPayment) => vault<unknown>("POST", "/payments", p);
+export const setManualRate = (day: string, rate: string) =>
+  vault<unknown>("PUT", `/rates/${day}`, { rate });
+
+// --- Shared plumbing ----------------------------------------------------------
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+): Promise<T> {
   let response: Response;
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   try {
     response = await fetch(path, {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

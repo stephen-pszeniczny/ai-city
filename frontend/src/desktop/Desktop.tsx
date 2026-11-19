@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { BuildingId } from "../api";
 import { TodoPanel } from "../todo/TodoPanel";
+import { SideWorkPanel } from "../vault/SideWorkPanel";
 import { useSampleReminder } from "../todo/useMode";
 import { appsFor, type App } from "./apps";
 import "./desktop.css";
@@ -15,6 +16,10 @@ const ICONS: Record<string, string> = {
   plan: "☀",
   review: "↻",
   projects: "⚒",
+  sidework: "⏱",
+  income: "$",
+  statements: "▤",
+  goals: "◎",
   construction: "⚠",
 };
 
@@ -79,7 +84,13 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                   <span className="window__title">{windowTitle(openApp, apps)}</span>
                 </div>
                 <div className="window__body">
-                  {openApp === "todo" ? <TodoPanel /> : <UnderConstruction name={name} />}
+                  {openApp === "todo" ? (
+                    <TodoPanel />
+                  ) : openApp === "sidework" ? (
+                    <SideWorkPanel />
+                  ) : (
+                    <UnderConstruction name={name} />
+                  )}
                 </div>
               </div>
             ) : (

@@ -41,3 +41,14 @@ reminder_time = "09:00"
 # Shown in the app with a "placeholder" label while is_placeholder is true.
 tax_set_aside_percent = "20"
 tax_set_aside_is_placeholder = true
+
+# Optional: when each side-work platform pays, one block per platform.
+# The id after "pay_schedules." is a short code; "name" is what the app shows.
+# Log entries whose company is this id get expected pay and arrival dates.
+# Example values only.
+# [pay_schedules.platform_a]
+# name = "Platform A"
+# period = "weekly"
+# week_starts = "saturday"                 # pay weeks run Saturday to Friday
+# released_days_after_period_end = [5, 6]  # [earliest, latest] days after the week's last day
+# arrives_days_after_release = [3, 4]      # [earliest, latest] days after release

@@ -10,7 +10,7 @@ because values can be personal (an income goal, a home location).
 
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -66,12 +66,28 @@ class IncomeSettings:
 
 
 @dataclass(frozen=True)
+class PaySchedule:
+    """When one side-work platform pays: weekly periods, release and arrival windows.
+
+    week_starts uses date.weekday() numbering (Monday = 0). The two pairs are
+    (earliest, latest) day counts.
+    """
+
+    id: str
+    name: str
+    week_starts: int
+    release_after: tuple[int, int]
+    arrive_after: tuple[int, int]
+
+
+@dataclass(frozen=True)
 class Settings:
     buildings: dict[str, str]
     location: Location
     goals: Goals
     tasks: TaskDefaults
     income: IncomeSettings
+    pay_schedules: dict[str, PaySchedule] = field(default_factory=dict)
 
 
 def settings_path() -> Path:
@@ -100,13 +116,18 @@ def load_settings(path: Path | None = None) -> Settings:
 
 def parse_settings(data: dict) -> Settings:
     """Check already-parsed settings data and turn it into a Settings object."""
-    _only_keys(data, "settings file", {"buildings", "location", "goals", "tasks", "income"})
+    _only_keys(
+        data,
+        "settings file",
+        {"buildings", "location", "goals", "tasks", "income", "pay_schedules"},
+    )
     return Settings(
         buildings=_buildings(_table(data, "buildings")),
         location=_location(_table(data, "location")),
         goals=_goals(_table(data, "goals")),
         tasks=_tasks(_table(data, "tasks")),
         income=_income(_table(data, "income")),
+        pay_schedules=_pay_schedules(data.get("pay_schedules", {})),
     )
 
 
@@ -168,6 +189,60 @@ def _income(t: dict) -> IncomeSettings:
     if type(flag) is not bool:
         raise SettingsError("income.tax_set_aside_is_placeholder must be true or false.")
     return IncomeSettings(tax_set_aside_percent=percent, tax_set_aside_is_placeholder=flag)
+
+
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_SCHEDULE_KEYS = {
+    "name",
+    "period",
+    "week_starts",
+    "released_days_after_period_end",
+    "arrives_days_after_release",
+}
+
+
+def _pay_schedules(t) -> dict[str, PaySchedule]:
+    if not isinstance(t, dict):
+        raise SettingsError("pay_schedules must be a section of [pay_schedules.<id>] blocks.")
+    schedules = {}
+    for schedule_id, block in t.items():
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,30}", schedule_id):
+            raise SettingsError(
+                "pay_schedules ids must be lowercase letters, digits or _ (up to 31), "
+                "starting with a letter."
+            )
+        where = f"pay_schedules.{schedule_id}"
+        if not isinstance(block, dict):
+            raise SettingsError(f"{where} must be a section.")
+        _exact_keys(block, where, _SCHEDULE_KEYS)
+        if block["period"] != "weekly":
+            raise SettingsError(f'{where}.period must be "weekly".')
+        start = block["week_starts"]
+        if not isinstance(start, str) or start.strip().lower() not in WEEKDAYS:
+            raise SettingsError(f'{where}.week_starts must be a weekday name like "saturday".')
+        schedules[schedule_id] = PaySchedule(
+            id=schedule_id,
+            name=_text(block, where, "name"),
+            week_starts=WEEKDAYS.index(start.strip().lower()),
+            release_after=_day_pair(block, where, "released_days_after_period_end"),
+            arrive_after=_day_pair(block, where, "arrives_days_after_release"),
+        )
+    return schedules
+
+
+def _day_pair(t: dict, where: str, key: str) -> tuple[int, int]:
+    value = t[key]
+    ok = (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(type(v) is int and 0 <= v <= 60 for v in value)
+        and value[0] <= value[1]
+    )
+    if not ok:
+        raise SettingsError(
+            f"{where}.{key} must be [earliest, latest]: whole days from 0 to 60, earliest first."
+        )
+    return (value[0], value[1])
 
 
 # --- Small checking helpers ------------------------------------------------
