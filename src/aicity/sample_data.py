@@ -186,7 +186,7 @@ def seed(conn: sqlite3.Connection, now: datetime) -> bool:
 
 SIDE_WORK_SEEDED_KEY = "sample_side_work_seeded"
 _RATE_CENTS = 4500  # 45.00 USD an hour, invented
-_SESSIONS = ((1, 180), (3, 150), (4, 120))  # (days into the week, minutes)
+_SESSIONS = ((1, 300), (3, 250), (4, 200))  # (days into the week, hours x 100)
 
 
 def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
@@ -225,14 +225,14 @@ def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
 
     def log_week(start: date) -> list[int]:
         ids = []
-        for offset, minutes in _SESSIONS:
+        for offset, hundredths in _SESSIONS:
             day = start + timedelta(days=offset)
             if day <= today:
                 e = store.add_entry(
                     worked_on=day,
                     company="sample_a",
                     role="Evaluator",
-                    minutes=minutes,
+                    hundredths=hundredths,
                     rate_cents=_RATE_CENTS,
                     currency="USD",
                 )
@@ -271,7 +271,7 @@ def seed_side_work(conn: sqlite3.Connection, now: datetime) -> bool:
             worked_on=week - timedelta(weeks=w, days=2),
             company="Quill & Co",
             role="Technical writer",
-            minutes=240,
+            hundredths=400,
             rate_cents=6000,
             currency="CAD",
         )

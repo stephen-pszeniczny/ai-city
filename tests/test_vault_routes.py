@@ -346,7 +346,7 @@ def test_unknown_field_is_refused(unlocked):
 def test_edit_and_archive(unlocked):
     e = add(unlocked, worked_on="2026-03-10", hours="2", rate="40")
     r = unlocked.patch(f"/api/vault/side-work/entries/{e['id']}", json={"hours": None})
-    assert r.status_code == 200 and r.json()["minutes"] is None
+    assert r.status_code == 200 and r.json()["hundredths"] is None
     r = unlocked.post(f"/api/vault/side-work/entries/{e['id']}/archive")
     assert r.status_code == 200
     assert view(unlocked)["groups"] == []
@@ -368,3 +368,9 @@ def test_paid_entry_edit_is_a_conflict(unlocked):
 
 def test_missing_entry_is_not_found(unlocked):
     assert unlocked.patch("/api/vault/side-work/entries/999", json={"role": "x"}).status_code == 404
+
+
+def test_two_decimal_hours_give_exact_pay(unlocked):
+    add(unlocked, worked_on="2026-03-10", hours="1.33", rate="40", currency="CAD")
+    [g] = view(unlocked)["groups"]
+    assert (g["entries"][0]["hours"], g["expected_cad_cents"]) == ("1.33", 5320)

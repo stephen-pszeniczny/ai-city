@@ -154,7 +154,7 @@ export type SideWorkEntry = {
   company: string | null;
   role: string | null;
   hours: string | null;
-  minutes: number | null;
+  hundredths: number | null;
   rate_cents: number | null;
   currency: Currency;
   expected_cents: number | null;

@@ -13,7 +13,7 @@ from aicity.side_work_math import (
     arrival_window,
     difference_cents,
     expected_cents,
-    hours_to_minutes,
+    hours_to_hundredths,
     is_overdue,
     money_to_cents,
     pay_period,
@@ -26,13 +26,17 @@ SCHED = PaySchedule("platform_a", "Platform A", 5, (5, 6), (3, 4))
 
 
 def test_expected_pay_rounds_half_up():
-    assert expected_cents(90, 4001) == 6002  # 1.5 h x $40.01 = 60.015
-    assert expected_cents(60, 4000) == 4000
+    assert expected_cents(150, 4001) == 6002  # 1.5 h x $40.01 = 60.015
+    assert expected_cents(100, 4000) == 4000
+
+
+def test_expected_pay_uses_hours_exactly():
+    assert expected_cents(133, 4000) == 5320  # 1.33 h x $40.00, not 80 minutes ($53.33)
 
 
 def test_expected_pay_needs_hours_and_rate():
     assert expected_cents(None, 4000) is None
-    assert expected_cents(60, None) is None
+    assert expected_cents(100, None) is None
 
 
 def test_usd_to_cad_rounds_half_up():
@@ -95,17 +99,17 @@ def test_difference_unknown_when_either_side_unknown():
     assert difference_cents(100, None) is None
 
 
-def test_hours():
-    assert hours_to_minutes("1.5") == 90
-    assert hours_to_minutes("0.25") == 15
-    assert hours_to_minutes(" 168 ") == 10080
-    assert hours_to_minutes("0.01") == 1  # 0.6 min rounds half up to 1
+def test_hours_are_kept_in_hundredths():
+    assert hours_to_hundredths("1.5") == 150
+    assert hours_to_hundredths("1.33") == 133
+    assert hours_to_hundredths(" 168 ") == 16800
+    assert hours_to_hundredths("0.01") == 1
 
 
 @pytest.mark.parametrize("bad", ["0", "-2", "168.01", "200", "12.345", "", "abc", "1:30", "NaN"])
 def test_bad_hours_are_refused(bad):
     with pytest.raises(ValueError):
-        hours_to_minutes(bad)
+        hours_to_hundredths(bad)
 
 
 def test_money():

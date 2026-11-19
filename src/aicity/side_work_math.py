@@ -28,11 +28,11 @@ def rate_text(rate: Decimal) -> str:
 # --- Money ---------------------------------------------------------------------------
 
 
-def expected_cents(minutes: int | None, rate_cents: int | None) -> int | None:
-    """Hours worked times the hourly rate, or None when either is unknown."""
-    if minutes is None or rate_cents is None:
+def expected_cents(hundredths: int | None, rate_cents: int | None) -> int | None:
+    """Hours worked (in hundredths of an hour) times the hourly rate, or None if either is unknown."""
+    if hundredths is None or rate_cents is None:
         return None
-    return _round_cents(Decimal(minutes) * Decimal(rate_cents) / 60)
+    return _round_cents(Decimal(hundredths) * Decimal(rate_cents) / 100)
 
 
 def to_cad_cents(amount_cents: int, currency: str, rate: Decimal | None) -> int | None:
@@ -61,15 +61,15 @@ def difference_cents(expected_cad: int | None, received_cad: int | None) -> int 
 # --- What the page sends ---------------------------------------------------------------
 
 
-def hours_to_minutes(text: str) -> int:
-    """Hours as typed ("1.5") to whole minutes. More than 0, at most 168, up to 2 decimals."""
+def hours_to_hundredths(text: str) -> int:
+    """Hours as typed ("1.33") to hundredths of an hour, exactly. More than 0, at most 168."""
     text = text.strip()
     if not re.fullmatch(r"\d+(\.\d{1,2})?", text):
         raise ValueError("Hours must be a number like 1.5 (up to 2 decimals).")
     hours = Decimal(text)
     if not Decimal(0) < hours <= MAX_HOURS:
         raise ValueError(f"Hours must be more than 0 and at most {MAX_HOURS}.")
-    return _round_cents(hours * 60)
+    return int(hours * 100)
 
 
 def money_to_cents(text: str) -> int:

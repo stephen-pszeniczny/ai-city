@@ -28,7 +28,7 @@ CREATE TABLE side_work_entries (
     -- A pay-schedule id from settings, or any company name typed in. Optional.
     company     TEXT CHECK (length(company) BETWEEN 1 AND 80 AND company = trim(company)),
     role        TEXT CHECK (length(role) BETWEEN 1 AND 80 AND role = trim(role)),
-    minutes     INTEGER CHECK (minutes BETWEEN 1 AND 10080),
+    hundredths  INTEGER CHECK (hundredths BETWEEN 1 AND 16800),  -- hours x 100
     rate_cents  INTEGER CHECK (rate_cents BETWEEN 0 AND 10000000),
     currency    TEXT NOT NULL CHECK (currency IN ('CAD', 'USD')),
     payment_id  INTEGER REFERENCES side_work_payments (id),

@@ -154,7 +154,12 @@ def test_a_day_never_fetched_never_borrows_an_older_rate(conn):
     # November. Mar 9 itself was never fetched, so it must not borrow Mar 5's rate.
     early = FakeFetcher({date(2026, 3, 5): Decimal("1.3500"), date(2026, 3, 9): Decimal("1.3600")})
     refresh_rates(conn, {date(2026, 3, 5)}, early, today=date(2026, 3, 6))
-    refresh_rates(conn, {date(2026, 11, 17)}, FakeFetcher({date(2026, 11, 17): Decimal("1.40")}), today=date(2026, 11, 18))
+    refresh_rates(
+        conn,
+        {date(2026, 11, 17)},
+        FakeFetcher({date(2026, 11, 17): Decimal("1.40")}),
+        today=date(2026, 11, 18),
+    )
     assert rate_on(conn, date(2026, 3, 9)) is None
     refresh_rates(conn, {date(2026, 3, 9)}, early, today=date(2026, 11, 18))
     assert rate_on(conn, date(2026, 3, 9)) == (Decimal("1.3600"), date(2026, 3, 9))

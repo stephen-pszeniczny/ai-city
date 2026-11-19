@@ -10,7 +10,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from aicity.db import with_transaction
 from aicity.fx import latest_rate
@@ -49,7 +49,7 @@ class Entry:
     worked_on: date
     company: str | None
     role: str | None
-    minutes: int | None
+    hundredths: int | None
     rate_cents: int | None
     currency: str
     payment_id: int | None
@@ -72,13 +72,13 @@ class Payment:
 
 
 _ENTRY_COLUMNS = (
-    "id, worked_on, company, role, minutes, rate_cents, currency, payment_id, archived, "
+    "id, worked_on, company, role, hundredths, rate_cents, currency, payment_id, archived, "
     "created_at, updated_at"
 )
 _PAYMENT_COLUMNS = (
     "id, kind, company, received_on, amount_cents, currency, rate, rate_date, created_at"
 )
-_EDITABLE = {"worked_on", "company", "role", "minutes", "rate_cents", "currency"}
+_EDITABLE = {"worked_on", "company", "role", "hundredths", "rate_cents", "currency"}
 
 
 def _stamp(moment: datetime) -> str:
@@ -109,7 +109,7 @@ def _entry(row) -> Entry:
         worked_on=date.fromisoformat(row[1]),
         company=row[2],
         role=row[3],
-        minutes=row[4],
+        hundredths=row[4],
         rate_cents=row[5],
         currency=row[6],
         payment_id=row[7],
@@ -181,7 +181,7 @@ class SideWorkStore:
         worked_on: date,
         company: str | None,
         role: str | None,
-        minutes: int | None,
+        hundredths: int | None,
         rate_cents: int | None,
         currency: str,
     ) -> Entry:
@@ -189,13 +189,13 @@ class SideWorkStore:
 
         def work() -> int:
             return self._conn.execute(
-                "INSERT INTO side_work_entries (worked_on, company, role, minutes, rate_cents, "
+                "INSERT INTO side_work_entries (worked_on, company, role, hundredths, rate_cents, "
                 "currency, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     worked_on.isoformat(),
                     _clean_text(company, "Company"),
                     _clean_text(role, "Role"),
-                    minutes,
+                    hundredths,
                     rate_cents,
                     _check_currency(currency),
                     stamp,
@@ -367,7 +367,7 @@ def side_work_view(
         expected_cad, partial = 0, False
         totals: dict[str, int] = {}
         for e in entries:
-            amount = expected_cents(e.minutes, e.rate_cents)
+            amount = expected_cents(e.hundredths, e.rate_cents)
             if amount is None:
                 partial = True
             else:
@@ -444,11 +444,10 @@ def side_work_view(
     }
 
 
-def _hours_text(minutes: int | None) -> str | None:
-    if minutes is None:
+def _hours_text(hundredths: int | None) -> str | None:
+    if hundredths is None:
         return None
-    hours = (Decimal(minutes) / 60).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    return format(hours.normalize(), "f")
+    return format((Decimal(hundredths) / 100).normalize(), "f")
 
 
 def _entry_json(e: Entry) -> dict:
@@ -457,11 +456,11 @@ def _entry_json(e: Entry) -> dict:
         "worked_on": e.worked_on.isoformat(),
         "company": e.company,
         "role": e.role,
-        "hours": _hours_text(e.minutes),
-        "minutes": e.minutes,
+        "hours": _hours_text(e.hundredths),
+        "hundredths": e.hundredths,
         "rate_cents": e.rate_cents,
         "currency": e.currency,
-        "expected_cents": expected_cents(e.minutes, e.rate_cents),
+        "expected_cents": expected_cents(e.hundredths, e.rate_cents),
     }
 
 

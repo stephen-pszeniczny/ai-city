@@ -26,7 +26,7 @@ def entry(store, **overrides):
         "worked_on": date(2026, 3, 10),
         "company": "platform_a",
         "role": None,
-        "minutes": 120,
+        "hundredths": 200,
         "rate_cents": 4000,
         "currency": "USD",
     }
@@ -39,11 +39,11 @@ def test_entry_with_only_a_date_round_trips(store):
         worked_on=date(2026, 3, 10),
         company=None,
         role=None,
-        minutes=None,
+        hundredths=None,
         rate_cents=None,
         currency="CAD",
     )
-    assert (e.worked_on, e.company, e.role, e.minutes, e.rate_cents) == (
+    assert (e.worked_on, e.company, e.role, e.hundredths, e.rate_cents) == (
         date(2026, 3, 10),
         None,
         None,
@@ -65,8 +65,8 @@ def test_too_long_text_is_refused(store):
 
 def test_edit_changes_only_given_fields(store):
     e = entry(store)
-    edited = store.edit_entry(e.id, minutes=90)
-    assert (edited.minutes, edited.rate_cents) == (90, 4000)
+    edited = store.edit_entry(e.id, hundredths=150)
+    assert (edited.hundredths, edited.rate_cents) == (150, 4000)
 
 
 def test_edit_can_clear_an_optional_field(store):
@@ -76,7 +76,7 @@ def test_edit_can_clear_an_optional_field(store):
 
 def test_missing_entry_is_not_found(store):
     with pytest.raises(SideWorkNotFound):
-        store.edit_entry(999, minutes=60)
+        store.edit_entry(999, hundredths=60)
 
 
 def test_archived_entries_are_hidden_unless_asked(store):
@@ -163,7 +163,7 @@ def test_paid_entry_cannot_be_edited_or_archived(store):
     e = entry(store)
     pay(store, [e.id])
     with pytest.raises(SideWorkConflict):
-        store.edit_entry(e.id, minutes=30)
+        store.edit_entry(e.id, hundredths=50)
     with pytest.raises(SideWorkConflict):
         store.archive_entry(e.id)
 

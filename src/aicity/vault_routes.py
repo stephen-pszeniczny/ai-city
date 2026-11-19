@@ -40,7 +40,7 @@ from aicity.side_work import (
     SideWorkStore,
     side_work_view,
 )
-from aicity.side_work_math import hours_to_minutes, money_to_cents
+from aicity.side_work_math import hours_to_hundredths, money_to_cents
 
 KEY_HEADER = "X-Vault-Key"
 
@@ -74,7 +74,7 @@ def _day(value: str) -> date:
 
 
 def _hours(value: str | None) -> int | None:
-    return None if value is None or not value.strip() else hours_to_minutes(value)
+    return None if value is None or not value.strip() else hours_to_hundredths(value)
 
 
 def _money(value: str | None) -> int | None:
@@ -186,7 +186,7 @@ def create_entry(request: Request, body: EntryCreate) -> dict:
             worked_on=body.worked_on,
             company=body.company,
             role=body.role,
-            minutes=body.hours,
+            hundredths=body.hours,
             rate_cents=body.rate,
             currency=body.currency,
         )
@@ -195,7 +195,7 @@ def create_entry(request: Request, body: EntryCreate) -> dict:
 
 @router.patch("/entries/{entry_id}")
 def edit_entry(request: Request, entry_id: int, body: EntryEdit) -> dict:
-    names = {"hours": "minutes", "rate": "rate_cents"}
+    names = {"hours": "hundredths", "rate": "rate_cents"}
     changes = {names.get(k, k): getattr(body, k) for k in body.model_fields_set}
     if changes.get("worked_on", 0) is None or changes.get("currency", "") is None:
         raise SideWorkError("Date and currency can't be cleared.")
@@ -265,7 +265,7 @@ def _entry_out(e) -> dict:
         "worked_on": e.worked_on.isoformat(),
         "company": e.company,
         "role": e.role,
-        "minutes": e.minutes,
+        "hundredths": e.hundredths,
         "rate_cents": e.rate_cents,
         "currency": e.currency,
         "payment_id": e.payment_id,
