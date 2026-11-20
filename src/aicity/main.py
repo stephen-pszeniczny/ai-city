@@ -116,6 +116,7 @@ def create_app(
     app.state.mode_switcher = ModeSwitcher(app.state, ask)
     # The Vault's Touch ID lock (memory only, so a restart locks it again).
     app.state.vault_lock = VaultLock(ask)
+    app.state.jobs_lock = VaultLock(ask, place="Opportunity Office")
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
     app.state.reminder_loop = None
@@ -150,8 +151,9 @@ def create_app(
         409 a switch is already waiting, 503 Touch ID can't run.
         """
         switched = request.app.state.mode_switcher.switch(DbKind(body.mode))
-        # Any switch locks the Vault again, so Touch ID is asked afresh.
+        # Any switch locks the Vault and Opportunity Office again, so Touch ID is asked afresh.
         request.app.state.vault_lock.forget()
+        request.app.state.jobs_lock.forget()
         request.app.state.pending_imports.clear()
         if switched is DbKind.SAMPLE:
             # Take any real reminder titles off the screen before a demo.

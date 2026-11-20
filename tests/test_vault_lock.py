@@ -91,3 +91,35 @@ def test_switching_mode_shuts_the_lock(tmp_path, monkeypatch):
     key = app.state.vault_lock.unlock()
     assert client.put("/api/mode", json={"mode": "personal"}).status_code == 200
     assert not app.state.vault_lock.allows(key)
+
+
+# --- Opportunity Office's lock (same mechanism, its own keys) --------------
+
+
+def test_refusal_names_the_place():
+    lock = VaultLock(lambda: OwnerCheck.DECLINED, place="Opportunity Office")
+    with pytest.raises(SwitchRefused, match="Opportunity Office stays locked"):
+        lock.unlock()
+
+
+def test_vault_refusal_message_is_unchanged():
+    with pytest.raises(SwitchRefused, match="The Vault stays locked"):
+        VaultLock(lambda: OwnerCheck.DECLINED).unlock()
+
+
+def test_vault_and_jobs_keys_dont_open_each_other(tmp_path, monkeypatch):
+    monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path))
+    app = create_app(dev=False, ask=confirmed)
+    vault_key = app.state.vault_lock.unlock()
+    jobs_key = app.state.jobs_lock.unlock()
+    assert not app.state.jobs_lock.allows(vault_key)
+    assert not app.state.vault_lock.allows(jobs_key)
+
+
+def test_switching_mode_shuts_the_jobs_lock(tmp_path, monkeypatch):
+    monkeypatch.setenv(config.DATA_DIR_ENV, str(tmp_path))
+    app = create_app(dev=False, ask=confirmed)
+    client = TestClient(app, base_url=APP_URL, headers={"origin": APP_URL})
+    key = app.state.jobs_lock.unlock()
+    assert client.put("/api/mode", json={"mode": "personal"}).status_code == 200
+    assert not app.state.jobs_lock.allows(key)

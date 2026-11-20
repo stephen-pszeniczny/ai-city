@@ -1,4 +1,6 @@
-"""The Vault's Touch ID lock: asked once per app session, enforced by the server.
+"""A building's Touch ID lock: asked once per app session, enforced by the server.
+
+The Vault and Opportunity Office each have their own lock (and their own keys).
 
 unlock() shows the Mac's own Touch ID prompt (password as the backup), the
 same one the Personal mode switch uses, and hands back a random key. The page
@@ -15,8 +17,11 @@ from aicity.mode import OwnerCheck, SwitchBusy, SwitchRefused, SwitchUnavailable
 
 
 class VaultLock:
-    def __init__(self, ask: Callable[[], OwnerCheck] = ask_owner) -> None:
+    def __init__(
+        self, ask: Callable[[], OwnerCheck] = ask_owner, *, place: str = "The Vault"
+    ) -> None:
         self._ask = ask
+        self._place = place
         self._key: str | None = None
         self._waiting = threading.Lock()
 
@@ -32,7 +37,7 @@ class VaultLock:
                     "then try again."
                 )
             if answer != OwnerCheck.CONFIRMED:
-                raise SwitchRefused("Touch ID didn't confirm. The Vault stays locked.")
+                raise SwitchRefused(f"Touch ID didn't confirm. {self._place} stays locked.")
             self._key = secrets.token_urlsafe(32)
             return self._key
         finally:
