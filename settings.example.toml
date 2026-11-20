@@ -129,3 +129,45 @@ tax_set_aside_is_placeholder = true
 # shows_from = "19:00"
 # remind_at = "21:30"
 # items = ["Lunch made", "Keys by the door", "Clothes laid out"]
+
+# Optional: Opportunity Office. Search profiles, official public job lists the Sunday
+# scan reads, and the AI-training platforms on the roster. Example values only.
+# Pay is US dollars per hour, as text. skills is the temporary background scoring
+# compares against until Flight School's Archive replaces it.
+# [jobs]
+# scan_day = "sun"            # default
+# scan_time = "19:00"         # default
+# top_n = 10                  # leads kept per scan (1 to 25)
+# follow_up_days = 10
+# roll_off_days = 90
+#
+# [[jobs.profiles]]
+# id = "ai_training"
+# name = "AI training"
+# pay_floor_usd = "30"
+# pay_preferred_usd = "40"
+# hours = [10, 15]
+# job_types = ["contract", "part_time", "temporary", "freelance"]
+# title_words = ["ai trainer", "evaluator", "red team", "annotator", "rater"]
+# exclude_words = ["recruiter", "sales"]
+# location_ok = ["canada", "worldwide", "anywhere", "north america"]
+# skills = ["python", "technical writing", "data analysis", "spreadsheets"]
+# gap_words = ["sql", "javascript", "statistics"]
+#
+# [[jobs.sources]]
+# id = "company_a"
+# name = "Company A"
+# kind = "greenhouse"         # greenhouse | ashby | lever
+# board = "companya"          # the list's short name in its public address
+# profiles = ["ai_training"]
+#
+# [[jobs.platforms]]
+# id = "platform_a"
+# name = "Platform A"
+# url = "https://example.com/experts"
+# start_stage = "active"      # not_joined (default) | applied | assessment | active | quiet
+#
+# [[jobs.platforms]]
+# id = "platform_b"
+# name = "Platform B"
+# url = "https://example.org/join"

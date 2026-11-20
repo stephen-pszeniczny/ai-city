@@ -14,9 +14,13 @@ from dataclasses import dataclass, field
 from datetime import time
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aicity import config
+
+if TYPE_CHECKING:
+    from aicity.jobs_settings import JobsSettings
 
 # Generic building IDs used by the code. Display names come from settings.
 BUILDING_IDS = (
@@ -173,6 +177,8 @@ class Settings:
     plan: PlanSettings | None = None
     # Routines (optional): checklists shown in the Daily plan's Today list.
     routines: tuple[Routine, ...] = ()
+    # Opportunity Office ([jobs]); see jobs_settings.py.
+    jobs: "JobsSettings | None" = None
 
 
 def settings_path() -> Path:
@@ -214,8 +220,12 @@ def parse_settings(data: dict) -> Settings:
             "main_job",
             "plan",
             "routines",
+            "jobs",
         },
     )
+    # Imported here: jobs_settings reuses this module's helpers.
+    from aicity.jobs_settings import parse_jobs
+
     return Settings(
         buildings=_buildings(_table(data, "buildings")),
         location=_location(_table(data, "location")),
@@ -226,6 +236,7 @@ def parse_settings(data: dict) -> Settings:
         main_job=_main_job(data["main_job"]) if "main_job" in data else None,
         plan=_plan(data["plan"]) if "plan" in data else None,
         routines=_routines(data.get("routines", [])),
+        jobs=parse_jobs(data["jobs"]) if "jobs" in data else None,
     )
 
 
