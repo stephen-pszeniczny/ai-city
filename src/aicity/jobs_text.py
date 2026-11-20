@@ -13,16 +13,19 @@ _AMOUNT = r"\d{1,3}(?:,\d{3})+|\d+"
 _PAY = re.compile(
     rf"""
     (?P<upto>up\s+to\s+)?
-    (?P<cur1>CA\$|C\$|US\$|USD\s?|CAD\s?|\$|£|€)\s?
-    (?P<a>{_AMOUNT})(?:\.(?P<ac>\d{{1,2}}))?\s?(?P<ak>k\b)?
+    (?:(?P<cur0>USD|CAD)\s?)?
+    (?P<cur1>CA\$|C\$|US\$|\$|£|€)?\s?
+    (?<![\d.,])(?P<a>{_AMOUNT})(?:\.(?P<ac>\d{{1,2}}))?\s?(?P<ak>k\b)?
     (?:\s?(?:-|–|—|to)\s?(?:CA\$|C\$|US\$|\$|£|€)?\s?
        (?P<b>{_AMOUNT})(?:\.(?P<bc>\d{{1,2}}))?\s?(?P<bk>k\b)?)?
     (?:\s?(?P<cur2>USD|CAD)\b)?
-    (?:\s?(?P<unit>/\s?(?:hr|hour|h)\b|per\s+hour|an\s+hour|hourly
+    (?:\s?(?P<unit>/\s?(?:hr|hour|h)\b|per\s+(?:hour|hr)\b|an\s+hour|hourly
                   |/\s?(?:yr|year)\b|per\s+year|a\s+year|annually|per\s+annum))?
+    (?:\s?\(?(?P<cur3>USD|CAD)\b\)?)?
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+_CURRENCY_GROUPS = ("cur0", "cur1", "cur2", "cur3")
 _HOURS_RANGE = re.compile(r"(\d{1,2})\s?(?:-|–|to)\s?(\d{1,2})\s?(?:hours|hrs|h)\b", re.IGNORECASE)
 _HOURS_UP_TO = re.compile(r"up\s+to\s+(\d{1,2})\s?(?:hours|hrs|h)\b", re.IGNORECASE)
 _HOURS_ONE = re.compile(r"(\d{1,2})\s?(?:hours|hrs)\s?(?:per|a|/)\s?week", re.IGNORECASE)
@@ -30,7 +33,8 @@ _HOURS_ONE = re.compile(r"(\d{1,2})\s?(?:hours|hrs)\s?(?:per|a|/)\s?week", re.IG
 _REMOTE = re.compile(r"\bremote\b|work from home|work from anywhere", re.IGNORECASE)
 _ON_SITE = re.compile(r"\bon-?site\b|\bin[- ]office\b|\bhybrid\b", re.IGNORECASE)
 _NOT_CANADA = re.compile(
-    r"\b(?:us|u\.s\.|usa|united states)[- ]only\b"
+    r"\b(?:cannot|can't|can not|unable to|not able to|not)\b[^.;]{0,40}\bcanada\b"
+    r"|\b(?:us|u\.s\.|usa|united states)[- ]only\b"
     r"|must (?:be )?(?:based|located|reside) in the (?:us|u\.s\.|united states)",
     re.IGNORECASE,
 )
@@ -85,7 +89,8 @@ NO_PAY = Pay(None, None, None, "unknown", "")
 
 def parse_pay(text: str) -> Pay:
     """The first pay figure in the text, preferring one that says per hour or per year."""
-    matches = list(_PAY.finditer(text))
+    # A figure counts as pay only with a currency sign or word next to it.
+    matches = [m for m in _PAY.finditer(text) if any(m[g] for g in _CURRENCY_GROUPS)]
     if not matches:
         return NO_PAY
     match = next((m for m in matches if m["unit"]), matches[0])
@@ -98,7 +103,9 @@ def parse_pay(text: str) -> Pay:
     unit = _unit(match["unit"], match["ak"] or match["bk"], high)
     if match["upto"] and not match["b"]:
         low = None
-    return Pay(low, high, _currency(match["cur1"], match["cur2"]), unit, match[0].strip()[:80])
+    return Pay(
+        low, high, _currency(*(match[g] for g in _CURRENCY_GROUPS)), unit, match[0].strip()[:80]
+    )
 
 
 def read_facts(title: str, location: str, text: str, location_ok: tuple[str, ...]) -> Facts:
@@ -144,8 +151,8 @@ def _unit(words: str | None, k: str | None, high: int | None) -> str:
     return "unknown"
 
 
-def _currency(first: str, second: str | None) -> str:
-    both = f"{first} {second or ''}".upper()
+def _currency(*marks: str | None) -> str:
+    both = " ".join(m for m in marks if m).upper()
     if "£" in both or "€" in both:
         return "OTHER"
     if "CA$" in both or "C$" in both or "CAD" in both:
@@ -179,10 +186,15 @@ def _has_word(text: str, word: str) -> bool:
 
 
 def _job_type(title: str, text: str) -> str:
+    """Title first, then text. Any other type wins over a full-time mention
+    ("Not a full-time role; contract" is a contract)."""
     for source in (title, text):
-        for kind, pattern in _TYPE_WORDS:
-            if re.search(pattern, source, re.IGNORECASE):
-                return kind
+        found = [k for k, pattern in _TYPE_WORDS if re.search(pattern, source, re.IGNORECASE)]
+        others = [k for k in found if k != "full_time"]
+        if others:
+            return others[0]
+        if found:
+            return "full_time"
     return "unknown"
 
 

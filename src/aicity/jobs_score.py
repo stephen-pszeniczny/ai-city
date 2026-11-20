@@ -5,7 +5,7 @@ more "maybe", anything lower "skip". A clear skip verdict is an idea from
 career-ops (santifer/career-ops, MIT), rewritten here.
 
 Hard filters drop a posting outright (not remote, not open to Canada, full-time,
-known pay below the floor, an excluded word). Unclear things are kept with a
+a job type the profile doesn't list, known pay below the floor, an excluded word). Unclear things are kept with a
 flag instead: pay not listed, a range straddling the floor, Canada unknown.
 """
 
@@ -89,7 +89,11 @@ def score_posting(posting: Posting, profile: JobProfile, usd_rate: Decimal | Non
     points = (
         _skills_points(len(matched), len(background))
         + _pay_points(profile, hourly)
-        + (TITLE_POINTS if any(_has(posting.title.lower(), w) for w in profile.title_words) else 0)
+        + (
+            TITLE_POINTS
+            if any(_starts(posting.title.lower(), w) for w in profile.title_words)
+            else 0
+        )
         + _hours_points(posting.facts.hours, profile.hours)
     )
     verdict = "strong" if points >= STRONG_FROM else "maybe" if points >= MAYBE_FROM else "skip"
@@ -115,6 +119,8 @@ def _drop_reason(posting: Posting, profile: JobProfile, words: str, hourly) -> s
         return "not_canada"
     if facts.job_type == "full_time":
         return "full_time"
+    if facts.job_type != "unknown" and facts.job_type not in profile.job_types:
+        return "job_type"
     if hourly is not None and hourly[1] < profile.pay_floor_usd:
         return "below_floor"
     if any(_has(words, w) for w in profile.exclude_words):
@@ -162,6 +168,11 @@ def _hours_points(hours: tuple[int, int] | None, wanted: tuple[int, int]) -> int
     if hours is None or (hours[0] <= wanted[1] and wanted[0] <= hours[1]):
         return HOURS_POINTS
     return 0
+
+
+def _starts(text: str, phrase: str) -> bool:
+    """The phrase at the start of a word, so "red team" also finds "Red Teamer"."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}", text) is not None
 
 
 def _has(text: str, phrase: str) -> bool:

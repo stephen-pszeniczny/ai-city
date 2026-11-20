@@ -1,6 +1,8 @@
 """Opportunity Office: pasted leads, the inbox, lead statuses and platform stages.
 
 The inbox, for one search profile:
+Each list is ranked: leads with known hourly pay first, then by score, then by the
+low end of the pay in US dollars per hour.
 - New: status 'new' and either pasted, or from the newest scan within its top_n.
 - Earlier: status 'new' from an older scan (no longer counted in the badge).
 - More results: the newest scan past its top_n.
@@ -186,6 +188,8 @@ class JobsStore:
         }
         for row in rows:
             lists[self._place(row, latest)].append(self._to_view(row))
+        for views in lists.values():
+            views.sort(key=_rank)
         return Inbox(**lists)
 
     def set_status(self, lead_id: int, status: str, resume_label: str | None = None) -> LeadView:
@@ -527,6 +531,12 @@ def _optional_url(value) -> str | None:
     if not url.startswith("https://") or len(url) > URL_MAX:
         raise JobsError(f"A link must start with https:// (up to {URL_MAX} characters).")
     return url
+
+
+def _rank(lead: LeadView) -> tuple:
+    """Known pay first, then score, then the hourly low end in US dollars."""
+    pay = lead.pay_low_usd if lead.pay_low_usd is not None else lead.pay_high_usd
+    return (pay is None, -(lead.score or 0), -(pay or 0), lead.id)
 
 
 def _cents(dollars: Decimal | None) -> int | None:

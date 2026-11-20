@@ -96,3 +96,47 @@ def test_normalise_title():
 
 def test_normalise_company():
     assert normalise_company("Nimbus Data, Inc.") == normalise_company("nimbus data inc")
+
+
+# --- Final review fixes -----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "low", "currency"),
+    [
+        ("CAD $30/hr", 3000, "CAD"),
+        ("$40/hr CAD", 4000, "CAD"),
+        ("$40 per hour (CAD)", 4000, "CAD"),
+        ("USD $35/hr", 3500, "USD"),
+        ("40 USD/hr", 4000, "USD"),
+        ("45 CAD per hour", 4500, "CAD"),
+        ("$25 per hr", 2500, "USD"),
+    ],
+)
+def test_currency_words_around_the_figure(text, low, currency):
+    pay = parse_pay(text)
+    assert (pay.low, pay.currency, pay.unit) == (low, currency, "hour")
+
+
+def test_not_full_time_with_contract_is_contract():
+    assert (
+        read_facts("Evaluator", "Remote", "Not a full-time role; contract.", OK).job_type
+        == "contract"
+    )
+
+
+def test_part_time_wins_over_a_full_time_mention():
+    text = "Part-time. Full-time employees get benefits; this role doesn't."
+    assert read_facts("Evaluator", "Remote", text, OK).job_type == "part_time"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We cannot hire in Canada at this time.",
+        "Not available to candidates in Canada.",
+        "Unable to hire residents of Canada.",
+    ],
+)
+def test_negated_canada_is_no(text):
+    assert read_facts("Evaluator", "Remote", text, OK).canada_ok == "no"

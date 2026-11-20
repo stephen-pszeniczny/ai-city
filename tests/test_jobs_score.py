@@ -143,3 +143,20 @@ def test_weak_match_is_skip_verdict():
 
 def test_background_comes_from_the_profile_for_now():
     assert background_for(PROFILE) == PROFILE.skills
+
+
+def test_job_type_not_in_the_profile_is_dropped():
+    profile = replace(PROFILE, job_types=("contract", "part_time"))
+    result = score_posting(posting(facts=replace(FACTS, job_type="temporary")), profile, None)
+    assert (result.keep, result.drop_reason) == (False, "job_type")
+
+
+def test_unknown_job_type_is_kept():
+    profile = replace(PROFILE, job_types=("contract",))
+    assert score_posting(posting(facts=replace(FACTS, job_type="unknown")), profile, None).keep
+
+
+def test_title_word_matches_the_start_of_a_word():
+    plain = score_posting(posting(title="Evaluator"), PROFILE, None).score
+    teamer = score_posting(posting(title="AI Red Teamer"), PROFILE, None).score
+    assert teamer - plain == 15

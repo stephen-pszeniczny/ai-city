@@ -331,3 +331,25 @@ def test_nudges_oldest_first_at_most_two_and_snooze(store, clock):
 def test_platform_without_a_next_step_never_nudges(store):
     store.set_platform("platform_b", stage="applied")
     assert store.nudges() == []
+
+
+def test_known_pay_ranks_before_pay_not_listed(store):
+    unknown = paste(
+        store,
+        url="https://example.com/u",
+        title="AI Trainer one",
+        text="Contract. Python and technical writing. Pay on request.",
+    )
+    known = paste(store, url="https://example.com/k", title="Rater", text="Contract. $31/hr.")
+    assert unknown.score > known.score
+    assert [x.id for x in store.list_leads("ai_training").new] == [known.id, unknown.id]
+
+
+def test_ties_break_on_usd_hourly_low_end(store):
+    cad = paste(
+        store, url="https://example.com/c", title="Role c", text="Contract. $60 CAD per hour."
+    )
+    usd = paste(store, url="https://example.com/d", title="Role d", text="Contract. $45/hr.")
+    assert cad.score == usd.score
+    # 60 CAD = 42.86 USD, below 45 USD (both score 25 for pay)
+    assert [x.id for x in store.list_leads("ai_training").new] == [usd.id, cad.id]
