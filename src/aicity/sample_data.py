@@ -192,6 +192,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         seed_plan(conn, now)
         seed_checkin_notification(conn, now)
         seed_grocery(conn, now)
+        seed_jobs(conn, now)
         return seeded
     finally:
         conn.close()
@@ -329,6 +330,122 @@ def seed_grocery(conn: sqlite3.Connection, now: datetime) -> bool:
 
     with_transaction(conn, work, immediate=True)
     return True
+
+
+# --- Sample Opportunity Office ----------------------------------------------------------
+
+JOBS_SEEDED_KEY = "sample_jobs_seeded"
+
+# (company, title, location, text) for made-up postings. Text holds pay and skills.
+_SAMPLE_SCAN = (
+    (
+        "Nimbus Data",
+        "AI Red Teamer",
+        "Remote - Canada",
+        "Contract. $65 – $125 per hour. Python, technical writing, data analysis, spreadsheets.",
+    ),
+    (
+        "Orbit Labs",
+        "AI Trainer (Contract)",
+        "Remote - Worldwide",
+        "Contract, 10-15 hours per week. $45/hr. Python and technical writing.",
+    ),
+    ("Quasar Works", "Evaluator", "Remote", "Part-time. $35 per hour. Spreadsheets and SQL."),
+    (
+        "Comet Analytics",
+        "Annotation Specialist",
+        "Remote - North America",
+        "Contract. $28–$36/hr. Data analysis.",
+    ),
+    (
+        "Nebula AI",
+        "Writing Evaluator",
+        "Remote - Canada",
+        "Freelance. Technical writing. Pay depends on the project.",
+    ),
+    (
+        "Pulsar Group",
+        "Rater",
+        "Remote - Anywhere",
+        "Part-time. $32/hr. Statistics and JavaScript a plus.",
+    ),
+)
+_SAMPLE_EARLIER = ("Vega Studio", "Data Annotator", "Remote - Canada", "Contract. $38/hr. Python.")
+# (company, title, text, status, applied days ago)
+_SAMPLE_PASTED = (
+    ("Vega Studio", "AI Trainer", "Contract. $42/hr. Python and spreadsheets.", "new", None),
+    ("Orbit Labs", "QA Evaluator", "Part-time. $40/hr. Technical writing.", "saved", None),
+    ("Nimbus Data", "Prompt Writer", "Contract. $50/hr. Technical writing.", "applied", 12),
+    ("Comet Analytics", "Data Rater", "Contract. $34/hr. Spreadsheets.", "applied", 3),
+    ("Nebula AI", "Coding Evaluator", "Contract. $60/hr. Python.", "interview", 9),
+    ("Pulsar Group", "Search Rater", "Part-time. $31/hr.", "skipped", None),
+)
+
+
+def seed_jobs(conn: sqlite3.Connection, now: datetime) -> bool:
+    """Made-up leads in every list and platforms at different stages, once. Sample only."""
+    from aicity.jobs_store import JobsStore
+
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("Sample leads only go into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (JOBS_SEEDED_KEY,)).fetchone():
+        return False
+    clock = _StepClock(now)
+    store = JobsStore(conn, SAMPLE_JOBS, clock=clock, usd_rate=sample_rate(now.date()))
+
+    def work() -> None:
+        old = _sample_scan_run(conn, now - timedelta(days=7))
+        _sample_scanned(conn, store, old, 1, _SAMPLE_EARLIER)
+        latest = _sample_scan_run(conn, now - timedelta(hours=1))
+        for rank, posting in enumerate(_SAMPLE_SCAN, start=1):
+            _sample_scanned(conn, store, latest, rank, posting)
+        for n, (company, title, text, status, days_ago) in enumerate(_SAMPLE_PASTED, start=1):
+            clock.now = now - timedelta(days=days_ago or 1)
+            lead = store.paste(
+                url=f"https://example.com/sample-job/{n}",
+                title=title,
+                company=company,
+                location="Remote - Canada",
+                text=text,
+                profile_id="ai_training",
+            )
+            if status in ("applied", "interview"):
+                store.set_status(lead.id, "applied", "v1 sample")
+            if status != "new" and status != "applied":
+                store.set_status(lead.id, status)
+        clock.now = now - timedelta(days=2)
+        store.set_platform("orbit", stage="assessment", next_step="Finish the skills test")
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (JOBS_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
+    return True
+
+
+def _sample_scan_run(conn: sqlite3.Connection, when: datetime) -> int:
+    stamp = when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return conn.execute(
+        "INSERT INTO job_scan_runs (started_at, finished_at, outcome_json) VALUES (?, ?, ?)",
+        (stamp, stamp, '[{"source": "sample_board", "ok": true, "count": 6}]'),
+    ).lastrowid
+
+
+def _sample_scanned(conn, store, batch: int, rank: int, posting: tuple) -> None:
+    """A scanned lead: paste it (to read and score it), then mark it as from the scan."""
+    company, title, location, text = posting
+    lead = store.paste(
+        url=None,
+        title=title,
+        company=company,
+        location=location,
+        text=text,
+        profile_id="ai_training",
+    )
+    conn.execute(
+        "UPDATE job_leads SET origin = 'sample_board', external_id = ?, batch_id = ?, "
+        "batch_rank = ? WHERE id = ?",
+        (f"sample-{batch}-{rank}", batch, rank, lead.id),
+    )
 
 
 CHECKIN_SEEDED_KEY = "sample_checkin_seeded"
