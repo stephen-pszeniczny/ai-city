@@ -25,6 +25,7 @@ from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transa
 from aicity.fx import rate_on
 from aicity.grocery import GroceryStore
 from aicity.income import IncomeStore
+from aicity.jobs_settings import JobPlatform, JobProfile, JobSource, JobsSettings
 from aicity.notifications import SINCE_KEY
 from aicity.plan import PlanStore, monday_of
 from aicity.settings import (
@@ -79,6 +80,48 @@ SAMPLE_ROUTINES: tuple[Routine, ...] = (
 
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
+)
+
+# Sample mode's Opportunity Office settings: made-up platforms and skills, never the
+# private settings. The source is never scanned (Sample mode never reaches the internet).
+SAMPLE_JOBS = JobsSettings(
+    scan_day=6,
+    scan_time=time(19, 0),
+    top_n=10,
+    follow_up_days=10,
+    roll_off_days=90,
+    profiles=(
+        JobProfile(
+            id="ai_training",
+            name="AI training",
+            active=True,
+            pay_floor_usd=Decimal(30),
+            pay_preferred_usd=Decimal(40),
+            hours=(10, 15),
+            job_types=("contract", "part_time", "temporary", "freelance"),
+            title_words=("ai trainer", "evaluator", "red team", "annotator"),
+            exclude_words=("recruiter", "sales"),
+            location_ok=("canada", "worldwide", "anywhere", "north america"),
+            skills=("python", "technical writing", "data analysis", "spreadsheets"),
+            gap_words=("sql", "javascript", "statistics"),
+        ),
+    ),
+    sources=(
+        JobSource(
+            id="sample_board",
+            name="Sample Board",
+            kind="greenhouse",
+            board="sampleboard",
+            profiles=("ai_training",),
+            enabled=False,
+        ),
+    ),
+    platforms=(
+        JobPlatform("nimbus", "Nimbus Experts", "https://example.com/nimbus", "active"),
+        JobPlatform("orbit", "Orbit Raters", "https://example.com/orbit", "not_joined"),
+        JobPlatform("quasar", "Quasar Tasks", "https://example.com/quasar", "not_joined"),
+        JobPlatform("comet", "Comet Labs", "https://example.com/comet", "not_joined"),
+    ),
 )
 
 
