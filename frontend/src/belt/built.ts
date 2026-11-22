@@ -3,4 +3,4 @@
 // Add a building's ID here in the phase that finishes it.
 import type { BuildingId } from "../api";
 
-export const BUILT: ReadonlySet<BuildingId> = new Set<BuildingId>(["planner", "finance"]);
+export const BUILT: ReadonlySet<BuildingId> = new Set<BuildingId>(["planner", "finance", "jobs"]);

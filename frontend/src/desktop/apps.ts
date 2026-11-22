@@ -1,6 +1,6 @@
 // The apps on each building's desktop (its modules, spec section 7).
 // Built so far: Mission Control's To-do, Daily plan, Sunday check-in and Grocery list, and the Vault's
-// Income, Side work and Statements;
+// Income, Side work and Statements, and Opportunity Office's Platforms and Log;
 // the rest is "later" or under construction.
 import type { BuildingId } from "../api";
 
@@ -21,8 +21,15 @@ const VAULT: readonly App[] = [
   { id: "statements", name: "Statements", ready: true },
 ];
 
+// Platforms first: the roster is the core of Opportunity Office.
+const OPPORTUNITY_OFFICE: readonly App[] = [
+  { id: "platforms", name: "Platforms", ready: true },
+  { id: "log", name: "Log", ready: true },
+];
+
 export function appsFor(id: BuildingId): App[] {
   if (id === "planner") return MISSION_CONTROL.map((a) => ({ ...a }));
   if (id === "finance") return VAULT.map((a) => ({ ...a }));
+  if (id === "jobs") return OPPORTUNITY_OFFICE.map((a) => ({ ...a }));
   return [{ id: "construction", name: "Under construction", ready: false }];
 }

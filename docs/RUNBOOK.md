@@ -140,6 +140,12 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Grocery list (Mission Control)** → open Mission Control's computer → **Grocery list**. Type an item and press Enter. Tap a chip to tick it (tap again to untick); **×** takes one item off the list; **Clear ticked** takes off everything you've bought. Typing a name that's already on the list (any capitals) doesn't add it twice; if it was ticked, it comes back unticked. Nothing is deleted, only hidden. The Daily plan's grocery day shows how many items are left ("🛒 Grocery day · 5 items"), and so does the Sunday check-in. The list reaches the phone in Phase 2.
 
+**Opportunity Office says "isn't set up yet"** → add a `[jobs]` section to the settings file (copy the commented example in `settings.example.toml`): one `[[jobs.platforms]]` per platform with a short lowercase `id`, the `name`, its login page `url` (https) and a `start_status`. No restart needed: reopen the app. Old keys from the first design (`profiles`, `sources`, scan settings) are refused with a message saying to remove them.
+
+**Checking platforms (Opportunity Office)** → each platform is due for a check by its status: active every 3 days, applied / assessment / onboarding weekly, paused monthly, not applied and rejected never (change the days under `[jobs.check_days]`). The belt label shows "N platforms to check". The Sunday check-in lists the ones due: **Open** goes to its login page, **Nothing new** stamps today, **Found something** logs the project (that counts as the check too). Changing a platform's status also starts its check clock again. Opportunity Office asks for Touch ID once per app session, like the Vault.
+
+**Logging a project (Opportunity Office)** → computer → **Log** → *+ Log a project*: the platform, a title in your own words (never copy the platform's description), pay per hour with USD or CAD, hours a week. Tap a status to move it on; **Ended** when it finishes. Below the pay floor shows a warning chip. A project marked **Active** puts its platform in the Vault's Log work company list.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---

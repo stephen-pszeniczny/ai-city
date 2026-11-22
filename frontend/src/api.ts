@@ -329,6 +329,8 @@ export type SideWorkView = {
     rates_pending: boolean;
   };
   schedules: { id: string; name: string }[];
+  /** Opportunity Office platforms with an active project, offered as companies. */
+  active_platforms: string[];
   groups: SideWorkGroup[];
   bonuses: SideWorkPayment[];
   extras: SideWorkPayment[];
@@ -657,3 +659,127 @@ async function errorMessage(response: Response): Promise<string> {
   }
   return `The engine answered with an error (${response.status}).`;
 }
+
+// --- Opportunity Office (the platform tracker) ----------------------------------------
+
+export type PlatformStatus =
+  "not_applied" | "applied" | "assessment" | "onboarding" | "active" | "paused" | "rejected";
+
+export type PlatformCard = {
+  id: string;
+  name: string;
+  url: string;
+  status: PlatformStatus;
+  status_at: string | null;
+  last_checked_at: string | null;
+  next_check_on: string | null;
+  due: boolean;
+  pay_low_cents: number | null;
+  pay_high_cents: number | null;
+  pay_currency: "USD" | "CAD" | null;
+  resume_label: string | null;
+  domains: string[];
+  assessments: string[];
+  profile_updated_on: string | null;
+  refresh_due: boolean;
+};
+
+export type ProjectStatus =
+  "found" | "applied" | "assessment" | "accepted" | "rejected" | "active" | "ended";
+
+export type ProjectView = {
+  id: number;
+  platform_id: string;
+  platform_name: string;
+  title: string;
+  pay_cents: number | null;
+  currency: "USD" | "CAD" | null;
+  pay_usd_cents: number | null;
+  pay_cad_cents: number | null;
+  hours_per_week: number | null;
+  status: ProjectStatus;
+  found_on: string;
+  status_at: string;
+  flags: string[];
+};
+
+export type PlatformsView = {
+  platforms: PlatformCard[];
+  due: PlatformCard[];
+  refresh: PlatformCard[];
+};
+export type ProjectsView = {
+  projects: ProjectView[];
+  rate: { value: string; date: string } | null;
+  floor_usd: string;
+  preferred_usd: string;
+};
+export type NewProject = {
+  platform_id: string;
+  title: string;
+  pay_cents: number | null;
+  currency: "USD" | "CAD" | null;
+  hours_per_week: number | null;
+};
+export type ProfileEdit = Partial<
+  Pick<
+    PlatformCard,
+    | "pay_low_cents"
+    | "pay_high_cents"
+    | "pay_currency"
+    | "resume_label"
+    | "domains"
+    | "assessments"
+    | "profile_updated_on"
+  >
+>;
+
+// The Opportunity Office key from Touch ID: memory only, like the Vault's.
+let jobsKey: string | null = null;
+const jobsLockListeners = new Set<() => void>();
+
+/** Be told when the engine says Opportunity Office is locked again. */
+export function onJobsLocked(listener: () => void): () => void {
+  jobsLockListeners.add(listener);
+  return () => jobsLockListeners.delete(listener);
+}
+
+export const hasJobsKey = () => jobsKey !== null;
+
+export async function unlockJobs(): Promise<void> {
+  const { key } = await request<{ key: string | null }>("POST", "/api/jobs/unlock");
+  jobsKey = key;
+}
+
+async function jobs<T>(method: string, path: string, body?: unknown): Promise<T> {
+  try {
+    return await request<T>(
+      method,
+      `/api/jobs${path}`,
+      body,
+      jobsKey ? { "X-Jobs-Key": jobsKey } : undefined,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) {
+      jobsKey = null; // locked again
+      jobsLockListeners.forEach((listener) => listener());
+    }
+    throw err;
+  }
+}
+
+/** Counts only ("2 platforms to check"), so it needs no Touch ID. */
+export const getJobsBadge = () => request<{ text: string | null }>("GET", "/api/jobs/badge");
+export const getPlatforms = () => jobs<PlatformsView>("GET", "/platforms");
+export const setPlatformStatus = (id: string, status: PlatformStatus) =>
+  jobs<PlatformCard>("PUT", `/platforms/${id}/status`, { status });
+export const checkPlatform = (id: string, outcome: "nothing" | "found") =>
+  jobs<PlatformCard>("POST", `/platforms/${id}/check`, { outcome });
+export const setPlatformProfile = (id: string, edit: ProfileEdit) =>
+  jobs<PlatformCard>("PUT", `/platforms/${id}/profile`, edit);
+export const getProjects = () => jobs<ProjectsView>("GET", "/projects");
+export const addProject = (p: NewProject) => jobs<ProjectView>("POST", "/projects", p);
+export const editProject = (id: number, edit: Partial<Omit<NewProject, "platform_id">>) =>
+  jobs<ProjectView>("PUT", `/projects/${id}`, edit);
+export const setProjectStatus = (id: number, status: ProjectStatus) =>
+  jobs<ProjectView>("POST", `/projects/${id}/status`, { status });

@@ -4,7 +4,14 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CSSProperties, RefObject } from "react";
 
-import { getBuildings, getCheckin, getVaultBadge, listTasks, type BuildingId } from "../api";
+import {
+  getBuildings,
+  getCheckin,
+  getJobsBadge,
+  getVaultBadge,
+  listTasks,
+  type BuildingId,
+} from "../api";
 import { plannerBadge } from "./badges";
 import { BUILT } from "./built";
 import { tintOf } from "./tints";
@@ -34,6 +41,13 @@ export function Labels({
     refetchInterval: 60_000,
     retry: false,
   });
+  // Opportunity Office: "2 platforms to check". Counts only, so no Touch ID.
+  const jobs = useQuery({
+    queryKey: ["jobs-badge"],
+    queryFn: getJobsBadge,
+    refetchInterval: 60_000,
+    retry: false,
+  });
   // "Check-in due" from Sunday noon until the coming week is planned (read only).
   const checkin = useQuery({
     queryKey: ["plan-checkin"],
@@ -44,6 +58,7 @@ export function Labels({
   const badges: Partial<Record<BuildingId, string | null>> = {
     planner: open.data ? plannerBadge(open.data, new Date(), checkin.data?.due ?? false) : null,
     finance: vault.data?.text ?? null,
+    jobs: jobs.data?.text ?? null,
   };
 
   return (
