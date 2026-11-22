@@ -1,119 +1,109 @@
-"""Opportunity Office: pasted leads, the inbox, lead statuses and platform stages.
+"""Opportunity Office: the platform roster, check rounds, profiles and the opportunity log.
 
-The inbox, for one search profile:
-Each list is ranked: leads with known hourly pay first, then by score, then by the
-low end of the pay in US dollars per hour.
-- New: status 'new' and either pasted, or from the newest scan within its top_n.
-- Earlier: status 'new' from an older scan (no longer counted in the badge).
-- More results: the newest scan past its top_n.
-- Saved; Applied (applied, interview, offer); Closed (rejected, skipped, or a
-  new or saved lead whose posting has closed).
-Filtered, expired and merged (repost) leads are never shown.
+A platform's status is its latest status event, or the settings' start_status when it
+has none. Each status (except not_applied and rejected) has a check interval in days
+(settings check_days). The next check is due that many days after the later of its
+last check and its last status change; a platform with no history is due today.
 
-A pasted role that matches an earlier one (same link, or the same company and
-title within 30 days) joins it, filling only fields that were empty. Pasted
-links are stored, never fetched. Platform state is the latest event row, or the
-settings' start stage when there is none.
+A profile refresh is due for a platform that has applied or gone further (not
+rejected) when its profile date is missing or 90+ days old, or its resume label
+differs from the master resume label.
 
-Stamps are UTC like 2026-11-29T15:00:00Z. The clock is passed in, so tests can use a fake one.
+Logged projects move forward along found -> applied -> assessment -> accepted ->
+active -> ended (skipping is fine), or to rejected before they're active. Rejected
+and ended are final. Pay is one hourly figure in USD or CAD, converted with the
+Bank of Canada rate (CAD per USD) when known; below the floor is flagged only when
+the US-dollar figure is known.
+
+Dates are the Mac's local date; stamps are UTC like 2026-11-29T15:00:00Z. Platforms
+removed from settings are not shown; their projects show the platform id as its name.
 """
 
 import json
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from aicity.db import with_transaction
-from aicity.jobs_score import Posting, hourly_usd, score_posting
-from aicity.jobs_settings import STAGES, JobProfile, JobsSettings
-from aicity.jobs_text import Facts, Pay, normalise_company, normalise_title, parse_pay, read_facts
+from aicity.jobs_settings import STATUSES, JobPlatform, JobsSettings
 from aicity.tasks import utc_now
 
-TITLE_MAX = 200
-COMPANY_MAX = 120
-LOCATION_MAX = 200
-URL_MAX = 500
-TEXT_MAX = 20_000
-EXCERPT_MAX = 4000
+PROJECT_STATUSES = ("found", "applied", "assessment", "accepted", "rejected", "active", "ended")
+_FORWARD = ("found", "applied", "assessment", "accepted", "active", "ended")
+_FINAL = ("rejected", "ended")
+_CHECK_OUTCOMES = ("nothing", "found")
+REFRESH_DAYS = 90
+TITLE_MAX = 80
 LABEL_MAX = 40
-NEXT_STEP_MAX = 100
-SAME_ROLE_DAYS = 30
-SNOOZE_DAYS = 28
-STATUSES = ("new", "saved", "skipped", "applied", "interview", "offer", "rejected")
-_NEXT = {
-    "new": {"new", "saved", "skipped", "applied"},
-    "saved": {"new", "saved", "skipped", "applied"},
-    "skipped": {"new", "saved", "skipped", "applied"},
-    "applied": {"interview", "offer", "rejected"},
-    "interview": {"offer", "rejected"},
-}
+TAG_MAX = 40
+TAGS_MAX = 20
+HOURS_MAX = 80
+_CURRENCIES = ("USD", "CAD")
 _STAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-_LEAD_COLUMNS = (
-    "l.id, l.origin, l.url, l.title, l.company, l.location, l.remote, l.canada_ok, "
-    "l.job_type, l.pay_low, l.pay_high, l.pay_currency, l.pay_unit, l.pay_text, l.status, "
-    "l.applied_at, l.resume_label, s.score, s.verdict, s.matched_json, s.gaps_json, "
-    "s.flags_json, l.closed_at, l.batch_id, l.batch_rank"
+_PROFILE_FIELDS = {
+    "pay_low_cents",
+    "pay_high_cents",
+    "pay_currency",
+    "resume_label",
+    "domains",
+    "assessments",
+    "profile_updated_on",
+}
+_PROJECT_FIELDS = {"title", "pay_cents", "currency", "hours_per_week"}
+_PROJECT_COLUMNS = (
+    "id, platform_id, title, pay_cents, currency, hours_per_week, status, found_on, status_at"
 )
 
 
 class JobsError(ValueError):
-    """A change that isn't allowed as given. The message is safe to show."""
+    """Bad input; the message says what to fix."""
 
 
 class JobsNotFound(LookupError):
-    """No lead, profile or platform with that ID."""
+    """No platform or project with that ID."""
 
 
 class JobsConflict(Exception):
-    """A status change the lead's current status doesn't allow."""
+    """The change isn't allowed from the current status."""
 
 
 @dataclass(frozen=True)
-class LeadView:
-    id: int
-    origin: str
-    url: str | None
-    title: str
-    company: str
-    location: str
-    remote: str
-    canada_ok: str
-    job_type: str
-    pay_low_usd: int | None  # US cents per hour
-    pay_high_usd: int | None
-    pay_text: str
-    status: str
-    applied_at: str | None
-    resume_label: str | None
-    score: int | None
-    verdict: str | None
-    matched: list[str]
-    gaps: list[str]
-    flags: list[str]
-    closed: bool
-
-
-@dataclass(frozen=True)
-class Inbox:
-    new: list[LeadView]
-    earlier: list[LeadView]
-    more: list[LeadView]
-    saved: list[LeadView]
-    applied: list[LeadView]
-    closed: list[LeadView]
-
-
-@dataclass(frozen=True)
-class PlatformView:
+class PlatformCard:
     id: str
     name: str
     url: str
-    stage: str
-    next_step: str
-    snoozed_until: str | None
-    changed_at: str | None
+    status: str
+    status_at: str | None
+    last_checked_at: str | None
+    next_check_on: str | None
+    due: bool
+    pay_low_cents: int | None
+    pay_high_cents: int | None
+    pay_currency: str | None
+    resume_label: str | None
+    domains: list[str]
+    assessments: list[str]
+    profile_updated_on: str | None
+    refresh_due: bool
+
+
+@dataclass(frozen=True)
+class ProjectView:
+    id: int
+    platform_id: str
+    platform_name: str
+    title: str
+    pay_cents: int | None
+    currency: str | None
+    pay_usd_cents: int | None
+    pay_cad_cents: int | None
+    hours_per_week: int | None
+    status: str
+    found_on: str
+    status_at: str
+    flags: list[str]
 
 
 class JobsStore:
@@ -132,377 +122,251 @@ class JobsStore:
         self._clock = clock
         self._rate = usd_rate
 
-    # --- Leads ------------------------------------------------------------
+    # --- Roster -----------------------------------------------------------------
 
-    def paste(
-        self,
-        *,
-        url: str | None,
-        title: str,
-        company: str,
-        location: str,
-        text: str,
-        profile_id: str,
-    ) -> LeadView:
-        profile = self._profile(profile_id)
-        url = _optional_url(url)
-        title = _required_text(title, "title", TITLE_MAX)
-        company = _required_text(company, "company", COMPANY_MAX)
-        location = (location or "").strip()
-        if len(location) > LOCATION_MAX:
-            raise JobsError(f"The location can be at most {LOCATION_MAX} characters.")
-        text = text if isinstance(text, str) else ""
-        if len(text) > TEXT_MAX:
-            raise JobsError(f"The job text can be at most {TEXT_MAX} characters.")
-        pay = parse_pay(text)
-        facts = read_facts(title, location, text, profile.location_ok)
-        excerpt = text.strip()[:EXCERPT_MAX]
+    def platforms(self) -> list[PlatformCard]:
+        return [self._card(p) for p in self._settings.platforms]
 
-        def work() -> int:
-            stamp = self._stamp()
-            existing = self._same_role(url, title, company)
-            if existing is None:
-                lead_id = self._insert_pasted(url, title, company, location, excerpt, pay, facts)
-            else:
-                lead_id = existing
-                self._fill(lead_id, url, location, excerpt, pay, facts)
-            self._conn.execute("UPDATE job_leads SET last_seen = ? WHERE id = ?", (stamp, lead_id))
-            self._rescore(lead_id, profile)
-            return lead_id
+    def due(self) -> list[PlatformCard]:
+        return [c for c in self.platforms() if c.due]
 
-        lead_id = with_transaction(self._conn, work, immediate=True)
-        return self._view(lead_id, profile.id)
+    def due_count(self) -> int:
+        return len(self.due())
 
-    def list_leads(self, profile_id: str) -> Inbox:
-        profile = self._profile(profile_id)
-        latest = self._latest_batch()
-        rows = self._conn.execute(
-            f"SELECT {_LEAD_COLUMNS} FROM job_leads l "
-            "JOIN job_lead_scores s ON s.lead_id = l.id AND s.profile_id = ? "
-            "WHERE l.merged_into IS NULL AND l.status NOT IN ('filtered', 'expired') "
-            "ORDER BY s.score DESC, coalesce(l.pay_low, l.pay_high, 0) DESC, l.id",
-            (profile.id,),
-        ).fetchall()
-        lists: dict[str, list[LeadView]] = {
-            k: [] for k in ("new", "earlier", "more", "saved", "applied", "closed")
-        }
-        for row in rows:
-            lists[self._place(row, latest)].append(self._to_view(row))
-        for views in lists.values():
-            views.sort(key=_rank)
-        return Inbox(**lists)
-
-    def set_status(self, lead_id: int, status: str, resume_label: str | None = None) -> LeadView:
+    def set_status(self, platform_id: str, status: str) -> PlatformCard:
+        platform = self._platform(platform_id)
         if status not in STATUSES:
             raise JobsError(f"Status must be one of: {', '.join(STATUSES)}.")
-        label = None
-        if status == "applied":
-            label = resume_label.strip() if isinstance(resume_label, str) else ""
-            if not 1 <= len(label) <= LABEL_MAX:
-                raise JobsError(f"Applying needs a resume label of 1 to {LABEL_MAX} characters.")
+        self._write(
+            "INSERT INTO platform_status_events (platform_id, status, changed_at) VALUES (?, ?, ?)",
+            (platform_id, status, self._stamp()),
+        )
+        return self._card(platform)
 
-        def work() -> None:
-            row = self._conn.execute(
-                "SELECT status FROM job_leads WHERE id = ? AND merged_into IS NULL", (lead_id,)
-            ).fetchone()
-            if row is None:
-                raise JobsNotFound(f"No lead with ID {lead_id}.")
-            if status not in _NEXT.get(row[0], set()):
-                raise JobsConflict(f"A lead that's {row[0]} can't be marked {status}.")
-            stamp = self._stamp()
-            if status == "applied":
-                self._conn.execute(
-                    "UPDATE job_leads SET status = ?, status_at = ?, applied_at = ?, "
-                    "resume_label = ? WHERE id = ?",
-                    (status, stamp, stamp, label, lead_id),
-                )
-            else:
-                self._conn.execute(
-                    "UPDATE job_leads SET status = ?, status_at = ? WHERE id = ?",
-                    (status, stamp, lead_id),
-                )
+    def record_check(self, platform_id: str, outcome: str) -> PlatformCard:
+        platform = self._platform(platform_id)
+        if outcome not in _CHECK_OUTCOMES:
+            raise JobsError("A check is either 'nothing' or 'found'.")
+        self._write(
+            "INSERT INTO platform_checks (platform_id, outcome, checked_at) VALUES (?, ?, ?)",
+            (platform_id, outcome, self._stamp()),
+        )
+        return self._card(platform)
 
-        with_transaction(self._conn, work, immediate=True)
-        return self._view(lead_id, None)
+    def set_profile(self, platform_id: str, **fields) -> PlatformCard:
+        platform = self._platform(platform_id)
+        unknown = set(fields) - _PROFILE_FIELDS
+        if unknown:
+            raise JobsError(f"Unknown profile field(s): {', '.join(sorted(unknown))}.")
+        row = _checked_profile({**self._profile(platform_id), **fields})
+        self._write(
+            "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
+            "pay_currency, resume_label, domains_json, assessments_json, profile_updated_on, "
+            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (platform_id) DO UPDATE SET pay_low_cents = excluded.pay_low_cents, "
+            "pay_high_cents = excluded.pay_high_cents, pay_currency = excluded.pay_currency, "
+            "resume_label = excluded.resume_label, domains_json = excluded.domains_json, "
+            "assessments_json = excluded.assessments_json, "
+            "profile_updated_on = excluded.profile_updated_on, updated_at = excluded.updated_at",
+            (platform_id, *row, self._stamp()),
+        )
+        return self._card(platform)
 
-    def skip_rest(self, profile_id: str) -> int:
-        """Skip every lead in the New list. Returns how many."""
+    # --- Opportunity log --------------------------------------------------------
 
-        def work() -> int:
-            ids = [lead.id for lead in self.list_leads(profile_id).new]
-            stamp = self._stamp()
-            for lead_id in ids:
-                self._conn.execute(
-                    "UPDATE job_leads SET status = 'skipped', status_at = ? WHERE id = ?",
-                    (stamp, lead_id),
-                )
-            return len(ids)
+    def projects(self) -> list[ProjectView]:
+        rows = self._conn.execute(f"SELECT {_PROJECT_COLUMNS} FROM job_projects").fetchall()
+        views = [self._project_view(r) for r in rows]
+        return sorted(
+            views, key=lambda v: (v.status in _FINAL, PROJECT_STATUSES.index(v.status), -v.id)
+        )
 
-        return with_transaction(self._conn, work, immediate=True)
-
-    def badge_counts(self, profile_id: str) -> dict[str, int]:
-        return {"new": len(self.list_leads(profile_id).new)}
-
-    # --- Platforms --------------------------------------------------------
-
-    def platforms(self) -> list[PlatformView]:
-        return [self._platform_view(p.id) for p in self._settings.platforms]
-
-    def set_platform(
+    def add_project(
         self,
-        platform_id: str,
         *,
-        stage: str | None = None,
-        next_step: str | None = None,
-        snooze: bool = False,
-    ) -> PlatformView:
-        current = self._platform_view(platform_id)
-        if stage is not None and stage not in STAGES:
-            raise JobsError(f"Stage must be one of: {', '.join(STAGES)}.")
-        if next_step is not None:
-            if not isinstance(next_step, str) or len(next_step.strip()) > NEXT_STEP_MAX:
-                raise JobsError(f"A next step can be at most {NEXT_STEP_MAX} characters.")
-            next_step = next_step.strip()
-        snoozed = (
-            (self._today() + timedelta(days=SNOOZE_DAYS)).isoformat()
-            if snooze
-            else current.snoozed_until
+        platform_id: str,
+        title: str,
+        pay_cents: int | None,
+        currency: str | None,
+        hours_per_week: int | None,
+    ) -> ProjectView:
+        self._platform(platform_id)
+        values = _checked_project(
+            {
+                "title": title,
+                "pay_cents": pay_cents,
+                "currency": currency,
+                "hours_per_week": hours_per_week,
+            }
         )
+        project_id = self._write(
+            "INSERT INTO job_projects (platform_id, title, pay_cents, currency, hours_per_week, "
+            "status, found_on, status_at) VALUES (?, ?, ?, ?, ?, 'found', ?, ?)",
+            (platform_id, *values, self._today().isoformat(), self._stamp()),
+        )
+        return self._project(project_id)
 
-        def work() -> None:
-            self._conn.execute(
-                "INSERT INTO job_platform_events "
-                "(platform_id, stage, next_step, snoozed_until, changed_at) VALUES (?, ?, ?, ?, ?)",
-                (
-                    platform_id,
-                    stage if stage is not None else current.stage,
-                    next_step if next_step is not None else current.next_step,
-                    snoozed,
-                    self._stamp(),
-                ),
-            )
+    def edit_project(self, project_id: int, **fields) -> ProjectView:
+        unknown = set(fields) - _PROJECT_FIELDS
+        if unknown:
+            raise JobsError(f"Unknown project field(s): {', '.join(sorted(unknown))}.")
+        current = self._project(project_id)
+        values = _checked_project(
+            {
+                "title": current.title,
+                "pay_cents": current.pay_cents,
+                "currency": current.currency,
+                "hours_per_week": current.hours_per_week,
+                **fields,
+            }
+        )
+        self._write(
+            "UPDATE job_projects SET title = ?, pay_cents = ?, currency = ?, hours_per_week = ? "
+            "WHERE id = ?",
+            (*values, project_id),
+        )
+        return self._project(project_id)
 
-        with_transaction(self._conn, work, immediate=True)
-        return self._platform_view(platform_id)
+    def set_project_status(self, project_id: int, status: str) -> ProjectView:
+        if status not in PROJECT_STATUSES:
+            raise JobsError(f"Status must be one of: {', '.join(PROJECT_STATUSES)}.")
+        current = self._project(project_id)
+        if not _can_move(current.status, status):
+            raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
+        self._write(
+            "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
+            (status, self._stamp(), project_id),
+        )
+        return self._project(project_id)
 
-    def nudges(self, limit: int = 2) -> list[PlatformView]:
-        """Platforms with a next step and not snoozed, oldest change first."""
-        today = self._today().isoformat()
-        waiting = [
-            p
-            for p in self.platforms()
-            if p.next_step and (p.snoozed_until is None or p.snoozed_until <= today)
-        ]
-        waiting.sort(key=lambda p: (p.changed_at or "", self._latest_event_id(p.id)))
-        return waiting[:limit]
-
-    # --- Helpers: leads ---------------------------------------------------
-
-    def _profile(self, profile_id: str) -> JobProfile:
-        for profile in self._settings.profiles:
-            if profile.id == profile_id:
-                return profile
-        raise JobsNotFound("No search profile with that ID.")
-
-    def _same_role(self, url: str | None, title: str, company: str) -> int | None:
-        if url:
-            row = self._conn.execute(
-                "SELECT id FROM job_leads WHERE url = ? AND merged_into IS NULL ORDER BY id LIMIT 1",
-                (url,),
-            ).fetchone()
-            if row:
-                return row[0]
-        since = (self._clock() - timedelta(days=SAME_ROLE_DAYS)).astimezone(UTC)
-        want = (normalise_company(company), normalise_title(title))
+    def active_platform_names(self) -> list[str]:
         rows = self._conn.execute(
-            "SELECT id, company, title FROM job_leads WHERE merged_into IS NULL "
-            "AND first_seen >= ? ORDER BY id",
-            (since.strftime(_STAMP_FORMAT),),
+            "SELECT DISTINCT platform_id FROM job_projects WHERE status = 'active'"
         ).fetchall()
-        for lead_id, other_company, other_title in rows:
-            if (normalise_company(other_company), normalise_title(other_title)) == want:
-                return lead_id
-        return None
+        active = {r[0] for r in rows}
+        return [p.name for p in self._settings.platforms if p.id in active]
 
-    def _insert_pasted(self, url, title, company, location, excerpt, pay: Pay, facts: Facts):
-        stamp = self._stamp()
-        hours = facts.hours or (None, None)
-        return self._conn.execute(
-            "INSERT INTO job_leads (origin, url, title, company, location, remote, canada_ok, "
-            "job_type, pay_low, pay_high, pay_currency, pay_unit, pay_text, hours_low, "
-            "hours_high, excerpt, first_seen, last_seen, status, status_at) "
-            "VALUES ('pasted', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)",
-            (
-                url,
-                title,
-                company,
-                location,
-                facts.remote,
-                facts.canada_ok,
-                facts.job_type,
-                pay.low,
-                pay.high,
-                pay.currency,
-                pay.unit,
-                pay.text,
-                hours[0],
-                hours[1],
-                excerpt,
-                stamp,
-                stamp,
-                stamp,
-            ),
-        ).lastrowid
+    # --- Helpers: platforms -----------------------------------------------------
 
-    def _fill(self, lead_id: int, url, location, excerpt, pay: Pay, facts: Facts) -> None:
-        """Fill only the fields that are still empty or unknown."""
-        hours = facts.hours or (None, None)
-        self._conn.execute(
-            "UPDATE job_leads SET "
-            "url = coalesce(url, ?), "
-            "location = CASE WHEN location = '' THEN ? ELSE location END, "
-            "excerpt = CASE WHEN excerpt = '' THEN ? ELSE excerpt END, "
-            "remote = CASE WHEN remote = 'unknown' THEN ? ELSE remote END, "
-            "canada_ok = CASE WHEN canada_ok = 'unknown' THEN ? ELSE canada_ok END, "
-            "job_type = CASE WHEN job_type = 'unknown' THEN ? ELSE job_type END, "
-            "hours_low = CASE WHEN hours_low IS NULL THEN ? ELSE hours_low END, "
-            "hours_high = CASE WHEN hours_low IS NULL THEN ? ELSE hours_high END WHERE id = ?",
-            (
-                url,
-                location,
-                excerpt,
-                facts.remote,
-                facts.canada_ok,
-                facts.job_type,
-                hours[0],
-                hours[1],
-                lead_id,
-            ),
-        )
-        if pay.unit != "unknown":
-            self._conn.execute(
-                "UPDATE job_leads SET pay_low = ?, pay_high = ?, pay_currency = ?, pay_unit = ?, "
-                "pay_text = ? WHERE id = ? AND pay_unit = 'unknown'",
-                (pay.low, pay.high, pay.currency, pay.unit, pay.text, lead_id),
-            )
+    def _platform(self, platform_id: str) -> JobPlatform:
+        for platform in self._settings.platforms:
+            if platform.id == platform_id:
+                return platform
+        raise JobsNotFound("No platform with that ID.")
 
-    def _rescore(self, lead_id: int, profile: JobProfile) -> None:
-        r = self._conn.execute(
-            "SELECT title, company, location, excerpt, pay_low, pay_high, pay_currency, "
-            "pay_unit, pay_text, remote, canada_ok, job_type, hours_low, hours_high "
-            "FROM job_leads WHERE id = ?",
-            (lead_id,),
+    def _card(self, platform: JobPlatform) -> PlatformCard:
+        status_row = self._conn.execute(
+            "SELECT status, changed_at FROM platform_status_events WHERE platform_id = ? "
+            "ORDER BY id DESC LIMIT 1",
+            (platform.id,),
         ).fetchone()
-        hours = (r[12], r[13]) if r[12] is not None else None
-        posting = Posting(
-            title=r[0],
-            company=r[1],
-            location=r[2],
-            text=r[3],
-            pay=Pay(r[4], r[5], r[6], r[7], r[8]),
-            facts=Facts(remote=r[9], canada_ok=r[10], job_type=r[11], hours=hours),
+        status, status_at = status_row if status_row else (platform.start_status, None)
+        checked = self._conn.execute(
+            "SELECT max(checked_at) FROM platform_checks WHERE platform_id = ?", (platform.id,)
+        ).fetchone()[0]
+        today = self._today()
+        next_on = self._next_check_on(status, status_at, checked)
+        profile = self._profile(platform.id)
+        return PlatformCard(
+            id=platform.id,
+            name=platform.name,
+            url=platform.url,
+            status=status,
+            status_at=status_at,
+            last_checked_at=checked,
+            next_check_on=None if next_on is None else next_on.isoformat(),
+            due=next_on is not None and today >= next_on,
+            pay_low_cents=profile["pay_low_cents"],
+            pay_high_cents=profile["pay_high_cents"],
+            pay_currency=profile["pay_currency"],
+            resume_label=profile["resume_label"],
+            domains=profile["domains"],
+            assessments=profile["assessments"],
+            profile_updated_on=profile["profile_updated_on"],
+            refresh_due=self._refresh_due(status, profile, today),
         )
-        result = score_posting(posting, profile, self._rate)
-        flags = result.flags + ((result.drop_reason,) if result.drop_reason else ())
-        self._conn.execute(
-            "INSERT OR REPLACE INTO job_lead_scores (lead_id, profile_id, score, verdict, "
-            "matched_json, gaps_json, flags_json, scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                lead_id,
-                profile.id,
-                result.score,
-                result.verdict,
-                json.dumps(list(result.matched)),
-                json.dumps(list(result.gaps)),
-                json.dumps(list(flags)),
-                self._stamp(),
-            ),
-        )
 
-    def _latest_batch(self) -> int | None:
-        row = self._conn.execute("SELECT max(id) FROM job_scan_runs").fetchone()
-        return row[0]
+    def _next_check_on(
+        self, status: str, status_at: str | None, checked: str | None
+    ) -> date | None:
+        days = self._settings.check_days.get(status)
+        if days is None:
+            return None
+        stamps = [s for s in (status_at, checked) if s is not None]
+        if not stamps:
+            return self._today()
+        return _local_date(max(stamps)) + timedelta(days=days)
 
-    def _place(self, row: tuple, latest: int | None) -> str:
-        status, closed_at, batch_id, batch_rank = row[14], row[22], row[23], row[24]
-        if status in ("applied", "interview", "offer"):
-            return "applied"
-        if status in ("rejected", "skipped") or closed_at is not None:
-            return "closed"
-        if status == "saved":
-            return "saved"
-        if row[1] == "pasted":
-            return "new"
-        if batch_id != latest:
-            return "earlier"
-        if batch_rank is not None and batch_rank <= self._settings.top_n:
-            return "new"
-        return "more"
+    def _refresh_due(self, status: str, profile: dict, today: date) -> bool:
+        if status in ("not_applied", "rejected"):
+            return False
+        updated = profile["profile_updated_on"]
+        if updated is None or (today - date.fromisoformat(updated)).days >= REFRESH_DAYS:
+            return True
+        master = self._settings.master_resume_label
+        return master is not None and profile["resume_label"] != master
 
-    def _view(self, lead_id: int, profile_id: str | None) -> LeadView:
-        if profile_id is None:
-            profile_id = self._settings.profiles[0].id
+    def _profile(self, platform_id: str) -> dict:
         row = self._conn.execute(
-            f"SELECT {_LEAD_COLUMNS} FROM job_leads l "
-            "LEFT JOIN job_lead_scores s ON s.lead_id = l.id AND s.profile_id = ? "
-            "WHERE l.id = ?",
-            (profile_id, lead_id),
-        ).fetchone()
-        return self._to_view(row)
-
-    def _to_view(self, r: tuple) -> LeadView:
-        hourly = hourly_usd(Pay(r[9], r[10], r[11], r[12], r[13]), self._rate)
-        low, high = hourly if hourly else (None, None)
-        return LeadView(
-            id=r[0],
-            origin=r[1],
-            url=r[2],
-            title=r[3],
-            company=r[4],
-            location=r[5],
-            remote=r[6],
-            canada_ok=r[7],
-            job_type=r[8],
-            pay_low_usd=_cents(low),
-            pay_high_usd=_cents(high),
-            pay_text=r[13],
-            status=r[14],
-            applied_at=r[15],
-            resume_label=r[16],
-            score=r[17],
-            verdict=r[18],
-            matched=json.loads(r[19]) if r[19] else [],
-            gaps=json.loads(r[20]) if r[20] else [],
-            flags=json.loads(r[21]) if r[21] else [],
-            closed=r[22] is not None,
-        )
-
-    # --- Helpers: platforms -----------------------------------------------
-
-    def _platform_view(self, platform_id: str) -> PlatformView:
-        platform = next((p for p in self._settings.platforms if p.id == platform_id), None)
-        if platform is None:
-            raise JobsNotFound("No platform with that ID.")
-        row = self._conn.execute(
-            "SELECT stage, next_step, snoozed_until, changed_at FROM job_platform_events "
-            "WHERE platform_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT pay_low_cents, pay_high_cents, pay_currency, resume_label, domains_json, "
+            "assessments_json, profile_updated_on FROM platform_profiles WHERE platform_id = ?",
             (platform_id,),
         ).fetchone()
         if row is None:
-            return PlatformView(
-                platform.id, platform.name, platform.url, platform.start_stage, "", None, None
-            )
-        return PlatformView(
-            platform.id, platform.name, platform.url, row[0], row[1], row[2], row[3]
+            row = (None, None, None, None, "[]", "[]", None)
+        return {
+            "pay_low_cents": row[0],
+            "pay_high_cents": row[1],
+            "pay_currency": row[2],
+            "resume_label": row[3],
+            "domains": json.loads(row[4]),
+            "assessments": json.loads(row[5]),
+            "profile_updated_on": row[6],
+        }
+
+    # --- Helpers: projects ------------------------------------------------------
+
+    def _project(self, project_id: int) -> ProjectView:
+        row = self._conn.execute(
+            f"SELECT {_PROJECT_COLUMNS} FROM job_projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        if row is None:
+            raise JobsNotFound("No project with that ID.")
+        return self._project_view(row)
+
+    def _project_view(self, r: tuple) -> ProjectView:
+        names = {p.id: p.name for p in self._settings.platforms}
+        pay, currency = r[3], r[4]
+        usd = cad = None
+        if pay is not None and currency == "USD":
+            usd = pay
+            cad = _round(Decimal(pay) * self._rate) if self._rate else None
+        elif pay is not None:
+            cad = pay
+            usd = _round(Decimal(pay) / self._rate) if self._rate else None
+        below = usd is not None and usd < self._settings.pay_floor_usd * 100
+        return ProjectView(
+            id=r[0],
+            platform_id=r[1],
+            platform_name=names.get(r[1], r[1]),
+            title=r[2],
+            pay_cents=pay,
+            currency=currency,
+            pay_usd_cents=usd,
+            pay_cad_cents=cad,
+            hours_per_week=r[5],
+            status=r[6],
+            found_on=r[7],
+            status_at=r[8],
+            flags=["below_floor"] if below else [],
         )
 
-    def _latest_event_id(self, platform_id: str) -> int:
-        row = self._conn.execute(
-            "SELECT max(id) FROM job_platform_events WHERE platform_id = ?", (platform_id,)
-        ).fetchone()
-        return row[0] or 0
+    # --- Helpers: writing and time ----------------------------------------------
 
-    # --- Helpers: time ----------------------------------------------------
+    def _write(self, sql: str, params: tuple) -> int:
+        return with_transaction(
+            self._conn, lambda: self._conn.execute(sql, params).lastrowid, immediate=True
+        )
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -513,33 +377,84 @@ class JobsStore:
     def _stamp(self) -> str:
         return self._now().astimezone(UTC).strftime(_STAMP_FORMAT)
 
-    def _today(self):
+    def _today(self) -> date:
         return self._now().astimezone().date()
 
 
-def _required_text(value, what: str, limit: int) -> str:
-    text = value.strip() if isinstance(value, str) else ""
-    if not 1 <= len(text) <= limit:
-        raise JobsError(f"The {what} must be 1 to {limit} characters.")
-    return text
+def _can_move(current: str, target: str) -> bool:
+    if current in _FINAL:
+        return False
+    if target == "rejected":
+        return current in ("found", "applied", "assessment", "accepted")
+    return _FORWARD.index(target) > _FORWARD.index(current)
 
 
-def _optional_url(value) -> str | None:
-    if value is None or (isinstance(value, str) and not value.strip()):
-        return None
-    url = value.strip() if isinstance(value, str) else ""
-    if not url.startswith("https://") or len(url) > URL_MAX:
-        raise JobsError(f"A link must start with https:// (up to {URL_MAX} characters).")
-    return url
+def _checked_project(v: dict) -> tuple:
+    title = v["title"].strip() if isinstance(v["title"], str) else ""
+    if not 1 <= len(title) <= TITLE_MAX:
+        raise JobsError(f"The title needs 1 to {TITLE_MAX} characters.")
+    pay, currency = v["pay_cents"], v["currency"]
+    if (pay is None) != (currency is None):
+        raise JobsError("Pay and its currency go together: give both or neither.")
+    if pay is not None and (type(pay) is not int or pay < 0):
+        raise JobsError("Pay must be a whole number of cents, 0 or more.")
+    if currency is not None and currency not in _CURRENCIES:
+        raise JobsError("Currency must be USD or CAD.")
+    hours = v["hours_per_week"]
+    if hours is not None and (type(hours) is not int or not 1 <= hours <= HOURS_MAX):
+        raise JobsError(f"Hours a week must be a whole number from 1 to {HOURS_MAX}.")
+    return title, pay, currency, hours
 
 
-def _rank(lead: LeadView) -> tuple:
-    """Known pay first, then score, then the hourly low end in US dollars."""
-    pay = lead.pay_low_usd if lead.pay_low_usd is not None else lead.pay_high_usd
-    return (pay is None, -(lead.score or 0), -(pay or 0), lead.id)
+def _checked_profile(v: dict) -> tuple:
+    low, high, currency = v["pay_low_cents"], v["pay_high_cents"], v["pay_currency"]
+    for amount in (low, high):
+        if amount is not None and (type(amount) is not int or amount < 0):
+            raise JobsError("Pay amounts must be whole numbers of cents, 0 or more.")
+    if low is not None and high is not None and low > high:
+        raise JobsError("The low end of the pay range can't be above the high end.")
+    if (currency is None) != (low is None and high is None):
+        raise JobsError("A pay range and its currency go together.")
+    if currency is not None and currency not in _CURRENCIES:
+        raise JobsError("Currency must be USD or CAD.")
+    label = v["resume_label"]
+    if label is not None:
+        label = label.strip() if isinstance(label, str) else ""
+        if not 1 <= len(label) <= LABEL_MAX:
+            raise JobsError(f"The resume label needs 1 to {LABEL_MAX} characters.")
+    updated = v["profile_updated_on"]
+    if updated is not None:
+        try:
+            date.fromisoformat(updated)
+        except (TypeError, ValueError):
+            raise JobsError("The profile date must look like 2026-11-29.") from None
+    return (
+        low,
+        high,
+        currency,
+        label,
+        json.dumps(_tags(v["domains"], "domains")),
+        json.dumps(_tags(v["assessments"], "assessments")),
+        updated,
+    )
 
 
-def _cents(dollars: Decimal | None) -> int | None:
-    if dollars is None:
-        return None
-    return int((dollars * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+def _tags(values, what: str) -> list[str]:
+    if (
+        not isinstance(values, list)
+        or len(values) > TAGS_MAX
+        or not all(isinstance(t, str) and 1 <= len(t.strip()) <= TAG_MAX for t in values)
+    ):
+        raise JobsError(
+            f"{what.capitalize()} must be a list of up to {TAGS_MAX} items "
+            f"of 1 to {TAG_MAX} characters."
+        )
+    return [t.strip() for t in values]
+
+
+def _local_date(stamp: str) -> date:
+    return datetime.strptime(stamp, _STAMP_FORMAT).replace(tzinfo=UTC).astimezone().date()
+
+
+def _round(value: Decimal) -> int:
+    return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))

@@ -25,7 +25,7 @@ from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transa
 from aicity.fx import rate_on
 from aicity.grocery import GroceryStore
 from aicity.income import IncomeStore
-from aicity.jobs_settings import JobPlatform, JobProfile, JobSource, JobsSettings
+from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
 from aicity.notifications import SINCE_KEY
 from aicity.plan import PlanStore, monday_of
 from aicity.settings import (
@@ -82,45 +82,18 @@ SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
 )
 
-# Sample mode's Opportunity Office settings: made-up platforms and skills, never the
-# private settings. The source is never scanned (Sample mode never reaches the internet).
+# Sample mode's Opportunity Office settings: made-up platforms, never the private
+# settings. Nothing is ever fetched from them.
 SAMPLE_JOBS = JobsSettings(
-    scan_day=6,
-    scan_time=time(19, 0),
-    top_n=10,
-    follow_up_days=10,
-    roll_off_days=90,
-    profiles=(
-        JobProfile(
-            id="ai_training",
-            name="AI training",
-            active=True,
-            pay_floor_usd=Decimal(30),
-            pay_preferred_usd=Decimal(40),
-            hours=(10, 15),
-            job_types=("contract", "part_time", "temporary", "freelance"),
-            title_words=("ai trainer", "evaluator", "red team", "annotator"),
-            exclude_words=("recruiter", "sales"),
-            location_ok=("canada", "worldwide", "anywhere", "north america"),
-            skills=("python", "technical writing", "data analysis", "spreadsheets"),
-            gap_words=("sql", "javascript", "statistics"),
-        ),
-    ),
-    sources=(
-        JobSource(
-            id="sample_board",
-            name="Sample Board",
-            kind="greenhouse",
-            board="sampleboard",
-            profiles=("ai_training",),
-            enabled=False,
-        ),
-    ),
+    pay_floor_usd=Decimal(30),
+    pay_preferred_usd=Decimal(40),
+    master_resume_label="v2 Sample",
+    check_days=dict(DEFAULT_CHECK_DAYS),
     platforms=(
         JobPlatform("nimbus", "Nimbus Experts", "https://example.com/nimbus", "active"),
-        JobPlatform("orbit", "Orbit Raters", "https://example.com/orbit", "not_joined"),
-        JobPlatform("quasar", "Quasar Tasks", "https://example.com/quasar", "not_joined"),
-        JobPlatform("comet", "Comet Labs", "https://example.com/comet", "not_joined"),
+        JobPlatform("orbit", "Orbit Raters", "https://example.com/orbit", "assessment"),
+        JobPlatform("quasar", "Quasar Tasks", "https://example.com/quasar", "applied"),
+        JobPlatform("comet", "Comet Labs", "https://example.com/comet", "not_applied"),
     ),
 )
 
@@ -334,118 +307,72 @@ def seed_grocery(conn: sqlite3.Connection, now: datetime) -> bool:
 
 # --- Sample Opportunity Office ----------------------------------------------------------
 
-JOBS_SEEDED_KEY = "sample_jobs_seeded"
+# v2: the platform tracker (2026-11-22). A Sample database seeded by the old design keeps
+# its old key and gets this seed too; the old leads tables were removed by migration 015.
+JOBS_SEEDED_KEY = "sample_jobs_seeded_v2"
 
-# (company, title, location, text) for made-up postings. Text holds pay and skills.
-_SAMPLE_SCAN = (
-    (
-        "Nimbus Data",
-        "AI Red Teamer",
-        "Remote - Canada",
-        "Contract. $65 – $125 per hour. Python, technical writing, data analysis, spreadsheets.",
-    ),
-    (
-        "Orbit Labs",
-        "AI Trainer (Contract)",
-        "Remote - Worldwide",
-        "Contract, 10-15 hours per week. $45/hr. Python and technical writing.",
-    ),
-    ("Quasar Works", "Evaluator", "Remote", "Part-time. $35 per hour. Spreadsheets and SQL."),
-    (
-        "Comet Analytics",
-        "Annotation Specialist",
-        "Remote - North America",
-        "Contract. $28–$36/hr. Data analysis.",
-    ),
-    (
-        "Nebula AI",
-        "Writing Evaluator",
-        "Remote - Canada",
-        "Freelance. Technical writing. Pay depends on the project.",
-    ),
-    (
-        "Pulsar Group",
-        "Rater",
-        "Remote - Anywhere",
-        "Part-time. $32/hr. Statistics and JavaScript a plus.",
-    ),
+# (platform, days ago checked) — Nimbus (active, every 3 days) is due; the others aren't.
+_SAMPLE_CHECKS = (("nimbus", 4), ("orbit", 1), ("quasar", 2))
+# (platform, days ago updated) — Nimbus's profile is 100 days old, so it needs a refresh.
+_SAMPLE_PROFILES = (
+    ("nimbus", 100, 3500, 6000),
+    ("orbit", 10, 3000, 4500),
+    ("quasar", 5, 4000, 5500),
 )
-_SAMPLE_EARLIER = ("Vega Studio", "Data Annotator", "Remote - Canada", "Contract. $38/hr. Python.")
-# (company, title, text, status, applied days ago)
-_SAMPLE_PASTED = (
-    ("Vega Studio", "AI Trainer", "Contract. $42/hr. Python and spreadsheets.", "new", None),
-    ("Orbit Labs", "QA Evaluator", "Part-time. $40/hr. Technical writing.", "saved", None),
-    ("Nimbus Data", "Prompt Writer", "Contract. $50/hr. Technical writing.", "applied", 12),
-    ("Comet Analytics", "Data Rater", "Contract. $34/hr. Spreadsheets.", "applied", 3),
-    ("Nebula AI", "Coding Evaluator", "Contract. $60/hr. Python.", "interview", 9),
-    ("Pulsar Group", "Search Rater", "Part-time. $31/hr.", "skipped", None),
+# (platform, generic title, pay cents, currency, hours a week, status)
+_SAMPLE_PROJECTS = (
+    ("nimbus", "Physics reasoning reviews", 4500, "USD", 10, "active"),
+    ("nimbus", "Unit-conversion prompts", 4000, "USD", 6, "ended"),
+    ("quasar", "Chart reading evaluations", 5500, "CAD", 8, "applied"),
+    ("orbit", "Code review tasks", 5000, "USD", None, "found"),
+    ("orbit", "Translation checks", 2500, "USD", 5, "rejected"),
 )
 
 
 def seed_jobs(conn: sqlite3.Connection, now: datetime) -> bool:
-    """Made-up leads in every list and platforms at different stages, once. Sample only."""
+    """Made-up platform checks, profiles and projects in every state, once. Sample only."""
     from aicity.jobs_store import JobsStore
 
     label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
     if label is None or label[0] != DbKind.SAMPLE.value:
-        raise DatabaseError("Sample leads only go into the Sample database.")
+        raise DatabaseError("Sample Opportunity Office data only goes into the Sample database.")
     if conn.execute("SELECT 1 FROM meta WHERE key = ?", (JOBS_SEEDED_KEY,)).fetchone():
         return False
     clock = _StepClock(now)
-    store = JobsStore(conn, SAMPLE_JOBS, clock=clock, usd_rate=sample_rate(now.date()))
+    store = JobsStore(conn, SAMPLE_JOBS, clock=clock)
 
     def work() -> None:
-        old = _sample_scan_run(conn, now - timedelta(days=7))
-        _sample_scanned(conn, store, old, 1, _SAMPLE_EARLIER)
-        latest = _sample_scan_run(conn, now - timedelta(hours=1))
-        for rank, posting in enumerate(_SAMPLE_SCAN, start=1):
-            _sample_scanned(conn, store, latest, rank, posting)
-        for n, (company, title, text, status, days_ago) in enumerate(_SAMPLE_PASTED, start=1):
-            clock.now = now - timedelta(days=days_ago or 1)
-            lead = store.paste(
-                url=f"https://example.com/sample-job/{n}",
-                title=title,
-                company=company,
-                location="Remote - Canada",
-                text=text,
-                profile_id="ai_training",
+        for platform_id, days_ago in _SAMPLE_CHECKS:
+            clock.now = now - timedelta(days=days_ago)
+            store.record_check(platform_id, "nothing")
+        clock.now = now
+        for platform_id, days_ago, low, high in _SAMPLE_PROFILES:
+            store.set_profile(
+                platform_id,
+                pay_low_cents=low,
+                pay_high_cents=high,
+                pay_currency="USD",
+                resume_label="v2 Sample",
+                domains=["python", "technical writing"],
+                assessments=["Reasoning test"],
+                profile_updated_on=(now.astimezone().date() - timedelta(days=days_ago)).isoformat(),
             )
-            if status in ("applied", "interview"):
-                store.set_status(lead.id, "applied", "v1 sample")
-            if status != "new" and status != "applied":
-                store.set_status(lead.id, status)
-        clock.now = now - timedelta(days=2)
-        store.set_platform("orbit", stage="assessment", next_step="Finish the skills test")
+        for platform_id, title, pay, currency, hours, status in _SAMPLE_PROJECTS:
+            project = store.add_project(
+                platform_id=platform_id,
+                title=title,
+                pay_cents=pay,
+                currency=currency,
+                hours_per_week=hours,
+            )
+            if status == "ended":
+                store.set_project_status(project.id, "active")
+            if status != "found":
+                store.set_project_status(project.id, status)
         conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (JOBS_SEEDED_KEY,))
 
     with_transaction(conn, work, immediate=True)
     return True
-
-
-def _sample_scan_run(conn: sqlite3.Connection, when: datetime) -> int:
-    stamp = when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return conn.execute(
-        "INSERT INTO job_scan_runs (started_at, finished_at, outcome_json) VALUES (?, ?, ?)",
-        (stamp, stamp, '[{"source": "sample_board", "ok": true, "count": 6}]'),
-    ).lastrowid
-
-
-def _sample_scanned(conn, store, batch: int, rank: int, posting: tuple) -> None:
-    """A scanned lead: paste it (to read and score it), then mark it as from the scan."""
-    company, title, location, text = posting
-    lead = store.paste(
-        url=None,
-        title=title,
-        company=company,
-        location=location,
-        text=text,
-        profile_id="ai_training",
-    )
-    conn.execute(
-        "UPDATE job_leads SET origin = 'sample_board', external_id = ?, batch_id = ?, "
-        "batch_rank = ? WHERE id = ?",
-        (f"sample-{batch}-{rank}", batch, rank, lead.id),
-    )
 
 
 CHECKIN_SEEDED_KEY = "sample_checkin_seeded"

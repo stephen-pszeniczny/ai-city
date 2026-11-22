@@ -439,39 +439,30 @@ def test_seed_grocery_refuses_the_personal_database():
         seed_grocery(conn, NOW)
 
 
-def test_sample_jobs_seeded_once():
+def test_sample_jobs_seed():
     from aicity.jobs_store import JobsStore
     from aicity.sample_data import SAMPLE_JOBS
 
     seed_sample_database(clock=lambda: NOW)
-    seed_sample_database(clock=lambda: NOW)
+    seed_sample_database(clock=lambda: NOW)  # twice adds nothing
     conn = open_database(db_path(DbKind.SAMPLE), DbKind.SAMPLE)
-    store = JobsStore(conn, SAMPLE_JOBS, clock=lambda: NOW, usd_rate=Decimal("1.40"))
-    inbox = store.list_leads("ai_training")
-    assert len(inbox.new) == 7  # 6 from the latest scan + 1 pasted
-    assert len(inbox.earlier) == 1
-    assert len(inbox.saved) == 1
-    assert len(inbox.applied) == 3  # 2 applied, 1 interview
-    assert len(inbox.closed) == 1
-    assert {lead.verdict for lead in inbox.new} >= {"strong", "maybe"}
-    stages = {p.id: p.stage for p in store.platforms()}
-    assert stages == {
-        "nimbus": "active",
-        "orbit": "assessment",
-        "quasar": "not_joined",
-        "comet": "not_joined",
-    }
-    assert [p.id for p in store.nudges()] == ["orbit"]
-    companies = {lead.company for lead in inbox.new}
-    assert companies <= {
-        "Nimbus Data",
-        "Orbit Labs",
-        "Quasar Works",
-        "Comet Analytics",
-        "Nebula AI",
-        "Pulsar Group",
-        "Vega Studio",
-    }
+    try:
+        store = JobsStore(conn, SAMPLE_JOBS, clock=lambda: NOW, usd_rate=Decimal("1.40"))
+        cards = store.platforms()
+        assert {c.id: c.status for c in cards} == {
+            "nimbus": "active",
+            "orbit": "assessment",
+            "quasar": "applied",
+            "comet": "not_applied",
+        }
+        assert [c.id for c in store.due()] == ["nimbus"]
+        assert [c.id for c in cards if c.refresh_due] == ["nimbus"]
+        statuses = sorted(p.status for p in store.projects())
+        assert statuses == ["active", "applied", "ended", "found", "rejected"]
+        assert any(p.currency == "CAD" for p in store.projects())
+        assert conn.execute("SELECT count(*) FROM platform_checks").fetchone()[0] == 3
+    finally:
+        conn.close()
 
 
 def test_seed_jobs_refuses_the_personal_database():

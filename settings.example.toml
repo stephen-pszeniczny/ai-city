@@ -130,44 +130,29 @@ tax_set_aside_is_placeholder = true
 # remind_at = "21:30"
 # items = ["Lunch made", "Keys by the door", "Clothes laid out"]
 
-# Optional: Opportunity Office. Search profiles, official public job lists the Sunday
-# scan reads, and the AI-training platforms on the roster. Example values only.
-# Pay is US dollars per hour, as text. skills is the temporary background scoring
-# compares against until Flight School's Archive replaces it.
+# Optional: Opportunity Office, a platform tracker. The AI-training platforms on the
+# roster, the pay floor logged projects are compared against (US dollars per hour, as
+# text), the master resume's version label, and how many days between checks for each
+# status (not_applied and rejected are never checked). Example values only.
 # [jobs]
-# scan_day = "sun"            # default
-# scan_time = "19:00"         # default
-# top_n = 10                  # leads kept per scan (1 to 25)
-# follow_up_days = 10
-# roll_off_days = 90
+# pay_floor_usd = "30"                  # default
+# pay_preferred_usd = "40"              # default
+# master_resume_label = "v1 Nov 2026"   # optional
 #
-# [[jobs.profiles]]
-# id = "ai_training"
-# name = "AI training"
-# pay_floor_usd = "30"
-# pay_preferred_usd = "40"
-# hours = [10, 15]
-# job_types = ["contract", "part_time", "temporary", "freelance"]
-# title_words = ["ai trainer", "evaluator", "red team", "annotator", "rater"]
-# exclude_words = ["recruiter", "sales"]
-# location_ok = ["canada", "worldwide", "anywhere", "north america"]
-# skills = ["python", "technical writing", "data analysis", "spreadsheets"]
-# gap_words = ["sql", "javascript", "statistics"]
-#
-# [[jobs.sources]]
-# id = "company_a"
-# name = "Company A"
-# kind = "greenhouse"         # greenhouse | ashby | lever
-# board = "companya"          # the list's short name in its public address
-# profiles = ["ai_training"]
+# [jobs.check_days]                     # optional; these are the defaults
+# active = 3
+# applied = 7
+# assessment = 7
+# onboarding = 7
+# paused = 30
 #
 # [[jobs.platforms]]
 # id = "platform_a"
 # name = "Platform A"
-# url = "https://example.com/experts"
-# start_stage = "active"      # not_joined (default) | applied | assessment | active | quiet
+# url = "https://example.com/login"
+# start_status = "active"   # not_applied (default) | applied | assessment | onboarding | active | paused | rejected
 #
 # [[jobs.platforms]]
 # id = "platform_b"
 # name = "Platform B"
-# url = "https://example.org/join"
+# url = "https://example.org/login"

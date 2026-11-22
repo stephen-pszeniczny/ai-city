@@ -1,21 +1,23 @@
-"""Opportunity Office web routes.
+"""Opportunity Office web routes: the platform tracker.
 
-    POST /api/jobs/unlock                    Touch ID -> {"key"} (null in Sample mode)
-    GET  /api/jobs/badge                     {"text"}: "4 new leads" or null. Counts only.
-    GET  /api/jobs/leads                     the inbox, the profile and the exchange rate
-    POST /api/jobs/leads                     paste a role -> 201 the lead
-    POST /api/jobs/leads/{lead_id}/status    {status, resume_label?} -> the lead
-    POST /api/jobs/leads/skip-rest           skip the New list -> {"skipped"}
-    GET  /api/jobs/platforms                 {"platforms", "nudges"}
-    PUT  /api/jobs/platforms/{platform_id}   {stage?, next_step?, snooze?} -> the platform
+    POST /api/jobs/unlock                         Touch ID -> {"key"} (null in Sample mode)
+    GET  /api/jobs/badge                          {"text"}: "2 platforms to check" or null
+    GET  /api/jobs/platforms                      {"platforms", "due", "refresh"}: cards
+    PUT  /api/jobs/platforms/{platform_id}/status   {status} -> the card
+    POST /api/jobs/platforms/{platform_id}/check    {outcome: nothing | found} -> the card
+    PUT  /api/jobs/platforms/{platform_id}/profile  {any profile field} -> the card
+    GET  /api/jobs/projects                       {"projects", "rate", "floor_usd", "preferred_usd"}
+    POST /api/jobs/projects                       log a project -> 201 the project
+    PUT  /api/jobs/projects/{project_id}          {title?, pay_cents?, currency?, hours_per_week?}
+    POST /api/jobs/projects/{project_id}/status   {status} -> the project
 
-Job applications are sensitive (spec section 4): in Personal mode every route but
-unlock and badge needs the X-Jobs-Key header from unlock (403 without it). Sample
-mode needs no key and uses its own made-up settings. A profile is chosen with
-?profile=, else the first active one.
+Career data is sensitive (spec section 4): in Personal mode every route but unlock and
+badge needs the X-Jobs-Key header from unlock (403 without it). The badge is a count
+only and never fails: no [jobs] section, or any settings problem, gives null. Sample
+mode needs no key and uses its own made-up settings. Nothing here fetches anything.
 
-Answers: 400 no [jobs] section in settings, 403 locked, 404 no such lead, profile or
-platform, 409 a status change the lead doesn't allow, 422 bad input.
+Answers: 400 no [jobs] section in settings, 403 locked, 404 no such platform or project,
+409 a status move the project doesn't allow, 422 bad input.
 """
 
 import sqlite3
@@ -32,7 +34,7 @@ from aicity.db import DbKind, db_path, open_database
 from aicity.fx import latest_rate
 from aicity.jobs_settings import JobsSettings
 from aicity.jobs_store import JobsConflict, JobsError, JobsNotFound, JobsStore
-from aicity.settings import load_settings
+from aicity.settings import SettingsError, load_settings
 
 KEY_HEADER = "X-Jobs-Key"
 
@@ -60,23 +62,37 @@ class _Body(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
-class PasteIn(_Body):
-    url: str | None = None
-    title: str
-    company: str
-    location: str = ""
-    text: str = ""
-
-
 class StatusIn(_Body):
     status: str
+
+
+class CheckIn(_Body):
+    outcome: str
+
+
+class ProfileIn(_Body):
+    pay_low_cents: int | None = None
+    pay_high_cents: int | None = None
+    pay_currency: str | None = None
     resume_label: str | None = None
+    domains: list[str] | None = None
+    assessments: list[str] | None = None
+    profile_updated_on: str | None = None
 
 
-class PlatformIn(_Body):
-    stage: str | None = None
-    next_step: str | None = None
-    snooze: bool = False
+class ProjectIn(_Body):
+    platform_id: str
+    title: str
+    pay_cents: int | None = None
+    currency: str | None = None
+    hours_per_week: int | None = None
+
+
+class ProjectEditIn(_Body):
+    title: str | None = None
+    pay_cents: int | None = None
+    currency: str | None = None
+    hours_per_week: int | None = None
 
 
 # --- Opening the store for one request ---------------------------------------------------
@@ -116,11 +132,9 @@ def _open(request: Request) -> Iterator[tuple[JobsStore, JobsSettings, object]]:
         conn.close()
 
 
-def _profile_id(settings: JobsSettings, requested: str | None) -> str:
-    if requested:
-        return requested
-    active = [p for p in settings.profiles if p.active]
-    return (active or list(settings.profiles))[0].id
+def _given(body: BaseModel) -> dict:
+    """Only the fields the page actually sent (a missing field stays as it was)."""
+    return body.model_dump(exclude_unset=True)
 
 
 # --- Routes ------------------------------------------------------------------------------
@@ -136,71 +150,82 @@ def unlock(request: Request) -> dict[str, str | None]:
 
 @open_router.get("/badge")
 def badge(request: Request) -> dict[str, str | None]:
-    """The belt badge. No Touch ID needed: counts only, never names or titles."""
+    """The belt badge. No Touch ID needed: a count only, never a platform name."""
     try:
-        with _open(request) as (store, settings, _rate_found):
-            new = store.badge_counts(_profile_id(settings, None))["new"]
-    except NotSetUp:
+        with _open(request) as (store, _settings_found, _rate_found):
+            due = store.due_count()
+    except (NotSetUp, SettingsError, OSError):
         return {"text": None}
-    if not new:
+    if not due:
         return {"text": None}
-    return {"text": f"{new} new lead" + ("" if new == 1 else "s")}
-
-
-@router.get("/leads")
-def get_leads(request: Request, profile: str | None = None) -> dict:
-    with _open(request) as (store, settings, rate):
-        profile_id = _profile_id(settings, profile)
-        inbox = store.list_leads(profile_id)
-        chosen = next(p for p in settings.profiles if p.id == profile_id)
-        return asdict(inbox) | {
-            "profile": {"id": chosen.id, "name": chosen.name},
-            "rate": None if rate is None else {"value": str(rate[0]), "date": rate[1].isoformat()},
-        }
-
-
-@router.post("/leads", status_code=201)
-def paste_lead(request: Request, body: PasteIn, profile: str | None = None) -> dict:
-    with _open(request) as (store, settings, _rate_found):
-        lead = store.paste(
-            url=body.url,
-            title=body.title,
-            company=body.company,
-            location=body.location,
-            text=body.text,
-            profile_id=_profile_id(settings, profile),
-        )
-        return asdict(lead)
-
-
-@router.post("/leads/skip-rest")
-def skip_rest(request: Request, profile: str | None = None) -> dict[str, int]:
-    with _open(request) as (store, settings, _rate_found):
-        return {"skipped": store.skip_rest(_profile_id(settings, profile))}
-
-
-@router.post("/leads/{lead_id}/status")
-def set_status(request: Request, lead_id: int, body: StatusIn) -> dict:
-    with _open(request) as (store, _settings_found, _rate_found):
-        return asdict(store.set_status(lead_id, body.status, body.resume_label))
+    return {"text": f"{due} platform{'' if due == 1 else 's'} to check"}
 
 
 @router.get("/platforms")
 def get_platforms(request: Request) -> dict:
     with _open(request) as (store, _settings_found, _rate_found):
-        return {
-            "platforms": [asdict(p) for p in store.platforms()],
-            "nudges": [asdict(p) for p in store.nudges()],
-        }
+        cards = store.platforms()
+    return {
+        "platforms": [asdict(c) for c in cards],
+        "due": [asdict(c) for c in cards if c.due],
+        "refresh": [asdict(c) for c in cards if c.refresh_due],
+    }
 
 
-@router.put("/platforms/{platform_id}")
-def put_platform(request: Request, platform_id: str, body: PlatformIn) -> dict:
+@router.put("/platforms/{platform_id}/status")
+def put_status(request: Request, platform_id: str, body: StatusIn) -> dict:
     with _open(request) as (store, _settings_found, _rate_found):
-        view = store.set_platform(
-            platform_id, stage=body.stage, next_step=body.next_step, snooze=body.snooze
+        return asdict(store.set_status(platform_id, body.status))
+
+
+@router.post("/platforms/{platform_id}/check")
+def post_check(request: Request, platform_id: str, body: CheckIn) -> dict:
+    with _open(request) as (store, _settings_found, _rate_found):
+        return asdict(store.record_check(platform_id, body.outcome))
+
+
+@router.put("/platforms/{platform_id}/profile")
+def put_profile(request: Request, platform_id: str, body: ProfileIn) -> dict:
+    with _open(request) as (store, _settings_found, _rate_found):
+        return asdict(store.set_profile(platform_id, **_given(body)))
+
+
+@router.get("/projects")
+def get_projects(request: Request) -> dict:
+    with _open(request) as (store, settings, rate):
+        projects = store.projects()
+    return {
+        "projects": [asdict(p) for p in projects],
+        "rate": None if rate is None else {"value": str(rate[0]), "date": rate[1].isoformat()},
+        "floor_usd": str(settings.pay_floor_usd),
+        "preferred_usd": str(settings.pay_preferred_usd),
+    }
+
+
+@router.post("/projects", status_code=201)
+def post_project(request: Request, body: ProjectIn) -> dict:
+    with _open(request) as (store, _settings_found, _rate_found):
+        return asdict(
+            store.add_project(
+                platform_id=body.platform_id,
+                title=body.title,
+                pay_cents=body.pay_cents,
+                currency=body.currency,
+                hours_per_week=body.hours_per_week,
+            )
         )
-        return asdict(view)
+
+
+@router.put("/projects/{project_id}")
+def put_project(request: Request, project_id: int, body: ProjectEditIn) -> dict:
+    with _open(request) as (store, _settings_found, _rate_found):
+        return asdict(store.edit_project(project_id, **_given(body)))
+
+
+@router.post("/projects/{project_id}/status")
+def post_project_status(request: Request, project_id: int, body: StatusIn) -> dict:
+    with _open(request) as (store, _settings_found, _rate_found):
+        return asdict(store.set_project_status(project_id, body.status))
 
 
 def register(app: FastAPI) -> None:
