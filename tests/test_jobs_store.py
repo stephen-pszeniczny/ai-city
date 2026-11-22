@@ -1,4 +1,8 @@
-"""Opportunity Office store: pasted leads, the inbox, statuses and platform stages."""
+"""Opportunity Office store: the platform roster, check rounds, profiles and the log.
+
+Every platform and project here is made up. Times are 15:00 UTC (daytime on the Mac),
+so the Mac's local date is the same day.
+"""
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -6,37 +10,20 @@ from decimal import Decimal
 import pytest
 
 from aicity.db import DbKind, open_database
-from aicity.jobs_settings import JobPlatform, JobProfile, JobsSettings
+from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
 from aicity.jobs_store import JobsConflict, JobsError, JobsNotFound, JobsStore
 
 NOW = datetime(2026, 11, 29, 15, 0, tzinfo=UTC)
 
-PROFILE = JobProfile(
-    id="ai_training",
-    name="AI training",
-    active=True,
+SETTINGS = JobsSettings(
     pay_floor_usd=Decimal(30),
     pay_preferred_usd=Decimal(40),
-    hours=(10, 15),
-    job_types=("contract", "part_time"),
-    title_words=("ai trainer",),
-    exclude_words=("recruiter",),
-    location_ok=("canada",),
-    skills=("python", "technical writing"),
-    gap_words=("sql",),
-)
-SETTINGS = JobsSettings(
-    scan_day=6,
-    scan_time=datetime(2026, 1, 1, 19).time(),
-    top_n=2,
-    follow_up_days=10,
-    roll_off_days=90,
-    profiles=(PROFILE,),
-    sources=(),
+    master_resume_label="v2",
+    check_days=dict(DEFAULT_CHECK_DAYS),
     platforms=(
         JobPlatform("platform_a", "Platform A", "https://example.com/a", "active"),
-        JobPlatform("platform_b", "Platform B", "https://example.com/b", "not_joined"),
-        JobPlatform("platform_c", "Platform C", "https://example.com/c", "not_joined"),
+        JobPlatform("platform_b", "Platform B", "https://example.com/b", "applied"),
+        JobPlatform("platform_c", "Platform C", "https://example.com/c", "not_applied"),
     ),
 )
 
@@ -63,293 +50,288 @@ def clock():
 
 @pytest.fixture
 def store(conn, clock):
-    return JobsStore(conn, SETTINGS, clock=clock, usd_rate=Decimal("1.40"))
+    return JobsStore(conn, SETTINGS, clock=clock)
 
 
-def paste(store, **overrides):
-    values = {
-        "url": "https://example.com/job/1",
-        "title": "AI Trainer",
-        "company": "Nimbus Data",
-        "location": "Remote - Canada",
-        "text": "Contract. $45/hr. Python and technical writing.",
-        "profile_id": "ai_training",
-    }
-    values.update(overrides)
-    return store.paste(**values)
+def card(store, platform_id):
+    return next(c for c in store.platforms() if c.id == platform_id)
 
 
-def scanned(conn, batch: int, rank: int, title: str, status: str = "new") -> int:
-    lead = conn.execute(
-        "INSERT INTO job_leads (origin, external_id, title, company, remote, canada_ok,"
-        " job_type, first_seen, last_seen, status, status_at, batch_id, batch_rank)"
-        " VALUES ('company_a', ?, ?, 'Orbit Labs', 'yes', 'yes', 'contract', ?, ?, ?, ?, ?, ?)",
-        (
-            title,
-            title,
-            "2026-11-29T15:00:00Z",
-            "2026-11-29T15:00:00Z",
-            status,
-            "2026-11-29T15:00:00Z",
-            batch,
-            rank,
-        ),
-    ).lastrowid
-    conn.execute(
-        "INSERT INTO job_lead_scores VALUES (?, 'ai_training', ?, 'maybe', '[]', '[]', '[]', ?)",
-        (lead, 100 - rank, "2026-11-29T15:00:00Z"),
+def fewer_platforms() -> JobsSettings:
+    return JobsSettings(**{**SETTINGS.__dict__, "platforms": SETTINGS.platforms[:2]})
+
+
+# --- Roster and check rounds ------------------------------------------------------------
+
+
+def test_start_status_from_settings_with_no_rows(store):
+    cards = store.platforms()
+    assert [(c.id, c.status, c.status_at) for c in cards] == [
+        ("platform_a", "active", None),
+        ("platform_b", "applied", None),
+        ("platform_c", "not_applied", None),
+    ]
+    assert cards[0].name == "Platform A" and cards[0].url == "https://example.com/a"
+
+
+def test_new_platform_is_due_today_if_it_has_an_interval(store):
+    a, b = card(store, "platform_a"), card(store, "platform_b")
+    assert (a.due, a.next_check_on) == (True, "2026-11-29")
+    assert (b.due, b.next_check_on) == (True, "2026-11-29")
+    assert [c.id for c in store.due()] == ["platform_a", "platform_b"]
+    assert store.due_count() == 2
+
+
+def test_not_applied_is_never_due(store):
+    c = card(store, "platform_c")
+    assert (c.due, c.next_check_on) == (False, None)
+
+
+def test_rejected_is_never_due(store):
+    store.set_status("platform_a", "rejected")
+    assert card(store, "platform_a").due is False
+
+
+def test_platform_removed_from_settings_is_not_shown(conn, clock):
+    JobsStore(conn, SETTINGS, clock=clock).record_check("platform_c", "nothing")
+    ids = [c.id for c in JobsStore(conn, fewer_platforms(), clock=clock).platforms()]
+    assert ids == ["platform_a", "platform_b"]
+
+
+def test_a_check_moves_the_next_check_on(store, clock):
+    after = store.record_check("platform_a", "nothing")
+    assert (after.due, after.next_check_on) == (False, "2026-12-02")  # active: 3 days
+    assert after.last_checked_at == "2026-11-29T15:00:00Z"
+    clock.now += timedelta(days=3)
+    assert card(store, "platform_a").due is True
+
+
+def test_status_change_resets_the_check_clock(store, clock):
+    store.record_check("platform_a", "found")
+    clock.now += timedelta(days=1)
+    after = store.set_status("platform_a", "paused")
+    assert after.status == "paused"
+    assert after.status_at == "2026-11-30T15:00:00Z"
+    assert after.next_check_on == "2026-12-30"  # paused: 30 days from the change
+
+
+def test_record_check_appends_a_row(store, conn):
+    store.record_check("platform_a", "nothing")
+    store.record_check("platform_a", "found")
+    assert conn.execute("SELECT outcome FROM platform_checks ORDER BY id").fetchall() == [
+        ("nothing",),
+        ("found",),
+    ]
+
+
+def test_bad_status_and_outcome(store):
+    with pytest.raises(JobsError):
+        store.set_status("platform_a", "quiet")
+    with pytest.raises(JobsError):
+        store.record_check("platform_a", "maybe")
+
+
+def test_unknown_platform(store):
+    with pytest.raises(JobsNotFound):
+        store.set_status("nope", "active")
+    with pytest.raises(JobsNotFound):
+        store.record_check("nope", "nothing")
+    with pytest.raises(JobsNotFound):
+        store.set_profile("nope", resume_label="v1")
+    with pytest.raises(JobsNotFound):
+        store.add_project(
+            platform_id="nope", title="X", pay_cents=None, currency=None, hours_per_week=None
+        )
+
+
+# --- Profiles ---------------------------------------------------------------------------
+
+
+def test_set_profile_partial_update_keeps_other_fields(store):
+    store.set_profile(
+        "platform_a",
+        pay_low_cents=3000,
+        pay_high_cents=5000,
+        pay_currency="USD",
+        resume_label="v2",
+        domains=["python", "mechanical engineering"],
+        assessments=["Physics test"],
+        profile_updated_on="2026-11-20",
     )
-    return lead
-
-
-def batch(conn) -> int:
-    return conn.execute(
-        "INSERT INTO job_scan_runs (started_at, finished_at) VALUES (?, ?)",
-        ("2026-11-29T15:00:00Z", "2026-11-29T15:01:00Z"),
-    ).lastrowid
-
-
-# --- Pasting ----------------------------------------------------------------
-
-
-def test_paste_saves_and_scores(store):
-    lead = paste(store)
-    assert lead.status == "new"
-    assert lead.pay_low_usd == 4500
-    assert lead.canada_ok == "yes"
-    assert lead.job_type == "contract"
-    assert lead.matched == ["python", "technical writing"]
-    assert lead.verdict == "strong"
-    assert [x.id for x in store.list_leads("ai_training").new] == [lead.id]
-
-
-def test_paste_below_floor_is_saved_with_its_reason(store):
-    lead = paste(store, text="Contract. $20/hr.")
-    assert lead.status == "new"
-    assert "below_floor" in lead.flags
-
-
-def test_cad_pay_shows_in_usd(store):
-    assert paste(store, text="$56 CAD per hour").pay_low_usd == 4000
-
-
-def test_pasting_same_role_twice_joins_first_by_url(store, conn):
-    first = paste(store, location="", text="Python.")
-    again = paste(store, title="Different words", company="Other", text="$45/hr contract")
-    assert again.id == first.id
-    assert again.title == "AI Trainer"  # filled fields are kept
-    assert again.pay_low_usd == 4500  # empty pay was filled
-    assert conn.execute("SELECT count(*) FROM job_leads").fetchone()[0] == 1
-
-
-def test_pasting_same_role_twice_joins_first_by_company_and_title(store, conn):
-    first = paste(store, url=None)
-    again = paste(store, url="https://example.com/other", title="AI Trainer (Remote, Contract)")
-    assert again.id == first.id
-    assert again.url == "https://example.com/other"
-    assert conn.execute("SELECT count(*) FROM job_leads").fetchone()[0] == 1
-
-
-def test_same_title_after_30_days_is_a_new_lead(store, clock):
-    first = paste(store, url=None)
-    clock.now = NOW + timedelta(days=31)
-    assert paste(store, url=None).id != first.id
+    after = store.set_profile("platform_a", resume_label="v1")
+    assert after.resume_label == "v1"
+    assert (after.pay_low_cents, after.pay_high_cents, after.pay_currency) == (3000, 5000, "USD")
+    assert after.domains == ["python", "mechanical engineering"]
+    assert after.assessments == ["Physics test"]
+    assert after.profile_updated_on == "2026-11-20"
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "fields",
     [
-        {"title": " "},
-        {"company": ""},
-        {"url": "http://example.com/job"},
-        {"title": "x" * 201},
+        {"pay_low_cents": 5000, "pay_high_cents": 3000, "pay_currency": "USD"},
+        {"pay_low_cents": 3000},  # no currency
+        {"pay_currency": "EUR", "pay_low_cents": 3000},
+        {"resume_label": "x" * 41},
+        {"domains": ["x" * 41]},
+        {"domains": ["d"] * 21},
+        {"profile_updated_on": "yesterday"},
+        {"colour": "blue"},
     ],
 )
-def test_paste_refuses_bad_input(store, overrides):
+def test_bad_profile_fields(store, fields):
     with pytest.raises(JobsError):
-        paste(store, **overrides)
+        store.set_profile("platform_a", **fields)
 
 
-def test_paste_with_unknown_profile(store):
-    with pytest.raises(JobsNotFound):
-        paste(store, profile_id="engineering")
+def test_refresh_rules(store, clock):
+    # Applied or later with no profile date yet: refresh due. Not applied: never.
+    assert card(store, "platform_a").refresh_due is True
+    assert card(store, "platform_c").refresh_due is False
+    store.set_profile("platform_a", resume_label="v2", profile_updated_on="2026-11-29")
+    assert card(store, "platform_a").refresh_due is False
+    clock.now += timedelta(days=89)
+    assert card(store, "platform_a").refresh_due is False
+    clock.now += timedelta(days=1)
+    assert card(store, "platform_a").refresh_due is True  # 90 days old
 
 
-# --- The inbox --------------------------------------------------------------
+def test_refresh_when_resume_label_differs_from_master(store):
+    store.set_profile("platform_a", resume_label="v1", profile_updated_on="2026-11-29")
+    assert card(store, "platform_a").refresh_due is True
 
 
-def test_new_earlier_and_more(store, conn):
-    old = batch(conn)
-    earlier = scanned(conn, old, 1, "Old role")
-    latest = batch(conn)
-    top1 = scanned(conn, latest, 1, "Role one")
-    top2 = scanned(conn, latest, 2, "Role two")
-    more = scanned(conn, latest, 3, "Role three")
-    inbox = store.list_leads("ai_training")
-    assert [x.id for x in inbox.new] == [top1, top2]
-    assert [x.id for x in inbox.earlier] == [earlier]
-    assert [x.id for x in inbox.more] == [more]
-
-
-def test_list_leads_writes_nothing(store, conn):
-    paste(store)
+def test_reading_writes_nothing(store, conn):
     before = conn.total_changes
-    store.list_leads("ai_training")
+    store.platforms()
+    store.due()
+    store.projects()
+    store.active_platform_names()
     assert conn.total_changes == before
 
 
-def test_statuses_sort_into_lists(store, conn):
-    a = paste(store, url="https://example.com/a", title="Role a")
-    b = paste(store, url="https://example.com/b", title="Role b")
-    c = paste(store, url="https://example.com/c", title="Role c")
-    store.set_status(a.id, "saved")
-    store.set_status(b.id, "applied", "v3 Nov 2026")
-    store.set_status(c.id, "skipped")
-    inbox = store.list_leads("ai_training")
-    assert [x.id for x in inbox.saved] == [a.id]
-    assert [x.id for x in inbox.applied] == [b.id]
-    assert [x.id for x in inbox.closed] == [c.id]
-    assert inbox.new == []
+# --- Opportunity log --------------------------------------------------------------------
 
 
-def test_skip_rest_only_touches_new(store, conn):
-    keep_saved = paste(store, url="https://example.com/a", title="Role a")
-    store.set_status(keep_saved.id, "saved")
-    applied = paste(store, url="https://example.com/b", title="Role b")
-    store.set_status(applied.id, "applied", "v3")
-    old = batch(conn)
-    earlier = scanned(conn, old, 1, "Old role")
-    batch(conn)
-    fresh = paste(store, url="https://example.com/c", title="Role c")
-    assert store.skip_rest("ai_training") == 1
-    statuses = dict(conn.execute("SELECT id, status FROM job_leads").fetchall())
-    assert statuses[fresh.id] == "skipped"
-    assert statuses[keep_saved.id] == "saved"
-    assert statuses[applied.id] == "applied"
-    assert statuses[earlier] == "new"
+def add(store, **overrides):
+    fields = {
+        "platform_id": "platform_a",
+        "title": "Physics reasoning reviews",
+        "pay_cents": 4500,
+        "currency": "USD",
+        "hours_per_week": 10,
+    }
+    fields.update(overrides)
+    return store.add_project(**fields)
 
 
-def test_skip_rest_on_empty_list_is_zero(store):
-    assert store.skip_rest("ai_training") == 0
-
-
-def test_badge_counts(store):
-    paste(store)
-    assert store.badge_counts("ai_training") == {"new": 1}
-
-
-# --- Statuses ---------------------------------------------------------------
-
-
-def test_applying_needs_a_label(store):
-    lead = paste(store)
-    with pytest.raises(JobsError):
-        store.set_status(lead.id, "applied")
-    with pytest.raises(JobsError):
-        store.set_status(lead.id, "applied", "x" * 41)
-
-
-def test_applying_records_date_and_label(store):
-    lead = store.set_status(paste(store).id, "applied", " v3 Nov 2026 ")
-    assert lead.resume_label == "v3 Nov 2026"
-    assert lead.applied_at == "2026-11-29T15:00:00Z"
+def test_add_project(store):
+    p = add(store)
+    assert (p.status, p.found_on, p.platform_name) == ("found", "2026-11-29", "Platform A")
+    assert (p.pay_usd_cents, p.pay_cad_cents, p.flags) == (4500, None, [])
 
 
 @pytest.mark.parametrize(
-    ("path", "ok"),
+    "fields",
     [
-        (["saved", "applied", "interview", "offer"], True),
-        (["skipped", "new", "saved"], True),
-        (["applied", "rejected"], True),
-        (["applied", "new"], False),
-        (["applied", "interview", "applied"], False),
-        (["rejected"], False),
-        (["applied", "offer", "rejected"], False),
+        {"title": "  "},
+        {"title": "x" * 81},
+        {"pay_cents": 4500, "currency": None},
+        {"pay_cents": None, "currency": "USD"},
+        {"currency": "EUR"},
+        {"pay_cents": -1},
+        {"hours_per_week": 0},
+        {"hours_per_week": 81},
     ],
 )
-def test_status_paths(store, path, ok):
-    lead = paste(store)
-    if ok:
-        for status in path:
-            store.set_status(lead.id, status, "v3" if status == "applied" else None)
-    else:
-        with pytest.raises(JobsConflict):
-            for status in path:
-                store.set_status(lead.id, status, "v3" if status == "applied" else None)
-
-
-def test_unknown_status_and_lead(store):
-    lead = paste(store)
+def test_bad_project_fields(store, fields):
     with pytest.raises(JobsError):
-        store.set_status(lead.id, "hired")
+        add(store, **fields)
+
+
+def test_below_floor_flag(store):
+    assert add(store, pay_cents=2500).flags == ["below_floor"]
+
+
+def test_cad_pay_converts_at_the_rate(conn, clock):
+    store = JobsStore(conn, SETTINGS, clock=clock, usd_rate=Decimal("1.40"))
+    p = add(store, pay_cents=4500, currency="CAD")
+    assert (p.pay_usd_cents, p.pay_cad_cents, p.flags) == (3214, 4500, [])
+    usd = add(store, pay_cents=4000, currency="USD")
+    assert (usd.pay_usd_cents, usd.pay_cad_cents) == (4000, 5600)
+
+
+def test_cad_pay_without_a_rate_has_no_usd_and_no_flag(store):
+    p = add(store, pay_cents=2000, currency="CAD")
+    assert (p.pay_usd_cents, p.pay_cad_cents, p.flags) == (None, 2000, [])
+
+
+def test_project_moves(store):
+    p = add(store)
+    assert store.set_project_status(p.id, "applied").status == "applied"
+    assert store.set_project_status(p.id, "accepted").status == "accepted"  # skips assessment
+    assert store.set_project_status(p.id, "active").status == "active"
+    assert store.set_project_status(p.id, "ended").status == "ended"
+    with pytest.raises(JobsConflict):
+        store.set_project_status(p.id, "active")  # ended is final
+
+
+def test_rejected_from_accepted_and_final(store):
+    p = add(store)
+    store.set_project_status(p.id, "accepted")
+    assert store.set_project_status(p.id, "rejected").status == "rejected"
+    with pytest.raises(JobsConflict):
+        store.set_project_status(p.id, "applied")
+
+
+@pytest.mark.parametrize(("start", "target"), [("active", "found"), ("active", "rejected")])
+def test_illegal_moves(store, start, target):
+    p = add(store)
+    store.set_project_status(p.id, start)
+    with pytest.raises(JobsConflict):
+        store.set_project_status(p.id, target)
+
+
+def test_unknown_project_and_status(store):
     with pytest.raises(JobsNotFound):
-        store.set_status(9999, "saved")
-
-
-# --- Platforms --------------------------------------------------------------
-
-
-def test_platforms_start_from_settings(store):
-    stages = {p.id: p.stage for p in store.platforms()}
-    assert stages == {
-        "platform_a": "active",
-        "platform_b": "not_joined",
-        "platform_c": "not_joined",
-    }
-
-
-def test_platform_change_appends_one_event(store, conn):
-    view = store.set_platform("platform_b", stage="applied", next_step="Wait for the test")
-    assert (view.stage, view.next_step) == ("applied", "Wait for the test")
-    view = store.set_platform("platform_b", stage="assessment")
-    assert view.next_step == "Wait for the test"  # carried forward
-    assert conn.execute("SELECT count(*) FROM job_platform_events").fetchone()[0] == 2
-
-
-def test_platform_refuses(store):
-    with pytest.raises(JobsNotFound):
-        store.set_platform("platform_z", stage="active")
+        store.set_project_status(999, "applied")
+    p = add(store)
     with pytest.raises(JobsError):
-        store.set_platform("platform_a", stage="hired")
+        store.set_project_status(p.id, "interview")
+
+
+def test_edit_project(store):
+    p = add(store)
+    after = store.edit_project(p.id, title="Chemistry reviews", hours_per_week=5)
+    assert (after.title, after.hours_per_week, after.pay_cents) == ("Chemistry reviews", 5, 4500)
+    cleared = store.edit_project(p.id, pay_cents=None, currency=None)
+    assert (cleared.pay_cents, cleared.currency) == (None, None)
     with pytest.raises(JobsError):
-        store.set_platform("platform_a", next_step="x" * 101)
+        store.edit_project(p.id, status="active")
 
 
-def test_nudges_oldest_first_at_most_two_and_snooze(store, clock):
-    store.set_platform("platform_b", next_step="Apply")
-    clock.now = NOW + timedelta(hours=1)
-    store.set_platform("platform_c", next_step="Finish the test")
-    clock.now = NOW + timedelta(hours=2)
-    store.set_platform("platform_a", next_step="Update profile")
-    assert [p.id for p in store.nudges()] == ["platform_b", "platform_c"]
-    store.set_platform("platform_b", snooze=True)
-    assert [p.id for p in store.nudges()] == ["platform_c", "platform_a"]
-    clock.now = NOW + timedelta(days=29)
-    assert "platform_b" in [p.id for p in store.nudges(limit=3)]
+def test_project_order_open_first_then_finished(store):
+    add(store, title="One")
+    active = add(store, title="Two")
+    store.set_project_status(active.id, "active")
+    ended = add(store, title="Three")
+    store.set_project_status(ended.id, "ended")
+    add(store, title="Four")
+    # Open ones in status order (found before active), newest first; then finished.
+    assert [p.title for p in store.projects()] == ["Four", "One", "Two", "Three"]
 
 
-def test_platform_without_a_next_step_never_nudges(store):
-    store.set_platform("platform_b", stage="applied")
-    assert store.nudges() == []
+def test_active_platform_names(store):
+    p = add(store, platform_id="platform_b")
+    assert store.active_platform_names() == []
+    store.set_project_status(p.id, "active")
+    add(store, platform_id="platform_b")  # a second, not active
+    assert store.active_platform_names() == ["Platform B"]
 
 
-def test_known_pay_ranks_before_pay_not_listed(store):
-    unknown = paste(
-        store,
-        url="https://example.com/u",
-        title="AI Trainer one",
-        text="Contract. Python and technical writing. Pay on request.",
+def test_project_on_a_removed_platform_shows_its_id(conn, clock):
+    JobsStore(conn, SETTINGS, clock=clock).add_project(
+        platform_id="platform_c", title="X", pay_cents=None, currency=None, hours_per_week=None
     )
-    known = paste(store, url="https://example.com/k", title="Rater", text="Contract. $31/hr.")
-    assert unknown.score > known.score
-    assert [x.id for x in store.list_leads("ai_training").new] == [known.id, unknown.id]
-
-
-def test_ties_break_on_usd_hourly_low_end(store):
-    cad = paste(
-        store, url="https://example.com/c", title="Role c", text="Contract. $60 CAD per hour."
-    )
-    usd = paste(store, url="https://example.com/d", title="Role d", text="Contract. $45/hr.")
-    assert cad.score == usd.score
-    # 60 CAD = 42.86 USD, below 45 USD (both score 25 for pay)
-    assert [x.id for x in store.list_leads("ai_training").new] == [usd.id, cad.id]
+    [p] = JobsStore(conn, fewer_platforms(), clock=clock).projects()
+    assert p.platform_name == "platform_c"
