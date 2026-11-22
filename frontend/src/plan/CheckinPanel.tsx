@@ -25,6 +25,7 @@ import { BlockForm, EVENT_KINDS } from "./BlockForm";
 import { addedEvents, chipState, needsAttention } from "./checkin";
 import { itemCountLabel } from "./grocery";
 import { dayLabel, isPast } from "./week";
+import { CheckRound } from "../jobs/CheckRound";
 import "./plan.css";
 
 export function CheckinPanel() {
@@ -243,6 +244,8 @@ export function CheckinPanel() {
           <p className="plan__note">Open the To-do app from the dock to change them.</p>
         )}
       </section>
+
+      <CheckRound />
 
       <div className="plan__bar">
         <button
