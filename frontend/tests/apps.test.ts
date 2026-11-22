@@ -40,8 +40,18 @@ test("The Vault: Income first (it opens first), then Side work and Statements", 
   );
 });
 
+test("Opportunity Office: Platforms first (it opens first), then Log", () => {
+  assert.deepEqual(
+    appsFor("jobs").map((a) => [a.id, a.name, a.ready]),
+    [
+      ["platforms", "Platforms", true],
+      ["log", "Log", true],
+    ],
+  );
+});
+
 test("every other building shows one under-construction app, not ready", () => {
-  for (const id of ALL.filter((b) => b !== "planner" && b !== "finance")) {
+  for (const id of ALL.filter((b) => !["planner", "finance", "jobs"].includes(b))) {
     assert.deepEqual(
       appsFor(id),
       [{ id: "construction", name: "Under construction", ready: false }],

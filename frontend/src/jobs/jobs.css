@@ -1,0 +1,122 @@
+/* Opportunity Office apps inside the desktop window. Buttons, fields and errors reuse
+   the to-do styles (.btn, .btn--quiet, .field, .form-error). Information as chips,
+   not paragraphs (spec section 7). Colours with transparency use commas on purpose. */
+
+.jobs {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.jobs__summary,
+.jobs-card__chips,
+.jobs-card__actions,
+.jobs-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.jobs__spacer {
+  flex: 1;
+}
+
+.jobs__h {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.jobs__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(65, 105, 225, 0.16);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.jobs__chip--warn {
+  background: var(--warn-fill);
+  border-color: rgba(255, 179, 64, 0.45);
+  color: var(--warn);
+}
+
+.jobs__chip--good {
+  background: rgba(52, 199, 89, 0.18);
+}
+
+.jobs__cards {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobs-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.jobs-card--active {
+  border-color: rgba(52, 199, 89, 0.45);
+}
+
+.jobs-card--rejected,
+.jobs-card--ended,
+.jobs-card--not_applied {
+  opacity: 0.7;
+}
+
+.jobs-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.jobs-card__name {
+  flex: 1;
+}
+
+.jobs-card__status {
+  width: auto;
+}
+
+.jobs-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.jobs-form .field {
+  width: auto;
+}
+
+.jobs-form__title {
+  flex: 1 1 14rem;
+}
+
+.jobs-form__num {
+  width: 6rem !important;
+}
+
+.jobs-tags__input {
+  width: 9rem !important;
+}
+
+.jobs-tags__remove {
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 0.1rem;
+}

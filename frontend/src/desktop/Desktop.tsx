@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import type { BuildingId } from "../api";
 import { CheckinPanel } from "../plan/CheckinPanel";
 import { GroceryPanel } from "../plan/GroceryPanel";
+import { LogPanel } from "../jobs/LogPanel";
+import { PlatformsPanel } from "../jobs/PlatformsPanel";
 import { PlanPanel } from "../plan/PlanPanel";
 import { TodoPanel } from "../todo/TodoPanel";
 import { IncomePanel } from "../vault/IncomePanel";
@@ -25,6 +27,8 @@ const ICONS: Record<string, string> = {
   sidework: "⏱",
   income: "$",
   statements: "▤",
+  platforms: "🛰",
+  log: "✎",
   construction: "⚠",
 };
 
@@ -103,6 +107,10 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                     <IncomePanel />
                   ) : openApp === "statements" ? (
                     <StatementsPanel />
+                  ) : openApp === "platforms" ? (
+                    <PlatformsPanel />
+                  ) : openApp === "log" ? (
+                    <LogPanel />
                   ) : (
                     <UnderConstruction name={name} />
                   )}
