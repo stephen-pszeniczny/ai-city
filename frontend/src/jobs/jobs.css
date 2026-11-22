@@ -120,3 +120,31 @@
   cursor: pointer;
   padding: 0 0.1rem;
 }
+
+/* The Open link looks and lines up like the buttons beside it. */
+.jobs-card__actions a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Status moves are small chips, so a row of them stays light. */
+.jobs-move {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: rgba(65, 105, 225, 0.22);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.jobs-move--quiet {
+  background: transparent;
+}
+
+.jobs-move:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

@@ -160,6 +160,8 @@ function ManualRate() {
 // --- Logging work ---------------------------------------------------------------------------
 
 const OTHER = "__other__";
+// A platform with an active Opportunity Office project, offered by name.
+const PLATFORM = "platform:";
 
 function LogForm({ v }: { v: SideWorkView }) {
   const client = useQueryClient();
@@ -176,7 +178,12 @@ function LogForm({ v }: { v: SideWorkView }) {
     mutationFn: () =>
       addEntry({
         worked_on: day,
-        company: company === OTHER ? otherName.trim() || null : company,
+        company:
+          company === OTHER
+            ? otherName.trim() || null
+            : company.startsWith(PLATFORM)
+              ? company.slice(PLATFORM.length)
+              : company,
         role: role.trim() || null,
         hours: hours.trim() || null,
         rate: rate.trim() || null,
@@ -210,6 +217,11 @@ function LogForm({ v }: { v: SideWorkView }) {
             {v.schedules.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+              </option>
+            ))}
+            {v.active_platforms.map((name) => (
+              <option key={name} value={`${PLATFORM}${name}`}>
+                {name}
               </option>
             ))}
             <option value={OTHER}>Other or blank</option>

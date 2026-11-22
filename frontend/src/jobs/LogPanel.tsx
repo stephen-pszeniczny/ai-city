@@ -116,7 +116,7 @@ function ProjectRow({ project }: { project: ProjectView }) {
             <button
               key={s}
               type="button"
-              className={`btn${s === "rejected" ? " btn--quiet" : ""}`}
+              className={`jobs-move${s === "rejected" ? " jobs-move--quiet" : ""}`}
               onClick={() => move.mutate(s as ProjectStatus)}
               disabled={move.isPending}
             >

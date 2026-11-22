@@ -40,11 +40,11 @@ const LOGS: Record<BuildingId, string[]> = {
     "Planning deposit matching",
   ],
   jobs: [
-    "Surveying job sources",
-    "Checking each feed's terms",
-    "Sketching the lead cards",
-    "Designing the match score",
-    "Planning the Sunday scan",
+    "Checking platform statuses",
+    "Counting platforms due a check",
+    "Stamping check dates",
+    "Tidying the project log",
+    "Comparing pay with the floor",
   ],
   career: [
     "Mapping the skills gap view",
