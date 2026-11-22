@@ -35,6 +35,7 @@ from aicity.db import DbKind, db_path, open_database
 from aicity.fx import rate_on, refresh_rates, save_manual_rate, valet_fetcher
 from aicity.income import IncomeError, IncomeStore, MainJobPayNotFound
 from aicity.income_view import income_view, main_job_pay_json, vault_badge
+from aicity.jobs_store import JobsStore
 from aicity.settings import MainJob, PaySchedule, load_settings
 from aicity.side_work import (
     SideWorkConflict,
@@ -233,7 +234,25 @@ def unlock(request: Request) -> dict[str, str | None]:
 def get_side_work(request: Request) -> dict:
     schedules, income = _settings_for(request)
     with _open(request) as (store, conn):
-        return side_work_view(store, conn, schedules, income, _today(request))
+        view = side_work_view(store, conn, schedules, income, _today(request))
+        return view | {"active_platforms": _active_platforms(request, conn, schedules)}
+
+
+def _active_platforms(request: Request, conn: sqlite3.Connection, schedules) -> list[str]:
+    """Opportunity Office platforms with an active project, offered as companies.
+
+    Names only; one whose id is already a pay schedule is left out (it's in the list).
+    """
+    if _sample(request):
+        jobs = sample_data.SAMPLE_JOBS
+    else:
+        jobs = load_settings().jobs
+        if jobs is None:
+            return []
+    known = set(schedules)  # pay schedules are keyed by id
+    names = JobsStore(conn, jobs, clock=request.app.state.clock).active_platform_names()
+    ids = {p.name: p.id for p in jobs.platforms}
+    return [n for n in names if ids[n] not in known]
 
 
 @router.post("/entries", status_code=201)

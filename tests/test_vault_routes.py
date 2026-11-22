@@ -687,3 +687,54 @@ def test_untimed_company_is_its_own_income_source(untimed):
     )
     month = untimed.get("/api/vault/income").json()["month"]
     assert {s["key"]: s["name"] for s in month["by_source"]} == {"platform_b": "Platform B"}
+
+
+# --- Platforms with an active Opportunity Office project --------------------------------
+
+JOBS = """
+[jobs]
+[[jobs.platforms]]
+id = "platform_a"
+name = "Platform A"
+url = "https://example.com/a"
+start_status = "active"
+
+[[jobs.platforms]]
+id = "platform_b"
+name = "Platform B"
+url = "https://example.com/b"
+start_status = "active"
+"""
+
+
+def active_project(platform_id: str) -> None:
+    from aicity.db import db_path, open_database
+    from aicity.jobs_store import JobsStore
+    from aicity.settings import load_settings
+
+    conn = open_database(db_path(DbKind.PERSONAL), DbKind.PERSONAL)
+    try:
+        store = JobsStore(conn, load_settings().jobs, clock=lambda: NOW)
+        p = store.add_project(
+            platform_id=platform_id,
+            title="Reviews",
+            pay_cents=None,
+            currency=None,
+            hours_per_week=None,
+        )
+        store.set_project_status(p.id, "active")
+    finally:
+        conn.close()
+
+
+def test_side_work_offers_platforms_with_an_active_project(data_dir, unlocked):
+    settings = data_dir / "settings" / "settings.toml"
+    settings.write_text(settings.read_text() + JOBS)
+    assert view(unlocked)["active_platforms"] == []
+    active_project("platform_b")
+    active_project("platform_a")  # same id as a pay schedule: already in the list
+    assert view(unlocked)["active_platforms"] == ["Platform B"]
+
+
+def test_side_work_without_jobs_offers_no_platforms(unlocked):
+    assert view(unlocked)["active_platforms"] == []
