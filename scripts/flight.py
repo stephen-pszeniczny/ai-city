@@ -174,7 +174,8 @@ def _resume_import(store: FlightStore, args, stdin, stdout) -> None:
     sections = preview_import(Path(args.path))
     for s in sections:
         count = len(s.items)
-        print(f"{s.title}: {count} item{'' if count == 1 else 's'}", file=stdout)
+        title = "Header (name and contact details)" if s.header else s.title
+        print(f"{title}: {count} item{'' if count == 1 else 's'}", file=stdout)
     if not args.confirm:
         print("Nothing saved. Run again with --confirm to save it.", file=stdout)
         return

@@ -116,8 +116,11 @@ def create_app(
     app.state.db_kind = load_saved_mode()
     app.state.mode_switcher = ModeSwitcher(app.state, ask)
     # The Vault's Touch ID lock (memory only, so a restart locks it again).
-    app.state.vault_lock = VaultLock(ask)
-    app.state.jobs_lock = VaultLock(ask, place="Opportunity Office")
+    # The real Touch ID prompt names what it's for; tests pass their own fake ask.
+    vault_ask = (lambda: ask_owner(operation="vault")) if ask is ask_owner else ask
+    jobs_ask = (lambda: ask_owner(operation="jobs")) if ask is ask_owner else ask
+    app.state.vault_lock = VaultLock(vault_ask)
+    app.state.jobs_lock = VaultLock(jobs_ask, place="Opportunity Office")
     # The clock the routes use; tests replace it with a fake one.
     app.state.clock = utc_now
     app.state.reminder_loop = None

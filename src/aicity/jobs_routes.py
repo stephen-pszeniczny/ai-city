@@ -41,9 +41,10 @@ KEY_HEADER = "X-Jobs-Key"
 
 def _require_key(request: Request) -> None:
     state = request.app.state
-    if state.db_kind == DbKind.PERSONAL and not state.jobs_lock.allows(
-        request.headers.get(KEY_HEADER)
-    ):
+    # Read the mode once: the handler opens this same mode's database (_kind), so a
+    # mode switch landing between the key check and the open can't skip the key.
+    kind = request.state.db_kind = DbKind(state.db_kind)
+    if kind == DbKind.PERSONAL and not state.jobs_lock.allows(request.headers.get(KEY_HEADER)):
         raise HTTPException(status_code=403, detail="Opportunity Office is locked.")
 
 
@@ -98,8 +99,13 @@ class ProjectEditIn(_Body):
 # --- Opening the store for one request ---------------------------------------------------
 
 
+def _kind(request: Request) -> DbKind:
+    """The mode this request was checked under (falls back to the current mode)."""
+    return getattr(request.state, "db_kind", None) or DbKind(request.app.state.db_kind)
+
+
 def _sample(request: Request) -> bool:
-    return request.app.state.db_kind == DbKind.SAMPLE
+    return _kind(request) == DbKind.SAMPLE
 
 
 def _settings(request: Request) -> JobsSettings:
@@ -123,7 +129,8 @@ def _rate(request: Request, conn: sqlite3.Connection):
 def _open(request: Request) -> Iterator[tuple[JobsStore, JobsSettings, object]]:
     state = request.app.state
     settings = _settings(request)
-    conn = open_database(db_path(state.db_kind), state.db_kind)
+    kind = _kind(request)
+    conn = open_database(db_path(kind), kind)
     try:
         rate = _rate(request, conn)
         store = JobsStore(conn, settings, clock=state.clock, usd_rate=rate[0] if rate else None)

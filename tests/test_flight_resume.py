@@ -195,3 +195,22 @@ def test_the_title_block_is_a_header_kept_out_of_model_context(tmp_path, conn):
     out = tmp_path / "o.docx"
     export_docx(conn, out)  # the export keeps the header
     assert preview_import(out)[0].title == "Made-up Person"
+
+
+def test_proposals_never_change_the_header(tmp_path, conn):
+    doc = Document()
+    doc.add_heading("Made-up Person", 0)
+    doc.add_paragraph("made-up@example.com")
+    doc.add_heading("Experience", 1)
+    doc.add_paragraph("Checked calculations")
+    doc.save(tmp_path / "h.docx")
+    confirm_import(conn, preview_import(tmp_path / "h.docx"), now=NOW)
+    header_item = resume_sections(conn)[0]["items"][0]["id"]
+    with pytest.raises(FlightError, match="header"):
+        apply_resume_change(
+            conn, {"section": "Experience", "action": "replace", "item": header_item, "text": "x"}
+        )
+    with pytest.raises(FlightError, match="header"):
+        apply_resume_change(
+            conn, {"section": "made-up person", "action": "add", "item": None, "text": "x"}
+        )

@@ -31,6 +31,7 @@ from aicity.side_work import SideWorkConflict, SideWorkError, SideWorkStore
 from aicity.side_work_math import arrival_window, expected_cents, pay_period, to_cad_cents
 from aicity.statement_csv import Classified, StatementRow, row_key
 
+MAX_PENDING = 5
 PENDING_MINUTES = 15
 
 
@@ -70,7 +71,13 @@ class PendingImports:
 
     def put(self, pending: Pending) -> str:
         token = secrets.token_urlsafe(16)
+        cutoff = self._clock() - timedelta(minutes=PENDING_MINUTES)
         with self._lock:
+            # Unconfirmed previews never pile up: expired ones go, and only the newest few stay.
+            for old in [t for t, p in self._items.items() if p.created < cutoff]:
+                del self._items[old]
+            while len(self._items) >= MAX_PENDING:
+                del self._items[next(iter(self._items))]
             self._items[token] = pending
         return token
 

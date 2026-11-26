@@ -18,6 +18,8 @@ from decimal import Decimal
 
 from aicity.settings import MainJob, PaySchedule
 
+# Older dates are refused: rates are filled day by day from the earliest date.
+EARLIEST_DAY = date(2000, 1, 1)
 MAX_BYTES = 2 * 1024 * 1024
 MAX_ROWS = 20_000
 COLUMNS = ("date", "transaction", "description", "amount", "balance", "currency")
@@ -94,7 +96,7 @@ def read_statement(data: bytes) -> list[StatementRow]:
             get = {c: cells[i] for c, i in where.items()}
             try:
                 day = date.fromisoformat(get["date"].strip())
-                if len(get["date"].strip()) != 10:
+                if len(get["date"].strip()) != 10 or day < EARLIEST_DAY:
                     raise ValueError
             except ValueError:
                 raise StatementError(

@@ -66,9 +66,10 @@ KEY_HEADER = "X-Vault-Key"
 
 def _require_key(request: Request) -> None:
     state = request.app.state
-    if state.db_kind == DbKind.PERSONAL and not state.vault_lock.allows(
-        request.headers.get(KEY_HEADER)
-    ):
+    # Read the mode once: the handler opens this same mode's database (_kind), so a
+    # mode switch landing between the key check and the open can't skip the key.
+    kind = request.state.db_kind = DbKind(state.db_kind)
+    if kind == DbKind.PERSONAL and not state.vault_lock.allows(request.headers.get(KEY_HEADER)):
         raise HTTPException(status_code=403, detail="Vault is locked.")
 
 
@@ -177,15 +178,21 @@ class RateIn(_Body):
 @contextmanager
 def _open(request: Request) -> Iterator[tuple[SideWorkStore, sqlite3.Connection]]:
     state = request.app.state
-    conn = open_database(db_path(state.db_kind), state.db_kind)
+    kind = _kind(request)
+    conn = open_database(db_path(kind), kind)
     try:
         yield SideWorkStore(conn, clock=state.clock), conn
     finally:
         conn.close()
 
 
+def _kind(request: Request) -> DbKind:
+    """The mode this request was checked under (falls back to the current mode)."""
+    return getattr(request.state, "db_kind", None) or DbKind(request.app.state.db_kind)
+
+
 def _sample(request: Request) -> bool:
-    return request.app.state.db_kind == DbKind.SAMPLE
+    return _kind(request) == DbKind.SAMPLE
 
 
 def _today(request: Request) -> date:
@@ -374,7 +381,7 @@ def _preview(request: Request, data: bytes) -> dict:
             rows,
             classified,
             schedules,
-            request.app.state.db_kind,
+            _kind(request),
             request.app.state.clock(),
         )
     body["token"] = request.app.state.pending_imports.put(pending)
@@ -387,9 +394,13 @@ async def preview_statement(request: Request) -> dict:
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="The file is too big (over 2 MB).")
-    data = await request.body()
-    if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="The file is too big (over 2 MB).")
+    chunks, size = [], 0
+    async for chunk in request.stream():  # bounded even without a Content-Length
+        size += len(chunk)
+        if size > MAX_BYTES:
+            raise HTTPException(status_code=413, detail="The file is too big (over 2 MB).")
+        chunks.append(chunk)
+    data = b"".join(chunks)
     return await run_in_threadpool(_preview, request, data)
 
 
@@ -430,7 +441,7 @@ class ConfirmIn(_Body):
 @statements_router.post("/confirm")
 def confirm_statement(request: Request, body: ConfirmIn) -> dict:
     pending_imports = request.app.state.pending_imports
-    pending = pending_imports.get(body.token, request.app.state.db_kind)
+    pending = pending_imports.get(body.token, _kind(request))
     schedules, _main_job = _sources(request)
     with _open(request) as (side, conn):
         result = confirm_import(

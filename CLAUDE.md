@@ -19,6 +19,11 @@
 - Never install anything without showing the source repo, what it adds (hooks, MCP servers, scripts, network access) and the exact command, then waiting for a yes.
 - Never suggest anything on the Do not install list.
 
+## Security checkpoints
+- Run a security audit (the installed `security-audit` skill, quick profile unless Steve picks another) at these checkpoints: when a phase ends, when a building is finished, before any public README screenshots or demo, and after a change to locks, the front door (`security.py`), file imports or anything an AI model can drive.
+- At a checkpoint, say in one line that an audit is due and what it covers. A full audit uses many helper agents and a lot of usage, so before starting ask Steve to check his usage limit, and wait for his go-ahead. Never start one without that yes.
+- Gitleaks and the blocked-words check still run on every commit, as now.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

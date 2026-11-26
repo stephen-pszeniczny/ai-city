@@ -63,9 +63,21 @@ def _store(
         conn.close()
 
 
+class PresenceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    looking: bool
+
+
+@router.post("/presence")
+def report_presence(request: Request, body: PresenceIn) -> dict:
+    """The page says whether it has focus. A POST, so other websites can't send it (Origin rule)."""
+    request.app.state.presence.report(body.looking)
+    return {"ok": True}
+
+
 @router.get("")
-def list_notifications(request: Request, looking: bool = False) -> dict:
-    request.app.state.presence.report(looking)
+def list_notifications(request: Request) -> dict:
     with _store(request) as (store, kind):
         return {"mode": kind.value, "items": [asdict(n) for n in store.list_active()]}
 

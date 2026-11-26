@@ -17,9 +17,11 @@ All commands run from the repo root with `.venv/bin/python scripts/flight.py …
    general level, side roles without anything confidential, and any rough notes from his
    tablet. He may share photos of handwritten pages: read them and use only the text; never
    save, copy or describe the images anywhere else. Daily detail isn't expected.
-3. **Save the draft** (add to it if he sends more):
-   `printf '%s' "<the text>" | .venv/bin/python scripts/flight.py save-draft 2026-11`
-   (use a quoted heredoc for long text). Show him nothing he didn't write.
+3. **Save the draft** (add to it if he sends more). Write his text to a file in this
+   session's scratch folder with the Write tool, then
+   `.venv/bin/python scripts/flight.py save-draft 2026-11 < <that file>`.
+   Never put his text inside a shell command or quotes (`$40/hr` would be mangled).
+   Show him nothing he didn't write.
 4. **Read the context:** `flight.py draft 2026-11` and `flight.py context` (existing skills
    and levels, the 34 competencies marked ready or empty, open recommendations, and the
    resume's sections with each item's id).

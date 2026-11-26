@@ -90,12 +90,18 @@ def save_mode(kind: DbKind) -> None:
 # --- Asking for Touch ID --------------------------------------------------------------
 
 
-def ask_owner(helper: Path = HELPER_PATH, timeout: float = OWNER_CHECK_TIMEOUT_S) -> OwnerCheck:
+def ask_owner(
+    helper: Path = HELPER_PATH,
+    timeout: float = OWNER_CHECK_TIMEOUT_S,
+    operation: str = "mode",
+) -> OwnerCheck:
     """Show the Mac's Touch ID prompt (password as the backup) and wait for the answer."""
     if not helper.is_file():
         return OwnerCheck.UNAVAILABLE
     try:
-        result = subprocess.run([str(helper)], timeout=timeout, capture_output=True, check=False)
+        result = subprocess.run(
+            [str(helper), operation], timeout=timeout, capture_output=True, check=False
+        )
     except subprocess.TimeoutExpired:
         return OwnerCheck.DECLINED  # the prompt is closed when the helper is stopped
     except OSError:
