@@ -112,9 +112,18 @@ def test_bad_month_is_exit_2(personal):
 
 
 def test_context_lists_skills_competencies_and_recommendations(personal):
-    rec = {"kind": "recommendation", "payload": {
-        "skill": "Design review", "kind": "task", "title": "Shadow a peer review",
-        "provider": "", "url": None, "price": "", "free": True}}
+    rec = {
+        "kind": "recommendation",
+        "payload": {
+            "skill": "Design review",
+            "kind": "task",
+            "title": "Shadow a peer review",
+            "provider": "",
+            "url": None,
+            "price": "",
+            "free": True,
+        },
+    }
     run(["propose", "2026-11", write(personal, [SKILL, EXAMPLE, rec])])
     for pid in ("1", "2", "3"):
         run(["decide", pid, "accept"])
