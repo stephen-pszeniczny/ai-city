@@ -7,8 +7,9 @@ start, which also catches reminders that came due while the app or Mac was off.
 
 In the Personal database it also makes the monthly "import last month's statement"
 reminder (statement_reminder.py), the weekly Sunday check-in reminder
-(checkin_reminder.py) and routine reminders (routine_reminder.py), using the due day and reminder time from the
-private settings; a settings problem is logged (by type only) and task reminders
+(checkin_reminder.py), routine reminders (routine_reminder.py) and Flight School's
+monthly "log last month" to-do (flight_reminder.py), using the due days and reminder
+time from the private settings; a settings problem is logged (by type only) and task reminders
 still go ahead.
 
 It never creates a database file, and a file it can't use is logged (by kind
@@ -23,10 +24,12 @@ from datetime import UTC, datetime, tzinfo
 
 from aicity.checkin_reminder import check_checkin_reminder
 from aicity.db import DatabaseError, DbKind, db_path, open_database
+from aicity.flight_reminder import check_flight_todo
 from aicity.notifications import Notification, NotificationStore
 from aicity.routine_reminder import check_routine_reminders
 from aicity.settings import SettingsError, load_settings
 from aicity.statement_reminder import check_statement_reminder
+from aicity.tasks import TaskStore
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ def check_all_databases(
                 made[kind] += _statement(conn, clock, local_tz, load)
                 made[kind] += _checkin(conn, clock, local_tz, load)
                 made[kind] += _routines(conn, clock, local_tz, load)
+                made[kind] += _flight(conn, clock, local_tz, load)
             if notify is not None and kind is DbKind.PERSONAL:
                 new = store.created_after(before)
                 if new:
@@ -125,6 +129,24 @@ def _routines(
         return 0
     now = clock()
     return check_routine_reminders(conn, now.astimezone(local_tz), routines, now.astimezone(UTC))
+
+
+def _flight(
+    conn: sqlite3.Connection, clock: Clock, local_tz: tzinfo | None, load: Callable[[], object]
+) -> int:
+    try:
+        settings = load()
+    except (SettingsError, OSError) as exc:
+        log.warning("Flight School to-do skipped (%s).", type(exc).__name__)
+        return 0
+    career = getattr(settings, "career", None)
+    if career is None:  # no [career] in the settings: no Flight School
+        return 0
+    tasks = TaskStore(conn, stale_after_days=settings.tasks.stale_after_days, clock=clock)
+    now = clock()
+    return check_flight_todo(
+        conn, now.astimezone(local_tz), career, settings.tasks.reminder_time, tasks
+    )
 
 
 def _tell(notify: Callable[[list[Notification]], None], new: list[Notification]) -> None:
