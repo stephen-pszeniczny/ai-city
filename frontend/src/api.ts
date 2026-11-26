@@ -118,8 +118,10 @@ export type NotificationItem = {
 export type NotificationList = { mode: Mode; items: NotificationItem[] };
 
 /** looking: this window has focus (the backend skips Mac notifications while you're looking). */
-export const getNotifications = (looking: boolean) =>
-  request<NotificationList>("GET", `/api/notifications?looking=${looking ? 1 : 0}`);
+export async function getNotifications(looking: boolean): Promise<NotificationList> {
+  await request<{ ok: boolean }>("POST", "/api/notifications/presence", { looking });
+  return request<NotificationList>("GET", "/api/notifications");
+}
 
 export const markSeen = (id: number, mode: Mode) =>
   request<{ ok: boolean }>("POST", `/api/notifications/${id}/seen`, { mode });

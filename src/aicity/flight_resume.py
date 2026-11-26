@@ -103,6 +103,8 @@ def apply_resume_change(
     action, text = payload["action"], payload["text"]
     if action == "add":
         sid = _section_id(conn, payload["section"])
+        if _is_header(conn, sid):
+            raise FlightError("The resume's header (name and contact details) isn't changed here.")
         pos = conn.execute(
             "SELECT coalesce(max(position) + 1, 0) FROM fs_resume_items WHERE section_id = ?",
             (sid,),
@@ -114,10 +116,13 @@ def apply_resume_change(
         )
         return
     row = conn.execute(
-        "SELECT id FROM fs_resume_items WHERE id = ? AND archived_at IS NULL", (payload["item"],)
+        "SELECT section_id FROM fs_resume_items WHERE id = ? AND archived_at IS NULL",
+        (payload["item"],),
     ).fetchone()
     if row is None:
         raise FlightError("No current resume item has that item id.")
+    if _is_header(conn, row[0]):
+        raise FlightError("The resume's header (name and contact details) isn't changed here.")
     if action == "replace":
         conn.execute(
             "UPDATE fs_resume_items SET text = ?, updated_at = ? WHERE id = ?",
@@ -193,6 +198,13 @@ def _section_id(conn: sqlite3.Connection, title: str) -> int:
     return conn.execute(
         "INSERT INTO fs_resume_sections (position, title) VALUES (?, ?)", (pos, title)
     ).lastrowid
+
+
+def _is_header(conn: sqlite3.Connection, section_id: int) -> bool:
+    row = conn.execute(
+        "SELECT header FROM fs_resume_sections WHERE id = ?", (section_id,)
+    ).fetchone()
+    return bool(row and row[0])
 
 
 def _save_version(conn: sqlite3.Connection, month_of: date, stamp: str) -> str:

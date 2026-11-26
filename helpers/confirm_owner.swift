@@ -12,6 +12,15 @@
 import Foundation
 import LocalAuthentication
 
+// What the prompt says depends on the one argument: mode (default), vault or jobs.
+let reasons = [
+    "mode": "switch the Asteroid Belt to Personal mode (real data)",
+    "vault": "open the Vault in the Asteroid Belt",
+    "jobs": "open Opportunity Office in the Asteroid Belt",
+]
+let operation = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "mode"
+guard let reason = reasons[operation] else { exit(1) }
+
 let context = LAContext()
 var problem: NSError?
 
@@ -22,7 +31,7 @@ guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &problem) els
 
 context.evaluatePolicy(
     .deviceOwnerAuthentication,
-    localizedReason: "switch the Asteroid Belt to Personal mode (real data)"
+    localizedReason: reason
 ) { success, _ in
     exit(success ? 0 : 1)
 }

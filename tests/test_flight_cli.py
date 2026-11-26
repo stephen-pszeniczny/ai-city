@@ -199,3 +199,17 @@ def test_context_never_shows_contact_details(personal):
     run(["resume-import", str(src), "--confirm"])
     out = run(["context"])[1]
     assert "made-up@example.com" not in out and "Checked calculations" in out
+
+
+def test_resume_import_preview_hides_the_name(personal):
+    from docx import Document
+
+    src = personal / "r.docx"
+    doc = Document()
+    doc.add_heading("Made-up Person", 0)
+    doc.add_paragraph("made-up@example.com")
+    doc.add_heading("Experience", 1)
+    doc.add_paragraph("Checked calculations")
+    doc.save(src)
+    out = run(["resume-import", str(src)])[1]
+    assert "Made-up Person" not in out and "Header (name and contact details): 1 item" in out

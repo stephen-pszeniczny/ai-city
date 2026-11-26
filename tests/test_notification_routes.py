@@ -176,14 +176,20 @@ def test_list_names_the_database_it_actually_read_even_if_the_mode_switches_mean
     assert [i["title"] for i in body["items"]] == ["First", "Second"]
 
 
-def test_route_records_looking_flag(client):
-    client.get("/api/notifications?looking=1")
+def test_presence_is_reported_by_post(client):
+    client.post("/api/notifications/presence", json={"looking": True})
     assert client.app.state.presence.looking() is True
-    client.get("/api/notifications?looking=0")
+    client.post("/api/notifications/presence", json={"looking": False})
     assert client.app.state.presence.looking() is False
 
 
-def test_route_without_flag_counts_as_not_looking(client):
+def test_a_get_never_changes_presence(client):
+    """Security audit 2026-11-26: GET skips the Origin rule, so it must not set presence."""
     client.get("/api/notifications?looking=1")
-    client.get("/api/notifications")
     assert client.app.state.presence.looking() is False
+
+
+def test_presence_post_from_another_site_is_refused(data_dir, clock):
+    app = create_app(dev=False)
+    other = TestClient(app, base_url=APP_URL, headers={"origin": "https://evil.example"})
+    assert other.post("/api/notifications/presence", json={"looking": True}).status_code == 403
