@@ -1,8 +1,9 @@
 """Flight School's master resume: Word import, approved changes, versions and Word export.
 
 Import is two steps: preview_import reads a .docx into sections (headings start a section;
-other non-empty paragraphs become items; tables are skipped; no headings at all gives one
-"Resume" section) and saves nothing; confirm_import saves it once, labels it "v1 Mon YYYY",
+a Title-styled heading starts the header, the name and contact details, which is exported
+but never shown to a model; other non-empty paragraphs become items; tables are skipped;
+no headings at all gives one "Resume" section) and saves nothing; confirm_import saves it once, labels it "v1 Mon YYYY",
 and applies any resume changes the owner accepted before the resume existed.
 
 Changes come from accepted resume_change proposals: add (to a section, created if new),
@@ -31,6 +32,7 @@ _ITEM_MAX = 600
 class Section:
     title: str
     items: list[str] = field(default_factory=list)
+    header: bool = False  # the title block: name and contact details
 
 
 def preview_import(path: Path) -> list[Section]:
@@ -45,7 +47,9 @@ def preview_import(path: Path) -> list[Section]:
         if not text:
             continue
         style = (para.style.name if para.style is not None else "") or ""
-        if style.startswith("Heading") or style == "Title":
+        if style == "Title":
+            sections.append(Section(text[:_TITLE_MAX], header=True))
+        elif style.startswith("Heading"):
             sections.append(Section(text[:_TITLE_MAX]))
         else:
             if not sections:
@@ -66,7 +70,8 @@ def confirm_import(conn: sqlite3.Connection, sections: list[Section], *, now: da
             raise FlightConflict("A resume has already been imported.")
         for pos, s in enumerate(sections):
             sid = conn.execute(
-                "INSERT INTO fs_resume_sections (position, title) VALUES (?, ?)", (pos, s.title)
+                "INSERT INTO fs_resume_sections (position, title, header) VALUES (?, ?, ?)",
+                (pos, s.title, int(s.header)),
             ).lastrowid
             for ipos, text in enumerate(s.items):
                 conn.execute(
@@ -138,25 +143,35 @@ def bump_version(conn: sqlite3.Connection, month: str, *, now: datetime) -> str:
     return _save_version(conn, date(year, mon, 1), _stamp(now))
 
 
-def resume_sections(conn: sqlite3.Connection) -> list[dict]:
-    sections = conn.execute(
-        "SELECT id, title FROM fs_resume_sections ORDER BY position, id"
-    ).fetchall()
+def resume_sections(conn: sqlite3.Connection, *, include_header: bool = True) -> list[dict]:
+    """The current resume. include_header=False leaves out the title block (name and contact
+    details), for anything shown to a model."""
+    sql = "SELECT id, title, header FROM fs_resume_sections"
+    if not include_header:
+        sql += " WHERE header = 0"
+    sections = conn.execute(sql + " ORDER BY position, id").fetchall()
     out = []
-    for sid, title in sections:
+    for sid, title, header in sections:
         items = conn.execute(
             "SELECT id, text FROM fs_resume_items WHERE section_id = ? AND archived_at IS NULL "
             "ORDER BY position, id",
             (sid,),
         ).fetchall()
-        out.append({"id": sid, "title": title, "items": [{"id": i, "text": t} for i, t in items]})
+        out.append(
+            {
+                "id": sid,
+                "title": title,
+                "header": bool(header),
+                "items": [{"id": i, "text": t} for i, t in items],
+            }
+        )
     return out
 
 
 def export_docx(conn: sqlite3.Connection, path: Path) -> None:
     doc = Document()
     for s in resume_sections(conn):
-        doc.add_heading(s["title"], level=1)
+        doc.add_heading(s["title"], level=0 if s["header"] else 1)
         for item in s["items"]:
             doc.add_paragraph(item["text"])
     doc.save(str(path))
@@ -197,7 +212,7 @@ def _merge_same_titles(sections: list[Section]) -> list[Section]:
         if key in merged:
             merged[key].items.extend(s.items)
         else:
-            merged[key] = Section(s.title, list(s.items))
+            merged[key] = Section(s.title, list(s.items), s.header)
     return list(merged.values())
 
 

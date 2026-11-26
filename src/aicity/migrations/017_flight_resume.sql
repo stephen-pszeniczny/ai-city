@@ -12,7 +12,10 @@ CREATE TABLE fs_resume_sections (
     id       INTEGER PRIMARY KEY,
     position INTEGER NOT NULL CHECK (position >= 0),
     title    TEXT NOT NULL UNIQUE COLLATE NOCASE
-             CHECK (length(title) BETWEEN 1 AND 60 AND title = trim(title))
+             CHECK (length(title) BETWEEN 1 AND 60 AND title = trim(title)),
+    -- The title block (name and contact details) is the header: exported, but never shown
+    -- to a model.
+    header   INTEGER NOT NULL DEFAULT 0 CHECK (header IN (0, 1))
 ) STRICT;
 
 CREATE TABLE fs_resume_items (

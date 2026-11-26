@@ -184,3 +184,18 @@ def test_analyse_needs_local_mode(personal):
     settings_with(personal, '\n[career]\nai = "claude_code"\n')
     code, _, err = run(["analyse", "2026-11"])
     assert code == 2 and "local" in err
+
+
+def test_context_never_shows_contact_details(personal):
+    from docx import Document
+
+    src = personal / "r.docx"
+    doc = Document()
+    doc.add_heading("Made-up Person", 0)
+    doc.add_paragraph("made-up@example.com")
+    doc.add_heading("Experience", 1)
+    doc.add_paragraph("Checked calculations")
+    doc.save(src)
+    run(["resume-import", str(src), "--confirm"])
+    out = run(["context"])[1]
+    assert "made-up@example.com" not in out and "Checked calculations" in out

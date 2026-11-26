@@ -175,3 +175,23 @@ def test_export_round_trips(tmp_path, conn):
         ("Experience", ["Designed duct layouts", "Checked calculations"]),
         ("Skills", ["Python"]),
     ]
+
+
+def test_the_title_block_is_a_header_kept_out_of_model_context(tmp_path, conn):
+    doc = Document()
+    doc.add_heading("Made-up Person", 0)  # the Title style
+    doc.add_paragraph("made-up@example.com · 555-0100")
+    doc.add_heading("Experience", 1)
+    doc.add_paragraph("Checked calculations")
+    doc.save(tmp_path / "t.docx")
+    sections = preview_import(tmp_path / "t.docx")
+    assert [(s.title, s.header) for s in sections] == [
+        ("Made-up Person", True),
+        ("Experience", False),
+    ]
+    confirm_import(conn, sections, now=NOW)
+    shown = resume_sections(conn, include_header=False)
+    assert [s["title"] for s in shown] == ["Experience"]
+    out = tmp_path / "o.docx"
+    export_docx(conn, out)  # the export keeps the header
+    assert preview_import(out)[0].title == "Made-up Person"

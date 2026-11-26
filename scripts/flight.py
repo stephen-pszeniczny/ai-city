@@ -146,8 +146,8 @@ def _context_text(store: FlightStore) -> str:
     lines += [
         f"- {r['skill']}: {r['title']}" for r in store.recommendations() if r["status"] == "open"
     ]
-    lines.append("RESUME (section, then item id: text)")
-    for s in resume_sections(store.conn):
+    lines.append("RESUME (section, then item id: text; the name and contact details are left out)")
+    for s in resume_sections(store.conn, include_header=False):
         lines.append(f"## {s['title']}")
         lines += [f"{item['id']}: {item['text']}" for item in s["items"]]
     return "\n".join(lines)
