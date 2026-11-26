@@ -146,6 +146,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Logging a project (Opportunity Office)** → computer → **Log** → *+ Log a project*: the platform, a title in your own words (never copy the platform's description), pay per hour with USD or CAD, hours a week. Tap a status to move it on; **Ended** when it finishes. Below the pay floor shows a warning chip. A project marked **Active** puts its platform in the Vault's Log work company list.
 
+**Flight School monthly log** → on the 1st (change it with `reminder_day` under `[career]`), Mission Control gets the to-do "Log last month for Flight School" with a reminder. In Claude Code, type `/flight-log`: paste or type what you did last month (rough notes are fine; photos of handwritten pages can be shown, they're never saved), then review each proposal (accept, edit or reject). When none are left, the month is done, its progress is saved and the to-do ticks off. Needs a `[career]` section in the settings file (copy the commented example; the defaults are fine). Check where things stand with `.venv/bin/python scripts/flight.py status`.
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---

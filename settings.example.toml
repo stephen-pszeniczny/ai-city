@@ -156,3 +156,11 @@ tax_set_aside_is_placeholder = true
 # id = "platform_b"
 # name = "Platform B"
 # url = "https://example.org/login"
+
+# Optional: Flight School. Who analyses the monthly log: "claude_code" (default; run
+# /flight-log in Claude Code) or "local" (a model in Ollama on this Mac, named in
+# local_model). reminder_day: the day of the month the "log last month" to-do appears.
+# [career]
+# ai = "claude_code"
+# local_model = "a-local-model:tag"   # only when ai = "local"
+# reminder_day = 1
