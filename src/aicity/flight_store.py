@@ -8,8 +8,9 @@ applies nothing. A proposal can be decided once.
 Applying: bullet -> fs_bullets; example -> a ready competency example; new_skill -> a
 skill with its links (related skills that don't exist yet are skipped) and a first level
 event; level_change -> the skill's new level and an event; recommendation -> an open
-recommendation; resume_change -> recorded on the proposal only (the master resume
-applies accepted changes, see flight_resume.py).
+recommendation; resume_change -> applied to the master resume at once if it has been
+imported, otherwise when it is (flight_resume.py). A month with an applied resume
+change bumps the resume version.
 
 A month is done when it has a decided proposal and none pending: its progress check is
 saved and its Mission Control to-do is completed, in the same transaction. Skill names
@@ -30,6 +31,7 @@ from aicity.flight_proposals import (
     FlightNotFound,
     validate_payload,
 )
+from aicity.flight_resume import apply_resume_change, bump_version, record_applied, resume_imported
 from aicity.tasks import TaskStore, utc_now
 
 __all__ = ["FlightConflict", "FlightError", "FlightNotFound", "FlightStore"]
@@ -54,6 +56,10 @@ class FlightStore:
         self._conn = conn
         self._tasks = tasks
         self._clock = clock
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        return self._conn
 
     # --- Drafts -----------------------------------------------------------------
 
@@ -315,7 +321,11 @@ class FlightStore:
         )
 
     def _apply_resume_change(self, month: str, pid: int, p: dict, stamp: str) -> None:
-        """Recorded on the proposal; the master resume applies it (flight_resume.py)."""
+        """Applied at once if the resume exists; otherwise at import (flight_resume.py)."""
+        if resume_imported(self._conn):
+            now = self._clock()
+            apply_resume_change(self._conn, p, now=now)
+            record_applied(self._conn, pid, now=now)
 
     # --- Helpers ----------------------------------------------------------------
 
@@ -342,10 +352,17 @@ class FlightStore:
         minutes = self._conn.execute(
             "SELECT coalesce(sum(minutes), 0) FROM fs_study WHERE substr(day, 1, 7) = ?", (month,)
         ).fetchone()[0]
+        changed_resume = self._conn.execute(
+            "SELECT 1 FROM fs_resume_applied a JOIN fs_proposals p ON p.id = a.proposal_id "
+            "WHERE p.month = ? LIMIT 1",
+            (month,),
+        ).fetchone()
+        label = bump_version(self._conn, month, now=self._clock()) if changed_resume else None
         self._conn.execute(
             "INSERT INTO fs_progress (month, competencies_ready, competencies_new, "
-            "level_changes_json, study_minutes, made_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (month, ready, new, json.dumps(changes), minutes, stamp),
+            "level_changes_json, study_minutes, resume_label, made_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (month, ready, new, json.dumps(changes), minutes, label, stamp),
         )
         self._conn.execute(
             "UPDATE fs_months SET status = 'done', done_at = ?, updated_at = ? WHERE month = ?",

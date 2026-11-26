@@ -133,3 +133,69 @@ def test_context_lists_skills_competencies_and_recommendations(personal):
     assert "[ready] 2.1" in out and "[empty] 2.2" in out
     assert out.count("[ready]") + out.count("[empty]") == 34
     assert "Shadow a peer review" in out
+
+
+def test_resume_import_preview_confirm_and_export(personal):
+    from docx import Document
+
+    src = personal / "resume.docx"
+    doc = Document()
+    doc.add_heading("Experience", level=1)
+    doc.add_paragraph("Designed duct layouts")
+    doc.save(src)
+    code, out, _ = run(["resume-import", str(src)])
+    assert code == 0 and "Experience: 1 item" in out and "--confirm" in out
+    assert "Experience" not in run(["context"])[1].split("RESUME")[1]  # nothing saved yet
+    code, out, _ = run(["resume-import", str(src), "--confirm"])
+    assert code == 0 and "v1" in out
+    assert "Designed duct layouts" in run(["context"])[1]
+    dest = personal / "out.docx"
+    assert run(["resume-export", str(dest)])[0] == 0 and dest.exists()
+    assert run(["resume-import", str(src), "--confirm"])[0] == 2  # only once
+
+
+def test_resume_export_without_a_resume(personal):
+    assert run(["resume-export", str(personal / "x.docx")])[0] == 2
+
+
+def settings_with(personal, career: str):
+    example = Path(__file__).resolve().parents[1] / "settings.example.toml"
+    (personal / "settings").mkdir(exist_ok=True)
+    (personal / "settings" / "settings.toml").write_text(example.read_text() + career)
+
+
+def test_analyse_with_the_local_model(personal, monkeypatch):
+    settings_with(personal, '\n[career]\nai = "local"\nlocal_model = "some-model:8b"\n')
+    run(["save-draft", "2026-11"], "Did a load review.")
+    calls = []
+
+    def fake(draft, context, model, client):
+        calls.append((draft, model, "COMPETENCIES" in context))
+        return [EXAMPLE]
+
+    monkeypatch.setattr(flight, "analyse_local", fake)
+    code, out, _ = run(["analyse", "2026-11"])
+    assert code == 0 and "example: 1" in out
+    assert calls == [("Did a load review.", "some-model:8b", True)]
+    assert len(run(["pending", "2026-11"])[1].splitlines()) == 1
+
+
+def test_analyse_needs_local_mode(personal):
+    settings_with(personal, '\n[career]\nai = "claude_code"\n')
+    code, _, err = run(["analyse", "2026-11"])
+    assert code == 2 and "local" in err
+
+
+def test_context_never_shows_contact_details(personal):
+    from docx import Document
+
+    src = personal / "r.docx"
+    doc = Document()
+    doc.add_heading("Made-up Person", 0)
+    doc.add_paragraph("made-up@example.com")
+    doc.add_heading("Experience", 1)
+    doc.add_paragraph("Checked calculations")
+    doc.save(src)
+    run(["resume-import", str(src), "--confirm"])
+    out = run(["context"])[1]
+    assert "made-up@example.com" not in out and "Checked calculations" in out

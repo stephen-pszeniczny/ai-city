@@ -21,7 +21,8 @@ All commands run from the repo root with `.venv/bin/python scripts/flight.py …
    `printf '%s' "<the text>" | .venv/bin/python scripts/flight.py save-draft 2026-11`
    (use a quoted heredoc for long text). Show him nothing he didn't write.
 4. **Read the context:** `flight.py draft 2026-11` and `flight.py context` (existing skills
-   and levels, the 34 competencies marked ready or empty, open recommendations).
+   and levels, the 34 competencies marked ready or empty, open recommendations, and the
+   resume's sections with each item's id).
 5. **Draft proposals** following the rules below, as a JSON list of `{"kind", "payload"}`:
    - `bullet`: `{text ≤ 300, skills: [names], competencies: [ids]}`: 3 to 8 per month.
    - `example`: `{competency, situation ≤ 300, action ≤ 1650, outcome ≤ 300}`: only where the
@@ -32,7 +33,9 @@ All commands run from the repo root with `.venv/bin/python scripts/flight.py …
      price, free}`: 1 to 3. Free first; a paid course or certification only when clearly worth
      it, with its price. You may web-search **course topics only** (never his notes) for current
      options and prices.
-   - `resume_change`: `{section, action: add|replace|remove, item: id or null, text ≤ 300}`.
+   - `resume_change`: `{section, action: add|replace|remove, item: id or null, text ≤ 300}`:
+     `item` is the id shown by `context` (null when adding). Only for things worth a resume
+     line; one or two a month at most.
 6. **Save them:** write the JSON to this session's scratch folder (never inside the repo), then
    `flight.py propose 2026-11 <file>`. If it's refused, fix the item it names and try again.
 7. **Review with him, one at a time:** `flight.py pending 2026-11`; show each proposal as a few

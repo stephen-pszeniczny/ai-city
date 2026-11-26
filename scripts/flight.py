@@ -8,7 +8,11 @@
     flight.py decide ID edit FILE              accept it with your edited payload (JSON file)
     flight.py status [YYYY-MM]                 the month's status and competency coverage
     flight.py context                          existing skills, the 34 competencies (ready or
-                                               empty) and open recommendations, for the model
+                                               empty), open recommendations and the resume
+    flight.py resume-import PATH [--confirm]   preview a Word resume; --confirm saves it (once)
+    flight.py resume-export PATH               write the current resume as a Word file
+    flight.py analyse YYYY-MM                  run the local model (when [career] ai = "local")
+                                               on the month's draft and save its proposals
 
 Works only on the Personal database, and never creates it (open the app once first).
 Prints only what was asked for. Exit 0 on success, 2 with a one-line message otherwise.
@@ -17,15 +21,26 @@ Prints only what was asked for. Exit 0 on success, 2 with a one-line message oth
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # The app code lives in src/; add it to the path before importing from it.
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+import httpx
+
 from aicity.competencies import CATEGORIES, COMPETENCIES
 from aicity.db import DbKind, db_path, open_database
+from aicity.flight_local import analyse_local
 from aicity.flight_proposals import validate_proposals
+from aicity.flight_resume import (
+    confirm_import,
+    export_docx,
+    preview_import,
+    resume_imported,
+    resume_sections,
+)
 from aicity.flight_store import (
     FlightConflict,
     FlightError,
@@ -77,6 +92,10 @@ def _draft(store: FlightStore, args, stdin, stdout) -> None:
 def _propose(store: FlightStore, args, stdin, stdout) -> None:
     items = validate_proposals(_read_json(args.file))
     store.add_proposals(args.month, items)
+    _print_counts(items, stdout)
+
+
+def _print_counts(items: list[dict], stdout) -> None:
     counts: dict[str, int] = {}
     for i in items:
         counts[i["kind"]] = counts.get(i["kind"], 0) + 1
@@ -110,18 +129,64 @@ def _status(store: FlightStore, args, stdin, stdout) -> None:
 
 
 def _context(store: FlightStore, args, stdin, stdout) -> None:
-    print("SKILLS", file=stdout)
-    for s in store.skills():
-        print(f"- {s['name']} (category {s['category']}, level {s['level']})", file=stdout)
+    print(_context_text(store), file=stdout)
+
+
+def _context_text(store: FlightStore) -> str:
+    lines = ["SKILLS"]
+    lines += [
+        f"- {s['name']} (category {s['category']}, level {s['level']})" for s in store.skills()
+    ]
     ready = {e["competency_id"] for e in store.examples() if e["status"] == "ready"}
-    print("COMPETENCIES", file=stdout)
+    lines.append("COMPETENCIES")
     for c in COMPETENCIES:
         mark = "ready" if c.id in ready else "empty"
-        print(f"[{mark}] {c.id} {CATEGORIES[c.category]}: {c.name}", file=stdout)
-    print("OPEN RECOMMENDATIONS", file=stdout)
-    for r in store.recommendations():
-        if r["status"] == "open":
-            print(f"- {r['skill']}: {r['title']}", file=stdout)
+        lines.append(f"[{mark}] {c.id} {CATEGORIES[c.category]}: {c.name}")
+    lines.append("OPEN RECOMMENDATIONS")
+    lines += [
+        f"- {r['skill']}: {r['title']}" for r in store.recommendations() if r["status"] == "open"
+    ]
+    lines.append("RESUME (section, then item id: text; the name and contact details are left out)")
+    for s in resume_sections(store.conn, include_header=False):
+        lines.append(f"## {s['title']}")
+        lines += [f"{item['id']}: {item['text']}" for item in s["items"]]
+    return "\n".join(lines)
+
+
+def _analyse(store: FlightStore, args, stdin, stdout) -> None:
+    try:
+        career = load_settings().career
+    except (SettingsError, OSError):
+        career = None
+    if career is None or career.ai != "local":
+        raise _Stop(
+            'The local model is used only when [career] ai = "local"; otherwise run /flight-log in Claude Code.'
+        )
+    with httpx.Client() as client:
+        items = analyse_local(
+            store.draft(args.month), _context_text(store), career.local_model, client
+        )
+    store.add_proposals(args.month, items)
+    _print_counts(items, stdout)
+
+
+def _resume_import(store: FlightStore, args, stdin, stdout) -> None:
+    sections = preview_import(Path(args.path))
+    for s in sections:
+        count = len(s.items)
+        print(f"{s.title}: {count} item{'' if count == 1 else 's'}", file=stdout)
+    if not args.confirm:
+        print("Nothing saved. Run again with --confirm to save it.", file=stdout)
+        return
+    label = confirm_import(store.conn, sections, now=datetime.now(UTC))
+    print(f"Saved the resume as {label}.", file=stdout)
+
+
+def _resume_export(store: FlightStore, args, stdin, stdout) -> None:
+    if not resume_imported(store.conn):
+        raise _Stop("No resume yet: import one first with resume-import.")
+    export_docx(store.conn, Path(args.path))
+    print(f"Wrote {args.path}.", file=stdout)
 
 
 # --- Helpers -----------------------------------------------------------------------
@@ -177,6 +242,19 @@ def _parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("context")
     s.set_defaults(run=_context)
+
+    s = sub.add_parser("resume-import")
+    s.add_argument("path")
+    s.add_argument("--confirm", action="store_true")
+    s.set_defaults(run=_resume_import)
+
+    s = sub.add_parser("resume-export")
+    s.add_argument("path")
+    s.set_defaults(run=_resume_export)
+
+    s = sub.add_parser("analyse")
+    s.add_argument("month")
+    s.set_defaults(run=_analyse)
     return p
 
 
