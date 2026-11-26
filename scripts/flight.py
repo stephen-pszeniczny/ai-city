@@ -11,6 +11,8 @@
                                                empty), open recommendations and the resume
     flight.py resume-import PATH [--confirm]   preview a Word resume; --confirm saves it (once)
     flight.py resume-export PATH               write the current resume as a Word file
+    flight.py analyse YYYY-MM                  run the local model (when [career] ai = "local")
+                                               on the month's draft and save its proposals
 
 Works only on the Personal database, and never creates it (open the app once first).
 Prints only what was asked for. Exit 0 on success, 2 with a one-line message otherwise.
@@ -26,8 +28,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # The app code lives in src/; add it to the path before importing from it.
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+import httpx
+
 from aicity.competencies import CATEGORIES, COMPETENCIES
 from aicity.db import DbKind, db_path, open_database
+from aicity.flight_local import analyse_local
 from aicity.flight_proposals import validate_proposals
 from aicity.flight_resume import (
     confirm_import,
@@ -87,6 +92,10 @@ def _draft(store: FlightStore, args, stdin, stdout) -> None:
 def _propose(store: FlightStore, args, stdin, stdout) -> None:
     items = validate_proposals(_read_json(args.file))
     store.add_proposals(args.month, items)
+    _print_counts(items, stdout)
+
+
+def _print_counts(items: list[dict], stdout) -> None:
     counts: dict[str, int] = {}
     for i in items:
         counts[i["kind"]] = counts.get(i["kind"], 0) + 1
@@ -120,23 +129,45 @@ def _status(store: FlightStore, args, stdin, stdout) -> None:
 
 
 def _context(store: FlightStore, args, stdin, stdout) -> None:
-    print("SKILLS", file=stdout)
-    for s in store.skills():
-        print(f"- {s['name']} (category {s['category']}, level {s['level']})", file=stdout)
+    print(_context_text(store), file=stdout)
+
+
+def _context_text(store: FlightStore) -> str:
+    lines = ["SKILLS"]
+    lines += [
+        f"- {s['name']} (category {s['category']}, level {s['level']})" for s in store.skills()
+    ]
     ready = {e["competency_id"] for e in store.examples() if e["status"] == "ready"}
-    print("COMPETENCIES", file=stdout)
+    lines.append("COMPETENCIES")
     for c in COMPETENCIES:
         mark = "ready" if c.id in ready else "empty"
-        print(f"[{mark}] {c.id} {CATEGORIES[c.category]}: {c.name}", file=stdout)
-    print("OPEN RECOMMENDATIONS", file=stdout)
-    for r in store.recommendations():
-        if r["status"] == "open":
-            print(f"- {r['skill']}: {r['title']}", file=stdout)
-    print("RESUME (section, then item id: text)", file=stdout)
+        lines.append(f"[{mark}] {c.id} {CATEGORIES[c.category]}: {c.name}")
+    lines.append("OPEN RECOMMENDATIONS")
+    lines += [
+        f"- {r['skill']}: {r['title']}" for r in store.recommendations() if r["status"] == "open"
+    ]
+    lines.append("RESUME (section, then item id: text)")
     for s in resume_sections(store.conn):
-        print(f"## {s['title']}", file=stdout)
-        for item in s["items"]:
-            print(f"{item['id']}: {item['text']}", file=stdout)
+        lines.append(f"## {s['title']}")
+        lines += [f"{item['id']}: {item['text']}" for item in s["items"]]
+    return "\n".join(lines)
+
+
+def _analyse(store: FlightStore, args, stdin, stdout) -> None:
+    try:
+        career = load_settings().career
+    except (SettingsError, OSError):
+        career = None
+    if career is None or career.ai != "local":
+        raise _Stop(
+            'The local model is used only when [career] ai = "local"; otherwise run /flight-log in Claude Code.'
+        )
+    with httpx.Client() as client:
+        items = analyse_local(
+            store.draft(args.month), _context_text(store), career.local_model, client
+        )
+    store.add_proposals(args.month, items)
+    _print_counts(items, stdout)
 
 
 def _resume_import(store: FlightStore, args, stdin, stdout) -> None:
@@ -220,6 +251,10 @@ def _parser() -> argparse.ArgumentParser:
     s = sub.add_parser("resume-export")
     s.add_argument("path")
     s.set_defaults(run=_resume_export)
+
+    s = sub.add_parser("analyse")
+    s.add_argument("month")
+    s.set_defaults(run=_analyse)
     return p
 
 

@@ -156,3 +156,31 @@ def test_resume_import_preview_confirm_and_export(personal):
 
 def test_resume_export_without_a_resume(personal):
     assert run(["resume-export", str(personal / "x.docx")])[0] == 2
+
+
+def settings_with(personal, career: str):
+    example = Path(__file__).resolve().parents[1] / "settings.example.toml"
+    (personal / "settings").mkdir(exist_ok=True)
+    (personal / "settings" / "settings.toml").write_text(example.read_text() + career)
+
+
+def test_analyse_with_the_local_model(personal, monkeypatch):
+    settings_with(personal, '\n[career]\nai = "local"\nlocal_model = "some-model:8b"\n')
+    run(["save-draft", "2026-11"], "Did a load review.")
+    calls = []
+
+    def fake(draft, context, model, client):
+        calls.append((draft, model, "COMPETENCIES" in context))
+        return [EXAMPLE]
+
+    monkeypatch.setattr(flight, "analyse_local", fake)
+    code, out, _ = run(["analyse", "2026-11"])
+    assert code == 0 and "example: 1" in out
+    assert calls == [("Did a load review.", "some-model:8b", True)]
+    assert len(run(["pending", "2026-11"])[1].splitlines()) == 1
+
+
+def test_analyse_needs_local_mode(personal):
+    settings_with(personal, '\n[career]\nai = "claude_code"\n')
+    code, _, err = run(["analyse", "2026-11"])
+    assert code == 2 and "local" in err
