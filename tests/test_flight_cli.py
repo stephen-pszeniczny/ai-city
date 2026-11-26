@@ -109,3 +109,18 @@ def test_never_touches_the_sample_database(personal):
 
 def test_bad_month_is_exit_2(personal):
     assert run(["draft", "November"])[0] == 2
+
+
+def test_context_lists_skills_competencies_and_recommendations(personal):
+    rec = {"kind": "recommendation", "payload": {
+        "skill": "Design review", "kind": "task", "title": "Shadow a peer review",
+        "provider": "", "url": None, "price": "", "free": True}}
+    run(["propose", "2026-11", write(personal, [SKILL, EXAMPLE, rec])])
+    for pid in ("1", "2", "3"):
+        run(["decide", pid, "accept"])
+    code, out, _ = run(["context"])
+    assert code == 0
+    assert "Design review (category 1, level 2)" in out
+    assert "[ready] 2.1" in out and "[empty] 2.2" in out
+    assert out.count("[ready]") + out.count("[empty]") == 34
+    assert "Shadow a peer review" in out

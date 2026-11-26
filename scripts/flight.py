@@ -7,6 +7,8 @@
     flight.py decide ID accept|reject          decide one proposal
     flight.py decide ID edit FILE              accept it with your edited payload (JSON file)
     flight.py status [YYYY-MM]                 the month's status and competency coverage
+    flight.py context                          existing skills, the 34 competencies (ready or
+                                               empty) and open recommendations, for the model
 
 Works only on the Personal database, and never creates it (open the app once first).
 Prints only what was asked for. Exit 0 on success, 2 with a one-line message otherwise.
@@ -21,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # The app code lives in src/; add it to the path before importing from it.
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from aicity.competencies import CATEGORIES, COMPETENCIES
 from aicity.db import DbKind, db_path, open_database
 from aicity.flight_proposals import validate_proposals
 from aicity.flight_store import (
@@ -106,6 +109,21 @@ def _status(store: FlightStore, args, stdin, stdout) -> None:
     print(f"Competencies ready: {ready} / {total}", file=stdout)
 
 
+def _context(store: FlightStore, args, stdin, stdout) -> None:
+    print("SKILLS", file=stdout)
+    for s in store.skills():
+        print(f"- {s['name']} (category {s['category']}, level {s['level']})", file=stdout)
+    ready = {e["competency_id"] for e in store.examples() if e["status"] == "ready"}
+    print("COMPETENCIES", file=stdout)
+    for c in COMPETENCIES:
+        mark = "ready" if c.id in ready else "empty"
+        print(f"[{mark}] {c.id} {CATEGORIES[c.category]}: {c.name}", file=stdout)
+    print("OPEN RECOMMENDATIONS", file=stdout)
+    for r in store.recommendations():
+        if r["status"] == "open":
+            print(f"- {r['skill']}: {r['title']}", file=stdout)
+
+
 # --- Helpers -----------------------------------------------------------------------
 
 
@@ -156,6 +174,9 @@ def _parser() -> argparse.ArgumentParser:
     s = sub.add_parser("status")
     s.add_argument("month", nargs="?")
     s.set_defaults(run=_status)
+
+    s = sub.add_parser("context")
+    s.set_defaults(run=_context)
     return p
 
 
