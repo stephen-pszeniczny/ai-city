@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from aicity import config
 
 if TYPE_CHECKING:
+    from aicity.career_settings import CareerSettings
     from aicity.jobs_settings import JobsSettings
 
 # Generic building IDs used by the code. Display names come from settings.
@@ -179,6 +180,8 @@ class Settings:
     routines: tuple[Routine, ...] = ()
     # Opportunity Office ([jobs]); see jobs_settings.py.
     jobs: "JobsSettings | None" = None
+    # Flight School ([career]); see career_settings.py.
+    career: "CareerSettings | None" = None
 
 
 def settings_path() -> Path:
@@ -221,9 +224,11 @@ def parse_settings(data: dict) -> Settings:
             "plan",
             "routines",
             "jobs",
+            "career",
         },
     )
     # Imported here: jobs_settings reuses this module's helpers.
+    from aicity.career_settings import parse_career
     from aicity.jobs_settings import parse_jobs
 
     return Settings(
@@ -237,6 +242,7 @@ def parse_settings(data: dict) -> Settings:
         plan=_plan(data["plan"]) if "plan" in data else None,
         routines=_routines(data.get("routines", [])),
         jobs=parse_jobs(data["jobs"]) if "jobs" in data else None,
+        career=parse_career(data["career"]) if "career" in data else None,
     )
 
 
