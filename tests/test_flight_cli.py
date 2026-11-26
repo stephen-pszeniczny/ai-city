@@ -133,3 +133,26 @@ def test_context_lists_skills_competencies_and_recommendations(personal):
     assert "[ready] 2.1" in out and "[empty] 2.2" in out
     assert out.count("[ready]") + out.count("[empty]") == 34
     assert "Shadow a peer review" in out
+
+
+def test_resume_import_preview_confirm_and_export(personal):
+    from docx import Document
+
+    src = personal / "resume.docx"
+    doc = Document()
+    doc.add_heading("Experience", level=1)
+    doc.add_paragraph("Designed duct layouts")
+    doc.save(src)
+    code, out, _ = run(["resume-import", str(src)])
+    assert code == 0 and "Experience: 1 item" in out and "--confirm" in out
+    assert "Experience" not in run(["context"])[1].split("RESUME")[1]  # nothing saved yet
+    code, out, _ = run(["resume-import", str(src), "--confirm"])
+    assert code == 0 and "v1" in out
+    assert "Designed duct layouts" in run(["context"])[1]
+    dest = personal / "out.docx"
+    assert run(["resume-export", str(dest)])[0] == 0 and dest.exists()
+    assert run(["resume-import", str(src), "--confirm"])[0] == 2  # only once
+
+
+def test_resume_export_without_a_resume(personal):
+    assert run(["resume-export", str(personal / "x.docx")])[0] == 2

@@ -8,7 +8,9 @@
     flight.py decide ID edit FILE              accept it with your edited payload (JSON file)
     flight.py status [YYYY-MM]                 the month's status and competency coverage
     flight.py context                          existing skills, the 34 competencies (ready or
-                                               empty) and open recommendations, for the model
+                                               empty), open recommendations and the resume
+    flight.py resume-import PATH [--confirm]   preview a Word resume; --confirm saves it (once)
+    flight.py resume-export PATH               write the current resume as a Word file
 
 Works only on the Personal database, and never creates it (open the app once first).
 Prints only what was asked for. Exit 0 on success, 2 with a one-line message otherwise.
@@ -17,6 +19,7 @@ Prints only what was asked for. Exit 0 on success, 2 with a one-line message oth
 import argparse
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +29,13 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from aicity.competencies import CATEGORIES, COMPETENCIES
 from aicity.db import DbKind, db_path, open_database
 from aicity.flight_proposals import validate_proposals
+from aicity.flight_resume import (
+    confirm_import,
+    export_docx,
+    preview_import,
+    resume_imported,
+    resume_sections,
+)
 from aicity.flight_store import (
     FlightConflict,
     FlightError,
@@ -122,6 +132,30 @@ def _context(store: FlightStore, args, stdin, stdout) -> None:
     for r in store.recommendations():
         if r["status"] == "open":
             print(f"- {r['skill']}: {r['title']}", file=stdout)
+    print("RESUME (section, then item id: text)", file=stdout)
+    for s in resume_sections(store.conn):
+        print(f"## {s['title']}", file=stdout)
+        for item in s["items"]:
+            print(f"{item['id']}: {item['text']}", file=stdout)
+
+
+def _resume_import(store: FlightStore, args, stdin, stdout) -> None:
+    sections = preview_import(Path(args.path))
+    for s in sections:
+        count = len(s.items)
+        print(f"{s.title}: {count} item{'' if count == 1 else 's'}", file=stdout)
+    if not args.confirm:
+        print("Nothing saved. Run again with --confirm to save it.", file=stdout)
+        return
+    label = confirm_import(store.conn, sections, now=datetime.now(UTC))
+    print(f"Saved the resume as {label}.", file=stdout)
+
+
+def _resume_export(store: FlightStore, args, stdin, stdout) -> None:
+    if not resume_imported(store.conn):
+        raise _Stop("No resume yet: import one first with resume-import.")
+    export_docx(store.conn, Path(args.path))
+    print(f"Wrote {args.path}.", file=stdout)
 
 
 # --- Helpers -----------------------------------------------------------------------
@@ -177,6 +211,15 @@ def _parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("context")
     s.set_defaults(run=_context)
+
+    s = sub.add_parser("resume-import")
+    s.add_argument("path")
+    s.add_argument("--confirm", action="store_true")
+    s.set_defaults(run=_resume_import)
+
+    s = sub.add_parser("resume-export")
+    s.add_argument("path")
+    s.set_defaults(run=_resume_export)
     return p
 
 

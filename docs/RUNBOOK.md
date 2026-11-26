@@ -148,6 +148,8 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Flight School monthly log** → on the 1st (change it with `reminder_day` under `[career]`), Mission Control gets the to-do "Log last month for Flight School" with a reminder. In Claude Code, type `/flight-log`: paste or type what you did last month (rough notes are fine; photos of handwritten pages can be shown, they're never saved), then review each proposal (accept, edit or reject). When none are left, the month is done, its progress is saved and the to-do ticks off. Needs a `[career]` section in the settings file (copy the commented example; the defaults are fine). Check where things stand with `.venv/bin/python scripts/flight.py status`.
 
+**Flight School resume (import once, export any time)** → `.venv/bin/python scripts/flight.py resume-import <your resume.docx>` shows how it would be split into sections (headings start a section; tables are skipped) and saves nothing. If it looks right, run the same command with `--confirm`: it's saved once as `v1 <month year>`. Each month with an accepted resume change becomes the next version. `scripts/flight.py resume-export <file.docx>` writes the current resume as a fresh Word file (its own clean layout, not your original's design).
+
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 
 ---
