@@ -143,7 +143,7 @@ The weekly study target lives in the database (changed in the app), starting at 
 
 **Rules the model follows** (in the skill file and the local prompt): only what the dump states;
 general level for the main job (no names, documents, identifiers, meeting details); "I"
-statements; the regulator character limits for examples; free-first courses with prices; propose, never
+statements; the regulator's character limits for examples; free-first courses with prices; propose, never
 apply.
 
 ### Until the screens exist (Claude's call)
