@@ -50,7 +50,7 @@ Starting values (all tunable in a settings file):
 | Opportunity Office | platform check ("Nothing new" or "Found something") | 10 | 3 per day |
 | | project logged | 15 | — |
 | | project moves a stage | 20 | — |
-| | platform profile refreshed | 20 | — |
+| | platform profile refreshed | 20 | once per platform per month |
 | Flight School | month logged | 60 | once per month |
 | | competency example approved | 25 | — |
 | | study time | 1 per 5 min | 60 min per day |
@@ -68,7 +68,7 @@ Tables that already hold these events include `tasks`/`task_history`, `plan_week
 - Each building has its own XP scale, so every building reaches level 100 in about a year at its normal pace. Mission Control earns almost daily while the Vault earns mostly monthly. With one shared curve, Mission Control would max out while the Vault sat near the bottom.
 - The curve gets steeper with level. Targets at a normal pace: first upgrade (level 10) in about 2–3 weeks, level 100 in about 12 months, roughly one upgrade every 5 weeks on average.
 - "Normal pace" per building is an estimate in the settings file (for example, about 3 to-dos a day, 4 gym blocks a week, every Sunday check-in, one statement a month). The builder sets the formula and checks it against those targets with a test.
-- **Belt level** (1–100) = the sum of all nine buildings' levels ÷ 9, with unbuilt buildings counting as 0 (the owner's choice, 2026-11-27). It can never go down, it reaches 100 only when all nine buildings are at 100, and shipping a new building adds to it. Example: three buildings at level 100 make Belt level 33. The bubble shows Belt level, a bar toward the next Belt level (from the sum of building levels), and **total XP** (the sum of all buildings' XP) as the always-climbing number. A Belt level of 0 (possible on the first day) shows as 1.
+- **Belt level** (1–100) = the sum of all nine buildings' levels ÷ 9, with unbuilt buildings counting as 0 (the owner's choice, 2026-11-27). It can never go down (a correction can't pull it below the level already shown; its bar just waits), it reaches 100 only when all nine buildings are at 100, and shipping a new building adds to it. Example: three buildings at level 100 make Belt level 33. The bubble shows Belt level, a bar toward the next Belt level (from the sum of building levels), and **total XP** (the sum of all buildings' XP) as the always-climbing number. A Belt level of 0 (possible on the first day) shows as 1.
 
 ## How it looks
 
