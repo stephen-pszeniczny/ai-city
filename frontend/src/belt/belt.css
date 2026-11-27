@@ -357,7 +357,7 @@
 .xp-bubble__head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  gap: 12px;
 }
 
 .xp-bubble__title {
@@ -375,7 +375,7 @@
 /* "+1" beside the level; it rises, holds and fades (BeltXpBubble removes it). */
 .xp-bubble__plus {
   position: absolute;
-  right: calc(100% + 6px);
+  left: calc(100% + 6px);
   top: 0;
   color: #8aa4ff;
   font-weight: 700;
@@ -409,7 +409,14 @@
   }
 }
 
+.xp-bubble__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .xp-bubble__bar {
+  flex: 1;
   height: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
@@ -424,7 +431,6 @@
 }
 
 .xp-bubble__total {
-  justify-self: end;
   font-size: 11.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;

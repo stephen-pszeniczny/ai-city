@@ -42,17 +42,22 @@ export function BeltXpBubble({ sky }: { sky: DayNight }) {
               Lv {belt.level}
             </span>
           </div>
-          <div
-            className="xp-bubble__bar"
-            role="progressbar"
-            aria-label="Progress to the next belt level"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(beltBarFraction(belt) * 100)}
-          >
-            <div className="xp-bubble__fill" style={{ width: `${beltBarFraction(belt) * 100}%` }} />
+          <div className="xp-bubble__progress">
+            <div
+              className="xp-bubble__bar"
+              role="progressbar"
+              aria-label="Progress to the next belt level"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(beltBarFraction(belt) * 100)}
+            >
+              <div
+                className="xp-bubble__fill"
+                style={{ width: `${beltBarFraction(belt) * 100}%` }}
+              />
+            </div>
+            <span className="xp-bubble__total">{formatXp(belt.total_xp)} total XP</span>
           </div>
-          <span className="xp-bubble__total">{formatXp(belt.total_xp)} total XP</span>
         </>
       )}
       <div className="xp-bubble__sky" role="group" aria-label="Day and night">
