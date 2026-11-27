@@ -252,3 +252,127 @@
 .window__pane .plan__block--build {
   border-left-color: var(--kit-warn);
 }
+
+/* Sunday check-in: the week at a glance as tiles with a mini timeline. */
+.window__pane .checkin__glance {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--kit-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.window__pane .checkin__glance li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: var(--kit-space-2) var(--kit-space-1);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  overflow: hidden;
+}
+
+.window__pane .checkin__glance li.is-today {
+  border-color: rgba(120, 160, 255, 0.6);
+}
+
+.window__pane .checkin__timeline {
+  position: relative;
+  width: 14px;
+  height: 64px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.window__pane .checkin__seg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 2px;
+  border-radius: 3px;
+  background: #3d6df2;
+}
+
+.window__pane .checkin__seg--commute {
+  background: #8e8e93;
+}
+
+.window__pane .checkin__seg--gym {
+  background: #34c759;
+}
+
+.window__pane .checkin__seg--event {
+  background: #bf5af2;
+}
+
+.window__pane .checkin__seg--side_work,
+.window__pane .checkin__seg--build {
+  background: var(--kit-warn);
+}
+
+/* To-dos needing attention: count tiles, then titles as chips. */
+.window__pane .checkin__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kit-space-2);
+  margin-bottom: var(--kit-space-2);
+}
+
+.window__pane .checkin__count {
+  display: grid;
+  gap: 2px;
+  padding: var(--kit-space-2) var(--kit-space-3);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+}
+
+.window__pane .checkin__count--warn {
+  border-color: rgba(255, 179, 64, 0.45);
+}
+
+.window__pane .checkin__countnum {
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.window__pane .checkin__count--warn .checkin__countnum {
+  color: var(--kit-warn);
+}
+
+.window__pane .checkin__taskchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kit-space-1);
+  margin: 0 0 var(--kit-space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.window__pane .checkin__taskchips li {
+  gap: 4px;
+  max-width: 100%;
+  color: var(--kit-text);
+}
+
+.window__pane .checkin__chiptext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+/* The Sample-mode reminder as a slim warning chip. */
+.window__pane .mode-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kit-space-2);
+  width: fit-content;
+  padding: 4px var(--kit-space-3);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}

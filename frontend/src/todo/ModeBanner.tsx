@@ -9,8 +9,7 @@ export function ModeBanner() {
     <p className="mode-banner" role="note">
       <WarningIcon />
       <span>
-        <strong>Sample mode.</strong> This list is demo data. Don't add real tasks until Personal
-        mode is built.
+        <strong>Sample mode</strong> · demo data
       </span>
     </p>
   );

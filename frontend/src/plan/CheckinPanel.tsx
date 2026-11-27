@@ -25,7 +25,8 @@ import {
 import { BlockForm, EVENT_KINDS } from "./BlockForm";
 import { addedEvents, chipState, needsAttention } from "./checkin";
 import { itemCountLabel } from "./grocery";
-import { dayLabel, isPast } from "./week";
+import { timelineSegments } from "./timeline";
+import { dayLabel, dayTile, isPast } from "./week";
 import { CheckRound } from "../jobs/CheckRound";
 import "./plan.css";
 
@@ -120,13 +121,22 @@ export function CheckinPanel() {
         </h3>
         <ul className="checkin__glance">
           {w.days.map((d) => {
-            const fixed = d.blocks.filter((b) => b.source === "settings");
+            const tile = dayTile(d.day, d.blocks.length);
             return (
-              <li key={d.day}>
-                <span className="checkin__day">{dayLabel(d.day)}</span>
-                {fixed.length === 0
-                  ? "Free"
-                  : fixed.map((b) => `${b.title} ${b.start}–${b.end}`).join(" · ")}
+              <li key={d.day} className={d.day === w.today ? "is-today" : undefined}>
+                <span className="plan__dayname">{tile.weekday}</span>
+                <span className="plan__daydate">{tile.date}</span>
+                <span className="checkin__timeline" aria-label={glanceLabel(d.blocks)}>
+                  {timelineSegments(d.blocks).map((s, i) => (
+                    <span
+                      key={i}
+                      className={`checkin__seg checkin__seg--${s.kind}`}
+                      style={{ top: s.top, height: s.height }}
+                      title={s.label}
+                    />
+                  ))}
+                </span>
+                <span className="plan__daycount">{tile.count}</span>
               </li>
             );
           })}
@@ -240,9 +250,14 @@ export function CheckinPanel() {
         <h3 id="ci-todo" className="checkin__h">
           To-dos needing attention
         </h3>
-        <TaskGroup label="Overdue" tasks={attention.overdue} />
-        <TaskGroup label="Due this week" tasks={attention.dueThisWeek} />
-        <TaskGroup label="Stale" tasks={attention.stale} />
+        <div className="checkin__counts">
+          <CountTile label="Overdue" count={attention.overdue.length} warn />
+          <CountTile label="Due this week" count={attention.dueThisWeek.length} />
+          <CountTile label="Stale" count={attention.stale.length} />
+        </div>
+        <TaskGroup tone="warn" tasks={attention.overdue} />
+        <TaskGroup tasks={attention.dueThisWeek} />
+        <TaskGroup tasks={attention.stale} />
         {attention.overdue.length + attention.dueThisWeek.length + attention.stale.length === 0 ? (
           <p className="plan__note">All clear</p>
         ) : (
@@ -368,19 +383,32 @@ function Chip({
   );
 }
 
-function TaskGroup({ label, tasks }: { label: string; tasks: Task[] }) {
-  if (tasks.length === 0) return null;
+function CountTile({ label, count, warn }: { label: string; count: number; warn?: boolean }) {
   return (
-    <div className="checkin__group">
-      <span className="plan__tag">{label}</span>
-      <ul>
-        {tasks.map((t) => (
-          <li key={t.id}>
-            {t.title}
-            {t.goal_date && <span className="plan__tag"> · {dayLabel(t.goal_date)}</span>}
-          </li>
-        ))}
-      </ul>
+    <div className={`checkin__count${warn && count > 0 ? " checkin__count--warn" : ""}`}>
+      <span className="checkin__countnum">{count}</span>
+      <span className="plan__daycount">{label}</span>
     </div>
   );
+}
+
+function TaskGroup({ tasks, tone }: { tasks: Task[]; tone?: "warn" }) {
+  if (tasks.length === 0) return null;
+  return (
+    <ul className="checkin__taskchips">
+      {tasks.map((t) => (
+        <li key={t.id} className={`plan__tag${tone ? ` plan__tag--${tone}` : ""}`}>
+          <span className="checkin__chiptext">{t.title}</span>
+          {t.goal_date && <span>· {dayLabel(t.goal_date)}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** What a screen reader hears for a day's tile (the timeline is only drawn). */
+function glanceLabel(blocks: readonly { title: string; start: string; end: string }[]): string {
+  return blocks.length === 0
+    ? "Free"
+    : blocks.map((b) => `${b.title} ${b.start} to ${b.end}`).join(", ");
 }

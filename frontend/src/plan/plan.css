@@ -172,13 +172,6 @@
   color: rgba(255, 255, 255, 0.75);
 }
 
-.checkin__day {
-  display: inline-block;
-  min-width: 4rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-}
-
 .checkin__chips {
   display: flex;
   flex-wrap: wrap;
@@ -212,11 +205,6 @@
 
 .checkin__chip--pick .field {
   width: auto;
-}
-
-.checkin__group ul {
-  margin: 0.2rem 0 0.5rem;
-  padding-left: 1.1rem;
 }
 
 .plan__grocery {
