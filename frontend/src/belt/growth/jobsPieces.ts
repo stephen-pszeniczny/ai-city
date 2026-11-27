@@ -373,24 +373,31 @@ export function deepSpaceArray(tint: string, kit: Kit, ground: Ground): Piece {
   group.add(beam);
   const station = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);
+  let length = 12;
+  let now = 0;
+  const run = () => {
+    shaft.scale.y = length;
+    pulses.forEach((p, i) => (p.position.y = ((now * 0.35 + i / 3) % 1) * length));
+  };
   return {
     group,
     update(t) {
+      now = t;
       core.rotation.y = t;
       core.scale.setScalar(1 + 0.18 * Math.sin(t * 5));
-      let length = 12;
-      if (group.parent) {
-        group.parent.updateWorldMatrix(true, false);
-        // The station is at the world's middle; aim level with the emitter.
-        const height = group.parent.localToWorld(station.copy(core.position)).y;
-        group.parent.worldToLocal(station.set(0, height, 0));
-        station.sub(core.position).setY(0);
-        // Stop well short, so the beam never pierces the station.
-        length = Math.max(4, station.length() * 0.68);
-        if (station.lengthSq() > 1e-6) beam.quaternion.setFromUnitVectors(up, station.normalize());
-      }
-      shaft.scale.y = length;
-      pulses.forEach((p, i) => (p.position.y = ((t * 0.35 + i / 3) % 1) * length));
+      run();
+    },
+    aim() {
+      if (!group.parent) return;
+      group.parent.updateWorldMatrix(true, false);
+      // The station is at the world's middle; aim level with the emitter.
+      const height = group.parent.localToWorld(station.copy(core.position)).y;
+      group.parent.worldToLocal(station.set(0, height, 0));
+      station.sub(core.position).setY(0);
+      // Stop well short, so the beam never pierces the station.
+      length = Math.max(4, station.length() * 0.68);
+      if (station.lengthSq() > 1e-6) beam.quaternion.setFromUnitVectors(up, station.normalize());
+      run();
     },
   };
 }

@@ -3,7 +3,9 @@
 //     round the hub and down the hallway to the robot (stopping at the vault door
 //     the first time, while the robot opens it); Back swoops out the same way.
 //   Mission Control ↔ Vault: through the hallways and the hub, without leaving.
-//   belt ↔ asteroid: a curved swing in (about 3 s), following the moving asteroid.
+//   belt ↔ asteroid: a curved swing in (about 3 s) that lines up behind the desk
+//     and finishes straight along its view, following the moving asteroid; Back
+//     plays the same way out.
 //   building ↔ screen: a short lean in or out (1.2 s).
 // A click or Escape during a flight finishes it. On the belt the person steers
 // (OrbitControls); inside a building the camera holds its viewpoint, following
@@ -17,7 +19,7 @@ import { DESK_SPOT } from "../interior/AsteroidDesk";
 import { ROOM_OFFSET, roomView } from "../interior/stationLayout";
 import { greetingClock } from "../interior/vaultGreeting";
 import { VAULT_GREETING } from "../interior/stationLayout";
-import { asteroidArc, type Pose } from "./flightPath";
+import { asteroidApproach, asteroidArc, type Pose, type Turn } from "./flightPath";
 import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { LOOK } from "./look";
@@ -43,7 +45,24 @@ type Controls = { target: THREE.Vector3; enabled: boolean };
 
 type Flight =
   | { kind: "route"; route: Route; start: number; fovFrom: number; fovTo: number }
-  | { kind: "arc"; from: Pose; to: "goal" | Pose; start: number; seconds: number; fovFrom: number }
+  | {
+      kind: "arc";
+      from: Pose;
+      to: "goal" | Pose;
+      turn: Turn;
+      start: number;
+      seconds: number;
+      fovFrom: number;
+    }
+  | {
+      kind: "leave";
+      home: Pose;
+      desk: View;
+      turn: Turn;
+      start: number;
+      seconds: number;
+      fovFrom: number;
+    }
   | { kind: "lean"; from: Pose; start: number; fovFrom: number };
 
 const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -96,6 +115,10 @@ export function CameraRig({
     controls: Controls | null;
   };
   const goal = useMemo<Pose>(
+    () => ({ position: new THREE.Vector3(), target: new THREE.Vector3() }),
+    [],
+  );
+  const leaving = useMemo<Pose>(
     () => ({ position: new THREE.Vector3(), target: new THREE.Vector3() }),
     [],
   );
@@ -168,6 +191,7 @@ export function CameraRig({
         kind: "arc",
         from: current,
         to: "goal",
+        turn: {},
         start: now,
         seconds: LOOK.flights.toAsteroidSeconds,
         fovFrom,
@@ -177,14 +201,14 @@ export function CameraRig({
         position: beltPose.current.position.clone(),
         target: beltPose.current.target.clone(),
       };
-      flight.current = {
-        kind: "arc",
-        from: current,
-        to: home,
-        start: now,
-        seconds: LOOK.flights.toAsteroidSeconds,
-        fovFrom,
-      };
+      const seconds = LOOK.flights.toAsteroidSeconds;
+      // From a desk, with the camera settled there: the way in, played backwards,
+      // so it backs out clear of what's built on the asteroid. Interrupted flights
+      // and other views just curve home from wherever the camera is.
+      flight.current =
+        prev.level === "building" && !isStation(prev.id) && !flight.current
+          ? { kind: "leave", home, desk: prev, turn: {}, start: now, seconds, fovFrom }
+          : { kind: "arc", from: current, to: home, turn: {}, start: now, seconds, fovFrom };
     } else {
       flight.current = { kind: "lean", from: current, start: now, fovFrom };
     }
@@ -220,8 +244,12 @@ export function CameraRig({
       fovTo = f.fovTo;
     } else if (f.kind === "arc") {
       k = skip ? 1 : Math.min(1, elapsed / f.seconds);
-      const to = f.to === "goal" ? goal : f.to;
-      pose = asteroidArc(f.from, to, k);
+      pose =
+        f.to === "goal" ? asteroidApproach(f.from, goal, k, f.turn) : asteroidArc(f.from, f.to, k);
+    } else if (f.kind === "leave") {
+      k = skip ? 1 : Math.min(1, elapsed / f.seconds);
+      poseFor(f.desk, sceneApi, leaving); // the asteroid keeps moving as we back away
+      pose = asteroidApproach(f.home, leaving, 1 - k, f.turn);
     } else {
       k = skip ? 1 : Math.min(1, elapsed / FLIGHT_SECONDS);
       const e = easeInOut(k);

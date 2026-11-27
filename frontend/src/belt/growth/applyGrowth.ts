@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { BuildingId } from "../../api";
 import { WORK_AT, WORK_SCALE } from "../../interior/workspace.ts";
 import { createLandmark } from "../landmarks.ts";
+import { standLandmark } from "./landmarkStages.ts";
 import type { Detail } from "../lod.ts";
 import { LOOK } from "../look.ts";
 import type { Kit } from "../materials.ts";
@@ -31,8 +32,9 @@ export type GrowthHandle = {
   /** What arrived with `tier`, if it's on show: its pieces, then a grown landmark. */
   newPiecesFor(tier: number): THREE.Group[];
   /**
-   * Animate: the landmark at time t; the pieces too unless `hold` (the computer
-   * screen is open). `motion` slows the pieces for reduced motion.
+   * Animate at time t. Today's landmark (stage 1) always moves, as it did before
+   * upgrades. Pieces and grown landmarks hold still while `hold` (the computer
+   * screen is open) and slow down by `motion` for reduced motion.
    */
   update(t: number, o?: { hold?: boolean; motion?: number }): void;
   /** Far away, small details are left out (see lod.ts). */
@@ -82,6 +84,9 @@ export function createGrowth({
   holder.add(pieces);
   desk.add(onDesk);
 
+  // A built asteroid's landmark stands off-centre, clear of the desk, from the start.
+  // (An unbuilt one stays in the middle, where its hologram is projected from.)
+  if (ladder) standLandmark(first.group, ladder, tint, kit);
   const stages = new Map<LandmarkStage, Model>([[1, first]]);
   first.group.name = "landmark";
   first.group.userData.stage = 1;
@@ -98,6 +103,10 @@ export function createGrowth({
   let shown: Piece[] = [];
   let detail: Detail = "near";
   let labelHeight = LABEL_HEIGHT;
+  /** The moment the pieces are at: it stops advancing while they're held. */
+  let pieceTime = 0;
+  /** The grown ship on the landmark on show, if it has one. */
+  let ship: THREE.Object3D | undefined;
 
   const showDetail = (root: THREE.Object3D) =>
     root.traverse((o) => {
@@ -105,7 +114,6 @@ export function createGrowth({
     });
   /** The ship on its pad hides while its flying copy is away. */
   const showShip = () => {
-    const ship = landmark.group.getObjectByName("ship");
     if (ship) ship.visible = !shown.some((p) => p.away?.());
   };
 
@@ -147,14 +155,20 @@ export function createGrowth({
         holder.remove(landmark.group);
         holder.add(next.group);
         landmark = next;
-        landmark.update(0);
+        ship = landmark.group.getObjectByName("ship");
         showDetail(landmark.group);
       }
-      showShip();
 
       const scale = asteroidScaleAt(tier, ladder);
       onScale(scale);
       handle.tier = tier;
+      // Anything just shown starts where the others are, even while they're held.
+      if (landmark !== first) landmark.update(pieceTime);
+      for (const piece of shown) {
+        piece.update(pieceTime);
+        piece.aim?.();
+      }
+      showShip();
       // The label stays where it was, unless a grown landmark reaches up to it.
       labelHeight = LABEL_HEIGHT;
       if (landmark !== first) {
@@ -169,15 +183,22 @@ export function createGrowth({
       const step = LADDERS[ladder].find((s) => s.tier === tier);
       if (!step) return [];
       const groups = step.pieces.map((p) => made.get(p)!.group);
-      if (step.landmarkStage) groups.push(stageModel(step.landmarkStage, ladder).group);
+      // A stage since replaced isn't on the asteroid, so there's nothing of it to animate.
+      if (step.landmarkStage && stages.get(step.landmarkStage) === landmark) {
+        groups.push(landmark.group);
+      }
       return groups;
     },
     update(t, { hold = false, motion = 1 } = {}) {
-      landmark.update(t);
-      if (hold) return;
-      const time = t * motion * LOOK.growth.pieceMotion;
-      for (const piece of shown) piece.update(time);
-      showShip();
+      if (landmark === first) landmark.update(t);
+      if (!hold) {
+        pieceTime = t * motion * LOOK.growth.pieceMotion;
+        if (landmark !== first) landmark.update(pieceTime);
+        for (const piece of shown) piece.update(pieceTime);
+        showShip();
+      }
+      // The asteroid keeps turning while held, so anything aimed is aimed again.
+      for (const piece of shown) piece.aim?.();
     },
     setDetail(next) {
       if (next === detail) return;

@@ -305,7 +305,7 @@ export function fuelFarm(tint: string, kit: Kit, ground: Ground): Piece {
 /** A gantry crane whose arm swings over the launch side, carrying a module. */
 export function gantryArm(tint: string, kit: Kit, ground: Ground): Piece {
   const c = palette(tint, kit);
-  const spot = onGround(ground, 94, 5.2);
+  const spot = onGround(ground, 78, 5.35);
   const group = new THREE.Group();
   const b = builder(kit);
   b.box(1.1, 0.2, 1.1, c.dark, [spot.x, spot.y + 0.08, spot.z]);

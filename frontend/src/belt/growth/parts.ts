@@ -10,6 +10,8 @@ import type { Kit } from "../materials.ts";
 export type Piece = {
   group: THREE.Group;
   update(t: number): void;
+  /** Point at something fixed in the world; called every frame, held or not. */
+  aim?: () => void;
   /** True while a flying copy is away, so what it copies should hide (the ship launch). */
   away?: () => boolean;
 };

@@ -5,100 +5,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "three";
 
-import { createGrowth, type GrowthHandle } from "../src/belt/growth/applyGrowth.ts";
-import { DECK_Y, ROCK_SCALE } from "../src/belt/growth/deck.ts";
-import { rockGround } from "../src/belt/growth/ground.ts";
 import { asteroidScaleAt, piecesUpTo, PIECE_IDS } from "../src/belt/growth/ladders.ts";
 import { createPiece, hasPiece } from "../src/belt/growth/pieces.ts";
 import { previewTier } from "../src/belt/growth/preview.ts";
+import { LANDMARK_SPOT } from "../src/belt/growth/jobsPieces.ts";
 import { PAD_AT } from "../src/belt/growth/sharedPieces.ts";
-import { createLandmark } from "../src/belt/landmarks.ts";
-import type { Kit } from "../src/belt/materials.ts";
-import { rockGeometry } from "../src/belt/space/rock.ts";
 import { DESK_SPOT, MONITOR_AT, MONITOR_TURN, workToDeck } from "../src/interior/workspace.ts";
+import type { GrowthHandle } from "../src/belt/growth/applyGrowth.ts";
+import { ASTEROIDS, make, shown, stubKit, type Asteroid } from "./growthStub.ts";
 
 const TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-type Asteroid = "jobs" | "career";
-const ASTEROIDS: Asteroid[] = ["jobs", "career"];
-/** Each one's tint and rock, as in space/orbit.ts and asteroids.ts. */
-const LOOKS = {
-  jobs: { tint: "#41c9d6", seed: 1.3 },
-  career: { tint: "#9b7bff", seed: 5 * 3.7 + 1.3 },
-} as const;
-
-/** The design kit without a browser: plain materials, and a note of what it must free. */
-function stubKit() {
-  const kept = new Set<unknown>();
-  const keep = <T>(x: T): T => {
-    kept.add(x);
-    return x;
-  };
-  const std = () => keep(new THREE.MeshStandardMaterial());
-  const mats = {
-    hull: std(),
-    gold: std(),
-    darkMetal: std(),
-    steel: std(),
-    solar: std(),
-    radiator: std(),
-    window: std(),
-  };
-  const glows = new Map<string, THREE.MeshBasicMaterial>();
-  const kit = {
-    mats,
-    keep,
-    glow(hex: THREE.ColorRepresentation, k: number) {
-      const key = `${new THREE.Color(hex).getHexString()}:${k}`;
-      let m = glows.get(key);
-      if (!m) glows.set(key, (m = keep(new THREE.MeshBasicMaterial())));
-      return m;
-    },
-    addBlinker() {},
-    setStationLights() {},
-    updateBlinkers() {},
-    dispose() {},
-  } as unknown as Kit;
-  return { kit, kept };
-}
-
-const grounds = new Map<Asteroid, ReturnType<typeof rockGround>>();
-function groundOf(id: Asteroid) {
-  let g = grounds.get(id);
-  if (!g) {
-    g = rockGround(rockGeometry(LOOKS[id].seed, LOOKS[id].tint), ROCK_SCALE, DECK_Y);
-    grounds.set(id, g);
-  }
-  return g;
-}
-
-/** An asteroid's growth on its own: the same groups asteroids.ts hands over. */
-function make(id: Asteroid, built = true) {
-  const { kit, kept } = stubKit();
-  const world = new THREE.Group(); // where the asteroid is
-  const body = new THREE.Group(); // what grows (rock, deck, holder)
-  const holder = new THREE.Group();
-  const desk = new THREE.Group(); // keeps its size
-  world.add(body, desk);
-  body.add(holder);
-  const first = createLandmark(id, LOOKS[id].tint, kit);
-  holder.add(first.group);
-  const scales: number[] = [];
-  const growth = createGrowth({
-    id,
-    tint: LOOKS[id].tint,
-    kit,
-    built,
-    holder,
-    desk,
-    landmark: first,
-    ground: groundOf(id),
-    onScale: (s) => {
-      scales.push(s);
-      body.scale.setScalar(s);
-    },
-  });
-  return { growth, kit, kept, world, body, holder, desk, first, scales };
-}
 
 const names = (g: THREE.Object3D) => g.children.map((c) => c.name);
 const stageShown = (g: GrowthHandle) => g.landmark().userData.stage;
@@ -122,7 +38,8 @@ test("a built asteroid starts at tier 0: today's landmark, its own size, no piec
     assert.equal(a.growth.tier, 0);
     assert.deepEqual(names(a.growth.pieces), []);
     assert.equal(a.growth.landmark(), a.first.group);
-    assert.deepEqual(a.first.group.position.toArray(), [0, 0, 0]);
+    // On the same off-centre pad as the grown stages, clear of the desk.
+    assert.deepEqual(a.first.group.position.toArray(), LANDMARK_SPOT.toArray());
     assert.equal(a.body.scale.x, 1);
     assert.equal(a.growth.labelHeight(), 4.6);
   }
@@ -200,6 +117,10 @@ test("a tier outside 0 to 10 is held at the nearest end", () => {
   assert.equal(a.growth.tier, 0);
 });
 
+test("an unbuilt asteroid's landmark stays in the middle, for its hologram", () => {
+  assert.deepEqual(make("career", false).first.group.position.toArray(), [0, 0, 0]);
+});
+
 test("an unbuilt asteroid never grows", () => {
   const a = make("career", false);
   a.growth.setTier(10);
@@ -209,23 +130,21 @@ test("an unbuilt asteroid never grows", () => {
   assert.deepEqual(a.scales, []);
 });
 
-test("newPiecesFor gives what that tier added, including a grown landmark", () => {
+test("newPiecesFor gives what that tier added, with its landmark only if that stage is on show", () => {
   const a = make("jobs");
+  const added = (tier: number) => a.growth.newPiecesFor(tier).map((g) => g.name);
+  a.growth.setTier(3);
+  assert.deepEqual(added(3), ["signalRings", "landmark"]);
   a.growth.setTier(10);
-  assert.deepEqual(
-    a.growth.newPiecesFor(3).map((g) => g.name),
-    ["signalRings", "landmark"],
-  );
-  assert.deepEqual(
-    a.growth.newPiecesFor(2).map((g) => g.name),
-    ["deckRing2"],
-  );
-  assert.deepEqual(
-    a.growth.newPiecesFor(6).map((g) => g.name),
-    ["landmark"],
-  );
+  assert.deepEqual(added(3), ["signalRings"], "stage 2 is no longer on the asteroid");
+  assert.deepEqual(added(2), ["deckRing2"]);
+  assert.deepEqual(added(6), []);
+  assert.deepEqual(added(10), ["deepSpaceArray", "landmark"]);
+  for (let tier = 1; tier <= 10; tier++) {
+    for (const g of a.growth.newPiecesFor(tier)) assert.ok(g.parent, `tier ${tier}: ${g.name}`);
+  }
   a.growth.setTier(1);
-  assert.deepEqual(a.growth.newPiecesFor(2), [], "not shown, so nothing new");
+  assert.deepEqual(added(2), [], "not shown, so nothing new");
 });
 
 test("every part is clickable as its building and freed with the kit", () => {
@@ -334,15 +253,57 @@ test("growth looks the same on every visit", () => {
   }
 });
 
-test("behind the computer screen the pieces hold still", () => {
+test("behind the computer screen the pieces and a grown landmark hold still", () => {
+  for (const id of ASTEROIDS) {
+    const a = make(id);
+    a.growth.setTier(10);
+    a.growth.update(3);
+    const both = () => [positionsOf(a.growth.pieces), positionsOf(a.growth.landmark())];
+    const [pieces, landmark] = both();
+    a.growth.update(30, { hold: true });
+    assert.deepEqual(both(), [pieces, landmark], id);
+    a.growth.update(30);
+    assert.notDeepEqual(both()[0], pieces, id);
+    assert.notDeepEqual(both()[1], landmark, id);
+  }
+});
+
+test("a grown landmark slows for reduced motion, like the pieces", () => {
+  const [slow, plain] = [make("career"), make("career")];
+  for (const x of [slow, plain]) x.growth.setTier(10);
+  slow.growth.update(40, { motion: 0.3 });
+  plain.growth.update(12);
+  assert.deepEqual(positionsOf(slow.growth.landmark()), positionsOf(plain.growth.landmark()));
+});
+
+test("today's landmark keeps moving as it always has", () => {
   const a = make("jobs");
-  a.growth.setTier(10);
   a.growth.update(3);
-  const before = positionsOf(a.growth.pieces);
-  a.growth.update(30, { hold: true });
-  assert.deepEqual(positionsOf(a.growth.pieces), before);
-  a.growth.update(30);
-  assert.notDeepEqual(positionsOf(a.growth.pieces), before);
+  const before = positionsOf(a.growth.landmark());
+  a.growth.update(8, { hold: true, motion: 0.3 });
+  assert.notDeepEqual(positionsOf(a.growth.landmark()), before);
+});
+
+test("the station beam points at the station even when it first shows during a hold", () => {
+  const a = make("jobs");
+  a.world.position.set(30, 0, 22); // out on the ring; the station is at the middle
+  a.world.updateMatrixWorld(true);
+  a.growth.setTier(10);
+  const aim = () => {
+    a.world.updateMatrixWorld(true);
+    const array = a.growth.pieces.getObjectByName("deepSpaceArray")!;
+    const beam = array.children.find((c) => c.userData.reaches)!;
+    const from = beam.getWorldPosition(new THREE.Vector3());
+    const along = new THREE.Vector3(0, 1, 0).applyQuaternion(
+      beam.getWorldQuaternion(new THREE.Quaternion()),
+    );
+    return along.dot(from.negate().setY(0).normalize());
+  };
+  assert.ok(aim() > 0.999, `as shown: ${aim()}`);
+  // The asteroid keeps turning behind the screen; the beam keeps pointing home.
+  a.world.rotation.y = 1.9;
+  a.growth.update(5, { hold: true });
+  assert.ok(aim() > 0.999, `held: ${aim()}`);
 });
 
 /** What the building view must always see: the screen, the robot and the desk top. */
@@ -366,16 +327,15 @@ function sightTargets(): THREE.Vector3[] {
 /** Times to check moving pieces at: a few minutes of orbits, sweeps and launches. */
 const TIMES = Array.from({ length: 300 }, (_, i) => i * 0.73);
 
-test("nothing grown ever comes between the building camera and the robot or screen", () => {
+test("nothing ever comes between the building camera and the robot or screen", () => {
   const ray = new THREE.Raycaster();
   const targets = sightTargets();
   const camera = DESK_SPOT.camera;
   for (const id of ASTEROIDS) {
     const a = make(id);
-    for (const tier of TIERS) {
+    for (const tier of [0, ...TIERS]) {
       a.growth.setTier(tier);
-      // Stage 1 is today's landmark at the deck's centre: unchanged, and not judged here.
-      const roots = [a.growth.pieces, ...(tier >= 3 ? [a.growth.landmark()] : [])];
+      const roots = [a.growth.pieces, a.growth.landmark()];
       const times = tier === 10 || tier === 3 || tier === 6 ? TIMES : TIMES.slice(0, 40);
       for (const t of times) {
         a.growth.update(t);
@@ -392,7 +352,6 @@ test("nothing grown ever comes between the building camera and the robot or scre
   }
 });
 
-const shown = (o: THREE.Object3D): boolean => o.visible && (!o.parent || shown(o.parent));
 const path = (o: THREE.Object3D): string =>
   o.parent?.parent ? `${path(o.parent)}/${o.name || o.type}` : o.name || o.type;
 
@@ -410,7 +369,7 @@ function eachVertex(root: THREE.Object3D, see: (v: THREE.Vector3, o: THREE.Objec
 test("growth stays off the desk, away from the camera and clear of the neighbours", () => {
   for (const id of ASTEROIDS) {
     const a = make(id);
-    for (const tier of TIERS) {
+    for (const tier of [0, ...TIERS]) {
       a.growth.setTier(tier);
       let widest = 0;
       let closest = Infinity;
@@ -418,7 +377,7 @@ test("growth stays off the desk, away from the camera and clear of the neighbour
       for (const t of TIMES.slice(0, 60)) {
         a.growth.update(t);
         a.world.updateMatrixWorld(true);
-        const roots = [a.growth.pieces, ...(tier >= 3 ? [a.growth.landmark()] : [])];
+        const roots = [a.growth.pieces, a.growth.landmark()];
         for (const root of roots) {
           eachVertex(root, (v, o) => {
             widest = Math.max(widest, Math.hypot(v.x, v.z));

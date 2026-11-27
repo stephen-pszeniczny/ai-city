@@ -244,6 +244,25 @@ function hangarShip(stage: Stage, tint: string, kit: Kit): Model {
   };
 }
 
+/**
+ * Stand today's landmark (stage 1) on its own pad where the grown ones stand,
+ * clear of the desk. The pad reaches down past the deck's edge to the rock.
+ */
+export function standLandmark(
+  group: THREE.Group,
+  id: "jobs" | "career",
+  tint: string,
+  kit: Kit,
+): void {
+  const c = palette(tint, kit);
+  const wide = { jobs: 0.72, career: 1.05 }[id];
+  const b = builder(kit);
+  b.cylinder(wide, wide * 0.82, 0.6, c.dark, [0, -0.28, 0], { sides: 28 });
+  b.hoop(wide, 0.045, c.lit, [0, 0.025, 0]);
+  b.into(group);
+  group.position.copy(LANDMARK_SPOT);
+}
+
 export function grownLandmark(id: "jobs" | "career", stage: Stage, tint: string, kit: Kit): Model {
   return id === "jobs" ? radar(stage, tint, kit) : hangarShip(stage, tint, kit);
 }

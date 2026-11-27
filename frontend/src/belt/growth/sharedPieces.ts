@@ -100,10 +100,10 @@ export function annulus(
   b.add(lathe, material, [0, y, 0]);
 }
 
-/** Where the captured moonlet is at time t: a slow orbit outside everything else. */
+/** Where the captured moonlet is at time t: a slow orbit above and outside everything else. */
 export function moonletPose(t: number, out = new THREE.Vector3()): THREE.Vector3 {
   const a = 2.2 + t * 0.11;
-  return out.set(Math.cos(a) * 8.4, 3.7 + Math.sin(t * 0.37) * 0.35, Math.sin(a) * 8.4);
+  return out.set(Math.cos(a) * 8.4, 7.9 + Math.sin(t * 0.37) * 0.25, Math.sin(a) * 8.4);
 }
 
 const MOONLET_R = 1.15;
