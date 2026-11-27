@@ -39,8 +39,8 @@ export function wallScreens(tint: string, kit: Kit): Piece {
   const wall = farWall("planner");
   const group = new THREE.Group();
   const face = kit.keep(new THREE.MeshBasicMaterial({ color: 0x0a1430, toneMapped: false }));
-  const rim = kit.glow(ROYAL_BLUE, 2.2);
-  const bars = [kit.glow(0x64d2ff, 1.4), kit.glow(0x30d158, 1.3), kit.glow(0xffb340, 1.3)];
+  const rim = c.glow(ROYAL_BLUE, 2.2);
+  const bars = [c.glow(0x64d2ff, 1.4), c.glow(0x30d158, 1.3), c.glow(0xffb340, 1.3)];
   const barGeo = kit.keep(new THREE.BoxGeometry(0.012, 1, 0.055));
   barGeo.translate(0, 0.5, 0); // grows up from its foot
   const dotGeo = kit.keep(new THREE.SphereGeometry(0.018, 8, 6));
@@ -95,12 +95,12 @@ export function mapTable(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const group = new THREE.Group();
   group.position.set(TABLE_AT.x, 0, TABLE_AT.z);
-  const rim = kit.glow(ROYAL_BLUE, 2.4);
+  const rim = c.glow(ROYAL_BLUE, 2.4);
   const b = builder(kit);
   b.cylinder(0.3, 0.36, 0.08, c.dark, [0, 0.04, 0], { sides: 32 });
   b.cylinder(0.12, 0.16, 0.62, c.hull, [0, 0.38, 0], { sides: 20 });
   b.cylinder(0.47, 0.4, 0.12, c.dark, [0, 0.72, 0], { sides: 40 });
-  b.cylinder(0.43, 0.43, 0.012, kit.glow(0x16306e, 1.4), [0, 0.787, 0], { sides: 40 });
+  b.cylinder(0.43, 0.43, 0.012, c.glow(0x16306e, 1.4), [0, 0.787, 0], { sides: 40 });
   b.hoop(0.47, 0.018, rim, [0, 0.78, 0]);
   b.hoop(0.3, 0.006, c.soft, [0, 0.796, 0]);
   b.hoop(0.16, 0.026, rim, [0, 0.14, 0]);
@@ -118,7 +118,7 @@ export function mapTable(tint: string, kit: Kit): Piece {
   const map = new THREE.Group();
   map.position.y = 1.08;
   map.rotation.x = -0.12;
-  const light = kit.glow(0xbfe8ff, 2);
+  const light = c.glow(0xbfe8ff, 2);
   add(map, new THREE.SphereGeometry(0.055, 14, 10), light);
   add(map, new THREE.BoxGeometry(0.28, 0.018, 0.018), light);
   for (const x of [-0.12, 0.12]) {
@@ -133,7 +133,7 @@ export function mapTable(tint: string, kit: Kit): Piece {
   const rockGeo = kit.keep(new THREE.DodecahedronGeometry(0.04, 0));
   const rocks = ASTEROIDS.map((a) => {
     const angle = (a.angleDeg * Math.PI) / 180;
-    const rock = new THREE.Mesh(rockGeo, kit.glow(a.tint, 1.8));
+    const rock = new THREE.Mesh(rockGeo, c.glow(a.tint, 1.8));
     rock.position.set(Math.cos(angle) * 0.34, 0, Math.sin(angle) * 0.34);
     ring.add(rock);
     return rock;
@@ -164,7 +164,7 @@ export function depositBoxes(tint: string, kit: Kit): Piece {
   const steel = kit.keep(
     new THREE.MeshStandardMaterial({ color: 0x8b93a3, roughness: 0.35, metalness: 0.9 }),
   );
-  const slot = kit.glow(0xffc24a, 2.2);
+  const slot = c.glow(0xffc24a, 2.2);
   const blinkGeo = kit.keep(new THREE.BoxGeometry(0.012, 0.03, 0.05));
   const blinking: THREE.Mesh[] = [];
   const b = builder(kit);
@@ -225,7 +225,7 @@ export function goldShelf(tint: string, kit: Kit): Piece {
   const shelves = [0.28, 0.66, 1.04];
   for (const y of shelves) {
     b.box(D, 0.025, W, gold, [0, y, 0]);
-    b.box(0.012, 0.012, W - 0.06, kit.glow(0xffc24a, 2), [-D / 2 - 0.008, y - 0.02, 0]);
+    b.box(0.012, 0.012, W - 0.06, c.glow(0xffc24a, 2), [-D / 2 - 0.008, y - 0.02, 0]);
   }
   b.box(D + 0.04, 0.05, W + 0.08, gold, [0, 1.37, 0]);
   /** A gold bar: narrower at the top, lying along the shelf's depth. */
@@ -277,7 +277,7 @@ export function goldShelf(tint: string, kit: Kit): Piece {
     [shelves[1]! + 0.18, -0.05],
     [shelves[2]! + 0.3, 0.1],
   ].map(([y, z]) => {
-    const spark = new THREE.Mesh(sparkGeo, kit.glow(0xfff2c8, 2.6));
+    const spark = new THREE.Mesh(sparkGeo, c.glow(0xfff2c8, 2.6));
     spark.position.set(-0.13, y!, z!);
     group.add(spark);
     return spark;

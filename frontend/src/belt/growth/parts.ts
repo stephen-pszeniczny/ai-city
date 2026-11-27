@@ -36,6 +36,8 @@ function makePalette(tint: string, kit: Kit) {
     kit.glow(hex, k * LOOK.growth.pieceGlow);
   return {
     tint,
+    /** A light in any colour, as bright as the growth glow setting allows. */
+    glow: light,
     hull: mats.hull,
     steel: mats.steel,
     dark: mats.darkMetal,

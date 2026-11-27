@@ -148,7 +148,7 @@ test("the way in through the hatch stays open, and nothing reaches the asteroids
 function surfaceGrid() {
   const { station, growth } = makeStation();
   for (const id of MODULES) growth[id].setTier(10);
-  const CELL = 0.7;
+  const CELL = 1.05; // at least the furthest anything asks about
   const grid = new Map<string, { p: THREE.Vector3; unit: string }[]>();
   const seen = new Set<string>();
   const cell = (p: THREE.Vector3, dx = 0, dy = 0, dz = 0) =>
@@ -267,7 +267,7 @@ test("no flight from the belt to an asteroid comes near a new part", () => {
             for (let i = 0; i <= 60; i++) {
               const at = asteroidApproach(from, goal, i / 60, turn).position;
               if (at.length() > 24) continue; // further out than anything on the station
-              const hit = near(at, 0.65);
+              const hit = near(at, 1.0); // the same bar as the station as it was
               if (hit) found.add(`${id} from ${distance}/${elevation}/${bearing}/${spin}: ${hit}`);
             }
           }

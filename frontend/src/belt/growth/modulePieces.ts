@@ -74,7 +74,7 @@ export function extraAntenna(tint: string, kit: Kit): Piece {
   const group = new THREE.Group();
   const b = builder(kit);
   const base = v3(-3.85, 1.95, 0);
-  const tip = v3(-4.55, 5.3, 0);
+  const tip = v3(-4.2, 5.0, 0);
   const along = (k: number) => base.clone().lerp(tip, k);
   b.cylinder(0.3, 0.4, 0.3, c.dark, base);
   b.rod(base, along(0.62), 0.09, c.steel, { sides: 8 });
@@ -120,7 +120,7 @@ export function roofDish(tint: string, kit: Kit): Piece {
   const group = new THREE.Group();
   const post = still(kit, (b) => {
     b.cylinder(0.55, 0.72, 0.4, c.dark, [-2.25, 2.2, 0], { sides: 24 });
-    b.cylinder(0.2, 0.28, 2.3, c.hull, [-2.25, 3.3, 0], { sides: 16 });
+    b.cylinder(0.2, 0.28, 2.02, c.hull, [-2.25, 3.16, 0], { sides: 16 });
     b.hoop(0.34, 0.05, c.lit, [-2.25, 3.0, 0]);
     for (const [x, z] of [
       [-0.8, 0.8],
@@ -132,7 +132,7 @@ export function roofDish(tint: string, kit: Kit): Piece {
     }
   });
   const head = new THREE.Group();
-  head.position.set(-2.25, 4.55, 0);
+  head.position.set(-2.25, 4.27, 0);
   const tilt = new THREE.Group();
   tilt.rotation.x = 0.85; // the bowl faces up and toward the front
   const b = builder(kit);
@@ -289,8 +289,8 @@ export function satellite(tint: string, kit: Kit): Piece {
   b.box(0.66, 0.54, 0.16, c.paint, [0, 0, 0]);
   for (const side of [-1, 1]) {
     b.rod(v3(side * 0.31, 0, 0), v3(side * 0.55, 0, 0), 0.04, c.steel);
-    b.box(0.95, 0.05, 0.66, c.solar, [side * 1.02, 0, 0], { turn: [0.35, 0, 0] });
-    b.box(0.07, 0.07, 0.68, c.lit, [side * 1.52, 0, 0], { turn: [0.35, 0, 0] });
+    b.box(0.58, 0.05, 0.66, c.solar, [side * 0.83, 0, 0], { turn: [0.35, 0, 0] });
+    b.box(0.07, 0.07, 0.68, c.lit, [side * 1.14, 0, 0], { turn: [0.35, 0, 0] });
   }
   // A small dish looking ahead along its orbit.
   const bowl = new THREE.LatheGeometry(
@@ -600,7 +600,7 @@ export function securityDrones(tint: string, kit: Kit): Piece {
   const scanGeo = kit.keep(new THREE.ConeGeometry(0.3, 0.75, 20, 1, true));
   const scanMat = c.beam(0.22);
   const eyeMat = c.lamp;
-  const alarm = kit.glow(0xff4530, 3);
+  const alarm = c.glow(0xff4530, 3);
   const drones = [0, 1, 2, 3].map((i) => {
     const drone = new THREE.Group();
     const body = new THREE.Mesh(bodyGeo, kit.mats.gold);
@@ -682,7 +682,7 @@ export function goldBeaconRing(tint: string, kit: Kit): Piece {
   const shaftGeo = kit.keep(new THREE.CylinderGeometry(0.03, 0.14, 1.5, 10, 1, true));
   const shaftMat = c.beam(0.34);
   const lamps = posts.map((degrees) => {
-    const lamp = new THREE.Mesh(lampGeo, kit.glow(GOLD_LIGHT, 3));
+    const lamp = new THREE.Mesh(lampGeo, c.glow(GOLD_LIGHT, 3));
     lamp.position.copy(at(degrees, 0.76));
     const shaft = new THREE.Mesh(shaftGeo, shaftMat);
     shaft.position.copy(at(degrees, 1.5));

@@ -253,6 +253,11 @@ export function BeltScene({
   }, [api, world]);
 
   const hold = useHold();
+  /** One object, updated each frame, for the station's growth (no per-frame allocations). */
+  const timing = useMemo(
+    () => ({ hold: false, motion: motionScale(reducedMotion) }),
+    [reducedMotion],
+  );
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (space) {
@@ -265,13 +270,13 @@ export function BeltScene({
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera, hold);
       world.kit.setStationLights(space.nightAmount());
     }
-    const motion = motionScale(reducedMotion);
+    timing.hold = hold;
     for (const id of STATION_MODULES) {
       const outside = world.modules[id];
-      outside.update(t, { hold, motion });
+      outside.update(t, timing);
       outside.setDetail(detailFor(state.camera.position.distanceTo(MODULE_SPOTS[id])));
       world.station.anchors[id].y = outside.labelHeight(); // the labels read this below
-      world.rooms[id].update(t, { hold, motion });
+      world.rooms[id].update(t, timing);
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
     const c = state.camera.position;

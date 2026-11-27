@@ -9,6 +9,10 @@ import type { XpView } from "../src/api.ts";
 import { LADDERS, piecesUpTo, type PieceId } from "../src/belt/growth/ladders.ts";
 import { hasPiece } from "../src/belt/growth/pieces.ts";
 import { sceneTier } from "../src/belt/growth/tiers.ts";
+import { LOOK } from "../src/belt/look.ts";
+import { createInteriorGrowth, createModuleGrowth } from "../src/belt/growth/applyGrowth.ts";
+import { createStation } from "../src/belt/station.ts";
+import { stubKit } from "./growthStub.ts";
 import { makeRoom, makeStation, MODULES, type Module } from "./moduleStub.ts";
 
 const TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -286,4 +290,37 @@ test("the roof dish shows a solid face to whoever looks into it", () => {
   ray.set(from, into.clone().sub(from).normalize());
   const hit = ray.intersectObject(dish, true)[0];
   assert.ok(hit && hit.distance < from.distanceTo(into) + 0.4, "sees through the bowl");
+});
+
+/** The brightness of every glowing material the modules' pieces ask for at tier 10. */
+function glowStrengths(pieceGlow: number): number[] {
+  const growth = LOOK.growth as unknown as { pieceGlow: number };
+  const usual = growth.pieceGlow;
+  growth.pieceGlow = pieceGlow;
+  try {
+    const { kit } = stubKit();
+    const station = createStation(kit); // the station's own lights aren't growth
+    const asked: number[] = [];
+    const glow = kit.glow;
+    kit.glow = (hex, k) => {
+      asked.push(k);
+      return glow(hex, k);
+    };
+    for (const id of MODULES) {
+      createModuleGrowth(id, station, kit).setTier(10);
+      createInteriorGrowth(id, "#ffffff", kit).setTier(10);
+    }
+    return asked;
+  } finally {
+    growth.pieceGlow = usual;
+  }
+}
+
+test("turning the growth glow down dims every light on the modules and in their rooms", () => {
+  const full = glowStrengths(1);
+  assert.ok(full.length > 0);
+  assert.deepEqual(
+    glowStrengths(0.5),
+    full.map((k) => k * 0.5),
+  );
 });
