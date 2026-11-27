@@ -1,16 +1,17 @@
-/* Level 3, the desktop screen: a modern thin-bezel display on a slim aluminium stand
-   (Steve, 2026-11-18: about 12% bigger than before, more modern),
-   floating over the live 3D room or asteroid. Colours with transparency use
-   commas (the secret scanner's SIN rule). */
+/* Level 3, the desk computer: a modern all-in-one with a thin dark border, an aluminium
+   chin and a slim aluminium stand (no real brand), floating over the 3D room or asteroid.
+   Inside: a menu bar, a building-tinted desktop, and one glass window with the apps in a
+   left list (glass buttons from the design kit) and the open app beside it.
+   Size: about 12% bigger than the first version (Steve, 2026-11-18).
+   Colours with transparency use commas (the secret scanner's SIN rule). */
 
 .desk-zoom {
-  --bezel: #0d0f14;
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 60px 5vw 16px;
-  pointer-events: none; /* the space around the monitor stays the 3D view */
+  padding: 56px 5vw 12px;
+  pointer-events: none; /* the space around the computer stays the 3D view */
 }
 
 .desk-zoom .monitor {
@@ -30,31 +31,28 @@
   }
 }
 
-/* ── The monitor ────────────────────────────────────────── */
+/* ── The computer ───────────────────────────────────────── */
 
 .monitor {
+  --desk-accent: #3d6df2;
   position: relative;
   z-index: 2;
   /* Width follows the available height too, so screen and chin always match. */
-  width: min(1355px, 100%, calc(74vh * 1.6)); /* 12% bigger than before */
+  width: min(1355px, 100%, calc(70vh * 1.6));
 }
 
 .monitor__screen {
   position: relative;
   aspect-ratio: 16 / 10;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
-  border: 10px solid var(--bezel);
-  border-bottom-width: 12px;
-  border-radius: 20px;
-  background:
-    radial-gradient(120% 90% at 80% 110%, rgba(65, 105, 225, 0.55), transparent 60%),
-    radial-gradient(60% 50% at 15% 10%, rgba(90, 60, 255, 0.25), transparent 70%), #060a18;
+  border: 9px solid #0b0d12;
+  border-radius: 18px 18px 0 0;
+  background: #05070c;
   box-shadow:
-    0 0 0 1px #262a33,
-    0 30px 80px rgba(0, 0, 0, 0.8),
-    0 0 60px rgba(65, 105, 225, 0.15);
+    0 0 0 1px #2a2f3a,
+    0 30px 80px rgba(0, 0, 0, 0.75);
   /* Makes "fixed" things (like the Undo banner) stay inside the screen. */
   transform: translateZ(0);
 }
@@ -63,71 +61,55 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(125deg, rgba(255, 255, 255, 0.06), transparent 35%);
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0%, transparent 35%);
 }
 
-/* The stand: a slim aluminium neck (::before) and a thin foot (::after). */
+/* Aluminium chin, stand and foot. */
 .monitor__chin {
-  position: relative;
-  width: 16%;
-  height: 34px;
-  margin: 0 auto 7px;
+  height: clamp(28px, 4.2vh, 48px);
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, #d9dde4 0%, #b5bbc6 55%, #9aa1ad 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-.monitor__chin::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, #7b8392, #c9cfda 45%, #a3aab7 55%, #6c7482);
-  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+.monitor__stand {
+  width: 17%;
+  height: clamp(26px, 4vh, 44px);
+  margin: 0 auto;
+  background: linear-gradient(180deg, #a9afba 0%, #c7ccd5 45%, #8d94a0 100%);
+  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
 }
 
-.monitor__chin::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -7px;
-  width: 210%;
+.monitor__foot {
+  width: 26%;
   height: 7px;
-  transform: translateX(-50%);
-  border-radius: 4px;
-  background: linear-gradient(#d4d9e2, #8e96a4);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.6);
+  margin: 0 auto;
+  border-radius: 4px 4px 6px 6px;
+  background: linear-gradient(180deg, #c3c8d1, #8f96a2);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
 }
 
-/* Power light: a tiny dot in the bottom bezel. */
-.monitor__chin .monitor__led {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-}
+/* ── Menu bar ───────────────────────────────────────────── */
 
-.monitor__led {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #30d158;
-  box-shadow: 0 0 6px #30d158;
-}
-
-/* Menu bar across the top of the screen. */
 .menubar {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  height: 30px;
-  padding: 0 0.9rem;
-  background: rgba(10, 14, 28, 0.6);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-  color: var(--text);
-  font-size: 0.8125rem;
+  gap: var(--kit-space-3);
+  height: 28px;
+  padding: 0 var(--kit-space-4);
+  font-size: 0.78rem;
+  background: rgba(8, 11, 20, 0.6);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+  border-bottom: 1px solid var(--kit-line);
+  z-index: 1;
 }
 
 .menubar__logo {
-  display: grid;
-  color: #8aa4ff;
+  display: inline-flex;
+  color: var(--desk-accent);
 }
 
 .menubar__spacer {
@@ -135,97 +117,111 @@
 }
 
 .menubar__sample {
-  padding: 0.05rem 0.5rem;
-  border-radius: 6px;
-  background: rgba(255, 179, 64, 0.16);
-  color: #ffb340;
-  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 179, 64, 0.55);
+  color: var(--kit-warn);
+  font-size: 0.7rem;
 }
 
 .menubar__clock {
+  color: var(--kit-muted);
   font-variant-numeric: tabular-nums;
 }
 
-/* The desktop and its one window. */
+/* ── Desktop and the glass window ───────────────────────── */
+
 .desktop {
   position: relative;
   min-height: 0;
-  padding: 6px 6px 4px; /* the window fills the screen; its content keeps a 5% margin */
-  display: grid;
-}
-
-.desktop__hint {
-  place-self: center;
-  color: var(--muted);
-}
-
-.desktop__note {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  margin: 0;
-  padding: 0.5rem 0.9rem;
-  border-radius: 10px;
-  background: rgba(20, 24, 36, 0.9);
-  font-size: 0.875rem;
+  padding: var(--kit-space-4);
+  background-size: cover;
 }
 
 .window {
-  min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr;
-  width: 100%;
-  justify-self: center;
-  border-radius: 12px;
+  grid-template-columns: minmax(176px, 21%) 1fr;
+  height: 100%;
   overflow: hidden;
-  background: rgba(18, 20, 30, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  border-radius: var(--kit-radius-l);
+  border: 1px solid var(--kit-line);
+  background: rgba(14, 19, 32, 0.6);
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 70px color-mix(in srgb, var(--desk-accent) 18%, transparent);
 }
 
-.window__bar {
-  position: relative;
+.window__apps {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 34px;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-direction: column;
+  gap: var(--kit-space-2);
+  padding: var(--kit-space-3) var(--kit-space-3);
+  border-right: 1px solid var(--kit-line);
+  background: rgba(255, 255, 255, 0.025);
+  min-height: 0;
 }
 
-.window__title {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--muted);
+.window__apps.is-scrolling {
+  overflow-y: auto;
 }
 
-.window__close {
-  position: absolute;
-  left: 12px;
-  width: 13px;
-  height: 13px;
-  padding: 0;
-  border: 0;
+.window__apps .kit-btn.is-later {
+  opacity: 0.55;
+}
+
+.window__lights {
+  display: flex;
+  gap: 7px;
+  padding: var(--kit-space-1) var(--kit-space-1) var(--kit-space-3);
+}
+
+.window__lights i {
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #ff5f57;
-  cursor: pointer;
 }
 
-.window__close:focus-visible {
-  outline: 2px solid #8aa4ff;
-  outline-offset: 2px;
+.window__lights i:nth-child(2) {
+  background: #febc2e;
 }
 
-/* The scrollable app area. */
-.window__body {
+.window__lights i:nth-child(3) {
+  background: #28c840;
+}
+
+.window__pane {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding: var(--kit-space-4) var(--kit-space-5);
 }
 
-/* Today's to-do panel, fitted into the window: no floating glass, no duplicate heading. */
-.window__body .panel {
+.window__pane:focus {
+  outline: none;
+}
+
+/* Focus moves here when an app opens; the app's own controls show the keyboard ring. */
+.window__pane:focus-visible {
+  outline: none;
+}
+
+.window__pane--slide {
+  animation: pane-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+/* Apps written for the old window: no floating glass of their own, no duplicate heading. */
+.window__pane .panel {
   width: 100%;
   border: 0;
   border-radius: 0;
@@ -236,90 +232,33 @@
   animation: none;
 }
 
-.window__body .panel__head:has(a.back-link) {
+.window__pane .panel__head:has(a.back-link) {
   display: none;
 }
 
-.window__body .panel__head {
-  padding-top: 0.9rem;
-}
-
-.window__body .mode-banner {
+.window__pane .mode-banner {
   margin-top: 1rem;
 }
 
-/* Dock along the bottom of the screen. */
-.dock {
-  justify-self: center;
-  display: flex;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 6px 8px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-}
-
-.dock__app {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  min-width: 64px;
-  padding: 4px 6px 8px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-
-.dock__app:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.dock__app:focus-visible {
-  outline: 2px solid #8aa4ff;
-  outline-offset: 1px;
-}
-
-.dock__icon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: linear-gradient(160deg, #5b82ff, #2a46b8);
-  font-size: 1.1rem;
-}
-
-.dock__app--later .dock__icon {
-  background: linear-gradient(160deg, #3a3f4d, #23262f);
-  color: var(--muted);
-}
-
-.dock__name {
-  font-size: 0.6875rem;
-  color: var(--muted);
-}
-
-.dock__dot {
+.desktop__note {
   position: absolute;
-  bottom: 2px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text);
+  left: 50%;
+  bottom: var(--kit-space-5);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: var(--kit-space-2) var(--kit-space-4);
+  border-radius: 999px;
+  border: 1px solid var(--kit-line);
+  background: rgba(14, 19, 32, 0.85);
+  font-size: 0.8rem;
 }
 
-/* Under-construction window for buildings that aren't built yet. */
+/* ── Under construction ─────────────────────────────────── */
+
 .construction {
   display: grid;
   place-content: center;
-  gap: 0.6rem;
+  gap: var(--kit-space-2);
   min-height: 100%;
   padding: 2rem;
   text-align: center;
@@ -327,7 +266,7 @@
 
 .construction h2 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.6rem;
 }
 
 .construction h2:focus {
@@ -336,24 +275,19 @@
 
 .construction p {
   margin: 0;
-  color: var(--muted);
+  color: var(--kit-muted);
 }
 
 .construction__stripes {
-  height: 18px;
-  margin-top: 1rem;
+  height: 16px;
+  margin-top: var(--kit-space-3);
   border-radius: 4px;
   background: repeating-linear-gradient(-45deg, #ffb340 0 16px, #111 16px 32px);
   opacity: 0.85;
 }
 
-/* The window takes focus when it opens (for keyboard and screen readers);
-   a visible ring only when reached by keyboard. */
-.window:focus {
-  outline: none;
-}
-
-.window:focus-visible {
-  outline: 2px solid #8aa4ff;
-  outline-offset: 2px;
+/* Long app names wrap onto a second line instead of being cut off. */
+.window__apps .kit-btn__label {
+  white-space: normal;
+  line-height: 1.2;
 }

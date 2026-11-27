@@ -1,0 +1,164 @@
+/* The design kit: one look for every desk-computer app (blue, grey and black glass).
+   Colours with transparency use commas on purpose (see todo.css). */
+
+.kit {
+  --kit-bg: #05070c;
+  --kit-glass: rgba(120, 140, 180, 0.12);
+  --kit-glass-strong: rgba(140, 160, 200, 0.2);
+  --kit-line: rgba(255, 255, 255, 0.12);
+  --kit-text: #e9eef8;
+  --kit-muted: #8d97ab;
+  --kit-accent: #3d6df2;
+  --kit-warn: #ffb340;
+  --kit-good: #34c759;
+  --kit-radius-s: 8px;
+  --kit-radius-m: 12px;
+  --kit-radius-l: 16px;
+  --kit-space-1: 4px;
+  --kit-space-2: 8px;
+  --kit-space-3: 12px;
+  --kit-space-4: 16px;
+  --kit-space-5: 24px;
+  --kit-blur: 18px;
+  color: var(--kit-text);
+  font-family: -apple-system, system-ui, "Helvetica Neue", sans-serif;
+}
+
+.kit-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--kit-space-2);
+  width: 100%;
+  padding: var(--kit-space-2) var(--kit-space-3);
+  border-radius: var(--kit-radius-m);
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.kit-btn:hover {
+  background: var(--kit-glass-strong);
+}
+.kit-btn:focus-visible {
+  outline: 2px solid var(--kit-accent);
+  outline-offset: 2px;
+}
+.kit-btn.is-active {
+  background: linear-gradient(135deg, rgba(61, 109, 242, 0.5), rgba(61, 109, 242, 0.22));
+  border-color: rgba(120, 160, 255, 0.6);
+  box-shadow: 0 6px 16px rgba(61, 109, 242, 0.25);
+}
+.kit-btn.is-active::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--kit-accent);
+  box-shadow: 0 0 6px var(--kit-accent);
+}
+.kit-btn__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: var(--kit-radius-s);
+  background: linear-gradient(145deg, #4a7bff, #2a49b8);
+  font-size: 0.8rem;
+}
+.kit-btn__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-tile {
+  display: grid;
+  gap: var(--kit-space-1);
+  padding: var(--kit-space-3) var(--kit-space-4);
+  border-radius: var(--kit-radius-m);
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass);
+}
+.kit-tile__label {
+  color: var(--kit-muted);
+  font-size: 0.72rem;
+}
+.kit-tile__value {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.kit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kit-space-1);
+  padding: 2px var(--kit-space-2);
+  border-radius: 999px;
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass-strong);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.kit-chip--warn {
+  color: var(--kit-warn);
+  border-color: rgba(255, 179, 64, 0.45);
+  background: rgba(255, 179, 64, 0.12);
+}
+.kit-chip--good {
+  border-color: rgba(52, 199, 89, 0.45);
+  background: rgba(52, 199, 89, 0.16);
+}
+
+.kit-section {
+  display: grid;
+  gap: var(--kit-space-3);
+}
+.kit-section__title {
+  margin: 0;
+  color: var(--kit-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.kit-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.kit-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5b86ff, var(--kit-accent));
+}
+
+.kit-field {
+  display: grid;
+  gap: var(--kit-space-1);
+  font-size: 0.8rem;
+}
+.kit-field__label {
+  color: var(--kit-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-btn {
+    transition: none;
+  }
+}

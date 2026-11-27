@@ -16,6 +16,7 @@ import {
 } from "react-router-dom";
 
 import { getBuildings, type BuildingId } from "./api";
+import { HoldProvider } from "./belt/HoldContext";
 import { BeltCanvas } from "./belt/BeltCanvas";
 import { escapeAction, flightState } from "./belt/flightState";
 import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
@@ -132,7 +133,9 @@ function BeltHome() {
 
   return (
     <>
-      <BeltCanvas view={view} onOpen={open} notifications={notifications} />
+      <HoldProvider hold={view.level === "screen"}>
+        <BeltCanvas view={view} onOpen={open} notifications={notifications} />
+      </HoldProvider>
 
       {view.level !== "belt" && (
         <button type="button" className="belt__back" onClick={() => go(back(view))}>

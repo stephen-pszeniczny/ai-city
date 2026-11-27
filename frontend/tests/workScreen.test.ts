@@ -7,19 +7,17 @@ import { LOOK } from "../src/belt/look.ts";
 import { detailFor } from "../src/belt/lod.ts";
 import { workScreen } from "../src/interior/workScreen.ts";
 
-const TASKS = [{ title: "Water the plants" }, { title: "Fix bike tyre" }];
+const LIVE = { headline: "3 due today", gauge: null, style: "ring" as const };
 
-test('planner tabs include "To-do" and use the real task titles', () => {
-  // Find a tick whose active tab is To-do.
-  for (let tick = 0; tick < 40; tick++) {
-    const s = workScreen("planner", true, tick, TASKS);
-    assert.ok(s.tabs.includes("To-do"));
-    if (s.tabs[s.active] === "To-do") {
-      assert.deepEqual(s.list, ["Water the plants", "Fix bike tyre"]);
-      return;
-    }
-  }
-  assert.fail("To-do tab never became active");
+test("a robot screen carries its building's live view and never task titles", () => {
+  const s = workScreen("planner", true, 4, LIVE);
+  assert.deepEqual(s.live, LIVE);
+  assert.equal("list" in s, false);
+  assert.ok(!JSON.stringify(s).includes("Water the plants"));
+});
+
+test("without a live view the screen still works", () => {
+  assert.equal(workScreen("planner", true, 4).live, null);
 });
 
 test('unbuilt buildings say "Setting up" and stay under construction', () => {

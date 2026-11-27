@@ -13,6 +13,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
+
 import type { BuildingId } from "../api";
 import { LOOK } from "../belt/look";
 import type { Detail } from "../belt/lod";
@@ -104,7 +107,9 @@ function GadgetBody({ id, tint, detail, reducedMotion, orbit }: Props) {
     [],
   );
 
+  const hold = useHold();
   useFrame((state) => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     const t = state.clock.elapsedTime * speed;
     switch (id) {
       case "jobs":

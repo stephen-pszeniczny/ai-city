@@ -1,8 +1,9 @@
 // What a robot's screen shows while it works: tabs, progress bars, a scrolling
 // log and a small chart that move on as the robot types and switches tabs
 // (the robot's `tick`). Lines are generic on purpose: never personal data or
-// amounts. Mission Control's To-do tab shows the real open-task titles.
+// amounts. Built buildings also carry a live view of their real counts (liveStat).
 import type { BuildingId } from "../api";
+import type { LiveStat } from "./liveStat";
 
 export type WorkScreen = {
   tabs: string[];
@@ -13,14 +14,14 @@ export type WorkScreen = {
   log: string[];
   /** Twelve chart values, 0 to 1. */
   chart: number[];
-  /** Task titles for a list tab (Mission Control's To-do), else empty. */
-  list: string[];
+  /** The building's live counts (never names or amounts), or null. */
+  live: LiveStat | null;
   /** The building isn't built yet: the screen says so. */
   construction: boolean;
 };
 
 const BUILT_TABS: Partial<Record<BuildingId, string[]>> = {
-  planner: ["To-do", "Today", "Reminders"],
+  planner: ["Today", "To-do", "Reminders"],
 };
 
 const LOGS: Record<BuildingId, string[]> = {
@@ -78,7 +79,7 @@ export function workScreen(
   id: BuildingId,
   built: boolean,
   tick: number,
-  tasks: readonly { title: string }[] = [],
+  live: LiveStat | null = null,
 ): WorkScreen {
   const tabs = built
     ? (BUILT_TABS[id] ?? ["Overview", "Activity"])
@@ -98,7 +99,7 @@ export function workScreen(
     progress: [0, 1, 2].map((i) => frac(tick * 0.07 + i * 0.31)),
     log,
     chart: Array.from({ length: 12 }, (_, i) => 0.5 + 0.4 * Math.sin((tick + i) * 0.7 + i * 0.3)),
-    list: tabs[active] === "To-do" ? tasks.map((t) => t.title) : [],
+    live: built ? live : null,
     construction: !built,
   };
 }

@@ -9,7 +9,6 @@ import type { BuildingId } from "../api";
 import type { HallwayRow } from "../belt/hallwayStatus";
 import { ControlStation } from "./ControlStation";
 import { Hallway } from "./Hallway";
-import type { ScreenLine } from "./Monitor";
 import { FLOOR_Y, HALL, HATCH, HUB, MODULE_X } from "./stationLayout";
 import { VaultDoor } from "./VaultDoor";
 import { PanelTexturesProvider, WallPanel } from "./WallPanels";
@@ -20,7 +19,6 @@ export function StationInterior({
   titleOf,
   tintOf,
   built,
-  plannerLines,
   rows,
   summary,
   screenOf,
@@ -29,7 +27,6 @@ export function StationInterior({
   titleOf: (id: BuildingId) => string;
   tintOf: (id: BuildingId) => string;
   built: ReadonlySet<BuildingId>;
-  plannerLines: readonly ScreenLine[];
   rows: readonly HallwayRow[];
   summary: string;
   /** Which room's screen is open (its monitor and robot hide), if any. */
@@ -57,7 +54,6 @@ export function StationInterior({
             title={titleOf(id)}
             tint={tintOf(id)}
             built={built.has(id)}
-            lines={id === "planner" ? plannerLines : []}
             atScreen={screenOf === id}
             onOpenScreen={() => onOpenScreen(id)}
           />

@@ -3,13 +3,13 @@
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
 import { useQuery } from "@tanstack/react-query";
 import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+
+import { useHold } from "./HoldContext";
 import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 
 import { getBuildings, listTasks, type BuildingId } from "../api";
-import type { ScreenLine } from "../interior/Monitor";
 import { Shuttle } from "../notifications/Shuttle";
-import { statusNotes, type Tone } from "../todo/dates";
 import { BUILT } from "./built";
 import { flightState } from "./flightState";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
@@ -28,17 +28,8 @@ import { createSpace, type Space } from "./space";
 import { createStation } from "./station";
 import type { DayNight } from "./useDayNight";
 
-const TONE_COLOURS: Record<Tone, string> = {
-  bad: "#ff453a",
-  warn: "#ffb340",
-  accent: "#8aa4ff",
-  plain: "#f5f5f7",
-  muted: "#98989f",
-};
-
 /** Pointer movement (px) below which a press counts as a click, not a drag. */
 const CLICK_SLOP = 5;
-const NO_LINES: ScreenLine[] = [];
 
 export function BeltScene({
   view,
@@ -193,20 +184,7 @@ export function BeltScene({
   // Mission Control's screen shows the live open tasks; other screens show the
   // robot's (generic) work.
   const openTasks = useQuery({ queryKey: ["tasks", "open"], queryFn: () => listTasks("open") });
-  const plannerLines = useMemo<ScreenLine[]>(
-    () =>
-      (openTasks.data ?? []).map((t) => {
-        const note = statusNotes(t)[0];
-        return {
-          title: t.title,
-          note: note?.text,
-          noteColour: note ? TONE_COLOURS[note.tone] : undefined,
-        };
-      }),
-    [openTasks.data],
-  );
   const hallRows = useMemo(() => hallwayStatus(buildings.data ?? [], BUILT), [buildings.data]);
-  const linesFor = (id: BuildingId): ScreenLine[] => (id === "planner" ? plannerLines : NO_LINES);
   const atScreen = view.level === "screen";
 
   useEffect(() => {
@@ -232,13 +210,17 @@ export function BeltScene({
     };
   }, [api, world]);
 
+  const hold = useHold();
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (space) {
-      space.update(t, state.camera);
-      world.station.update(t);
+      // Behind the open computer screen the scene holds still, except the asteroid orbit.
+      if (!hold) {
+        space.update(t, state.camera);
+        world.station.update(t);
+        world.kit.updateBlinkers(t);
+      }
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
-      world.kit.updateBlinkers(t);
       world.kit.setStationLights(space.nightAmount());
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
@@ -286,7 +268,6 @@ export function BeltScene({
           titleOf={titleOf}
           tintOf={tintOf}
           built={BUILT}
-          plannerLines={plannerLines}
           rows={hallRows}
           summary={hallwayStatus.missionSummary(openTasks.data ?? [])}
           screenOf={atScreen ? insideModule : null}
@@ -302,7 +283,6 @@ export function BeltScene({
                 title={titleOf(a.id)}
                 tint={tintOf(a.id)}
                 built={BUILT.has(a.id)}
-                lines={linesFor(a.id)}
                 inside={insideId === a.id}
                 atScreen={atScreen && insideId === a.id}
                 sign={a.deskSign}

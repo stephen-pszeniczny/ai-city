@@ -6,17 +6,20 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import type { BuildingId } from "../api";
 import type { RobotBrain } from "./robotBrain";
+import { useLiveStat } from "./useLiveStat";
 import { workScreen, type WorkScreen } from "./workScreen";
 
 /** Screen size in scene units (16:10), shared with the camera and the desktop overlay. */
 export const SCREEN = { width: 1.28, height: 0.8 } as const;
 
 /** One task row drawn on the screen. */
-export type ScreenLine = { title: string; note?: string; noteColour?: string };
 
 const W = 1024;
 const H = 640;
@@ -36,7 +39,6 @@ function draw(
   title: string,
   tint: string,
   s: WorkScreen,
-  lines: readonly ScreenLine[],
   typing: boolean,
 ) {
   const bg = g.createRadialGradient(W * 0.8, H * 1.1, 10, W * 0.8, H * 1.1, W);
@@ -88,30 +90,44 @@ function draw(
 
   const cx = x0 + 24;
   const cy = y0 + 70;
-  if (s.list.length > 0 || s.tabs[s.active] === "To-do") {
-    // Mission Control's open tasks.
-    const rows = lines.slice(0, 6);
-    if (rows.length === 0) {
-      g.fillStyle = "rgba(245, 245, 247, 0.55)";
-      g.font = font(500, 26);
-      g.fillText("Nothing open.", cx, cy + 30);
-    }
-    rows.forEach((row, i) => {
-      const y = cy + 20 + i * 54;
-      g.strokeStyle = "rgba(255, 255, 255, 0.45)";
-      g.lineWidth = 3;
+  if (s.live) {
+    // The building's live counts: a big headline and a moving gauge (never names or amounts).
+    g.fillStyle = "#f5f5f7";
+    g.font = font(700, 44);
+    g.fillText(fit(g, s.live.headline, 520), cx, cy + 46);
+    const gx = x0 + ww - 150;
+    const gy = cy + 120;
+    const phase = (s.progress[0] ?? 0) * Math.PI * 2;
+    g.lineWidth = 10;
+    if (s.live.style === "ring") {
+      g.strokeStyle = "rgba(255, 255, 255, 0.1)";
       g.beginPath();
-      g.arc(cx + 14, y, 11, 0, Math.PI * 2);
+      g.arc(gx, gy, 70, 0, Math.PI * 2);
       g.stroke();
-      g.fillStyle = "#f5f5f7";
-      g.font = font(500, 25);
-      g.fillText(fit(g, row.title, 470), cx + 40, y + 8);
-      if (row.note) {
-        g.fillStyle = row.noteColour ?? "rgba(245, 245, 247, 0.6)";
-        g.font = font(600, 19);
-        g.fillText(row.note, cx + 540, y + 7);
-      }
-    });
+      g.strokeStyle = tint;
+      g.beginPath();
+      g.arc(gx, gy, 70, phase, phase + Math.PI * 1.4);
+      g.stroke();
+    } else if (s.live.style === "bar") {
+      g.fillStyle = "rgba(255, 255, 255, 0.1)";
+      g.fillRect(cx, cy + 90, 420, 18);
+      g.fillStyle = tint;
+      g.fillRect(cx, cy + 90, 420 * (0.35 + 0.65 * (s.progress[0] ?? 0)), 18);
+    } else {
+      g.strokeStyle = "rgba(255, 255, 255, 0.15)";
+      g.lineWidth = 2;
+      [30, 55, 80].forEach((r) => {
+        g.beginPath();
+        g.arc(gx, gy, r, 0, Math.PI * 2);
+        g.stroke();
+      });
+      g.strokeStyle = tint;
+      g.lineWidth = 4;
+      g.beginPath();
+      g.moveTo(gx, gy);
+      g.lineTo(gx + Math.cos(phase) * 80, gy + Math.sin(phase) * 80);
+      g.stroke();
+    }
   } else {
     // Progress bars.
     s.progress.forEach((v, i) => {
@@ -192,7 +208,6 @@ export function Monitor({
   title,
   tint,
   built,
-  lines,
   brain,
   live = true,
 }: {
@@ -200,8 +215,6 @@ export function Monitor({
   title: string;
   tint: string;
   built: boolean;
-  /** Mission Control's open tasks (empty elsewhere). */
-  lines: readonly ScreenLine[];
   brain: RobotBrain;
   /** Redraw as the robot works (off when far away: the last picture stays). */
   live?: boolean;
@@ -250,12 +263,15 @@ export function Monitor({
   useEffect(() => () => Object.values(shapes).forEach((g) => g.dispose()), [shapes]);
 
   const last = useRef({ key: "", at: 0 });
-  // Redraw straight away when the content (title, tasks) changes.
+  const stat = useLiveStat(id);
+  // Redraw straight away when the content (title, live counts) changes.
   useEffect(() => {
     last.current.key = "";
-  }, [title, tint, built, lines]);
+  }, [title, tint, built, stat?.headline]);
 
+  const hold = useHold();
   useFrame(() => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     if (!live && last.current.key !== "") return;
     const s = brain.last;
     const typing = s.action === "type";
@@ -263,7 +279,7 @@ export function Monitor({
     const now = performance.now();
     if (key === last.current.key || now - last.current.at < MIN_REDRAW_MS) return;
     last.current = { key, at: now };
-    draw(g, title, tint, workScreen(id, built, s.tick, lines), lines, typing);
+    draw(g, title, tint, workScreen(id, built, s.tick, stat), typing);
     texture.needsUpdate = true;
   });
 

@@ -12,7 +12,7 @@ import * as THREE from "three";
 import type { BuildingId } from "../api";
 import { Console } from "./Console";
 import { Gadget } from "./Gadget";
-import { Monitor, SCREEN, type ScreenLine } from "./Monitor";
+import { Monitor, SCREEN } from "./Monitor";
 import { Robot, useRobotBrain, type RobotAway } from "./Robot";
 import { greetingAt, greetingClock, greetingPoints } from "./vaultGreeting";
 import { doorSide, ROOM_DOOR as DOOR, ROOM_OFFSET, roomView, ROOM_SIZE } from "./stationLayout";
@@ -29,7 +29,6 @@ export function ControlStation({
   title,
   tint,
   built,
-  lines,
   atScreen,
   onOpenScreen,
 }: {
@@ -37,7 +36,6 @@ export function ControlStation({
   title: string;
   tint: string;
   built: boolean;
-  lines: readonly ScreenLine[];
   /** Zoomed into the screen: the desktop overlay takes the monitor's place, so it and the robot hide. */
   atScreen: boolean;
   onOpenScreen: () => void;
@@ -279,7 +277,7 @@ export function ControlStation({
         </group>
         <Gadget id={id as BuildingId} tint={tint} detail="near" reducedMotion={reducedMotion} />
         <group position={view.screen} rotation={view.turn} visible={!atScreen}>
-          <Monitor id={id} title={title} tint={tint} built={built} lines={lines} brain={brain} />
+          <Monitor id={id} title={title} tint={tint} built={built} brain={brain} />
         </group>
       </group>
 
