@@ -20,13 +20,11 @@ export function planLevelUp(b: BuildingXp, view: View, ready: boolean): LevelUpP
 
 export type LevelUpPhase = "dock" | "cheer" | "build" | "done";
 
-// When the dock and cheer phases end, in seconds from the start of the moment.
-const DOCK_END = 2.5;
-const CHEER_END = 4;
-
 /** The cargo shuttle docks, the robot cheers, then the new pieces build in. */
 export function phaseAt(elapsedS: number): LevelUpPhase {
-  if (elapsedS < DOCK_END) return "dock";
-  if (elapsedS < CHEER_END) return "cheer";
-  return elapsedS < CHEER_END + LOOK.growth.buildInSeconds ? "build" : "done";
+  const { dockSeconds, cheerSeconds } = LOOK.growth.moment;
+  const buildStarts = dockSeconds + cheerSeconds;
+  if (elapsedS < dockSeconds) return "dock";
+  if (elapsedS < buildStarts) return "cheer";
+  return elapsedS < buildStarts + LOOK.growth.buildInSeconds ? "build" : "done";
 }

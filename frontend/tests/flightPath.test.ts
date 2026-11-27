@@ -138,3 +138,10 @@ test("skip is remembered until the flight ends", () => {
   assert.equal(flightState.flying(), false);
   assert.equal(flightState.skipRequested(), false);
 });
+
+test("Escape during a level-up moment skips it and does not also go back", () => {
+  const s = { flying: false, inTextField: false, atBelt: false, celebrating: true };
+  assert.equal(escapeAction(s), "skipLevelUp");
+  // A flight still comes first.
+  assert.equal(escapeAction({ ...s, flying: true }), "skip");
+});

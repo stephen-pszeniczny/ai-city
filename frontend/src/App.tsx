@@ -21,6 +21,8 @@ import { BeltCanvas } from "./belt/BeltCanvas";
 import { BuildingXpBar } from "./belt/BuildingXpBar";
 import { escapeAction, flightState } from "./belt/flightState";
 import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
+import { LevelUpCard } from "./belt/LevelUpCard";
+import { levelUp } from "./belt/levelUpRun";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
 import { Desktop } from "./desktop/Desktop";
 import { stepsToTask } from "./notifications/journey";
@@ -87,25 +89,30 @@ function BeltHome() {
   };
 
   function open(id: BuildingId) {
+    // A click that skipped a level-up moment does nothing else.
+    if (levelUp.swallowsClick()) return;
     // Clicking the building you're already in goes to its screen.
     if (view.level === "building" && view.id === id) go({ level: "screen", id });
     else if (view.level === "belt") go({ level: "building", id });
   }
 
-  // Escape finishes a flight first; otherwise steps out one level.
+  // Escape finishes a flight or a level-up moment first; otherwise steps out one level.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
+      // A held key counts once: the press that skips something never goes on to Back.
+      if (e.key !== "Escape" || e.defaultPrevented || e.repeat) return;
       // Escape inside a text field belongs to the field (and protects a half-typed task).
       const el = e.target as HTMLElement | null;
       const inTextField =
         !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
       const action = escapeAction({
         flying: flightState.flying(),
+        celebrating: levelUp.running() !== null,
         inTextField,
         atBelt: view.level === "belt",
       });
       if (action === "skip") flightState.skip();
+      else if (action === "skipLevelUp") levelUp.finish("skip");
       else if (action === "back") go(back(view));
     };
     window.addEventListener("keydown", onKey);
@@ -171,6 +178,8 @@ function BeltHome() {
       {view.level === "building" && (
         <BuildingXpBar key={view.id} id={view.id} name={nameOf(view.id)} />
       )}
+
+      {view.level === "building" && <LevelUpCard key={`card-${view.id}`} id={view.id} />}
 
       {view.level === "screen" && <Desktop key={view.id} id={view.id} name={nameOf(view.id)} />}
 

@@ -69,11 +69,13 @@ test("the moment goes dock, cheer, build, done", () => {
 });
 
 test("each phase starts where the one before ends", () => {
-  const end = 4 + LOOK.growth.buildInSeconds;
-  assert.equal(phaseAt(2.49), "dock");
-  assert.equal(phaseAt(2.5), "cheer");
-  assert.equal(phaseAt(3.99), "cheer");
-  assert.equal(phaseAt(4), "build");
+  const dock = LOOK.growth.moment.dockSeconds;
+  const cheer = dock + LOOK.growth.moment.cheerSeconds;
+  const end = cheer + LOOK.growth.buildInSeconds;
+  assert.equal(phaseAt(dock - 0.01), "dock");
+  assert.equal(phaseAt(dock), "cheer");
+  assert.equal(phaseAt(cheer - 0.01), "cheer");
+  assert.equal(phaseAt(cheer), "build");
   assert.equal(phaseAt(end - 0.01), "build");
   assert.equal(phaseAt(end), "done");
 });

@@ -30,6 +30,8 @@ export type AsteroidBuilding = {
   holder: THREE.Group;
   /** Upgrades: tier 0 until set. Only built buildings grow. */
   growth: GrowthHandle;
+  /** Size the rock, deck and what stands on it (a level-up grows it gradually). */
+  setScale(scale: number): void;
   /** The solid "under construction" sign for beside the robot's desk (made once), or null if built. */
   deskSign: THREE.Group | null;
   /** `hold`: the computer screen is open, so upgrade pieces stop moving. */
@@ -109,6 +111,7 @@ export function createAsteroids(
     let signFace: THREE.Group | null = null;
     const lm = createLandmark(def.id as Parameters<typeof createLandmark>[0], def.tint, kit);
     holder.add(lm.group);
+    const setScale = (scale: number) => grown.scale.setScalar(scale);
     const growth = createGrowth({
       id: def.id,
       tint: def.tint,
@@ -118,7 +121,7 @@ export function createAsteroids(
       desk: deskMount,
       landmark: lm,
       ground: rockGround(rock.geometry, ROCK_SCALE, DECK_Y),
-      onScale: (scale) => grown.scale.setScalar(scale),
+      onScale: setScale,
     });
     // A built asteroid's landmark animates through its growth (it can change stage).
     if (!BUILT.has(def.id)) {
@@ -165,6 +168,7 @@ export function createAsteroids(
       spin,
       holder,
       growth,
+      setScale,
       deskSign,
       update(t, speed, camera, hold = false) {
         const [x, y, z] = orbitPosition(def.angleDeg, t, speed);

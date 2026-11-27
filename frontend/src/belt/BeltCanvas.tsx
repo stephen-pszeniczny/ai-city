@@ -15,6 +15,7 @@ import { BELT_HOME, CameraRig, type SceneApi } from "./CameraRig";
 import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
+import { levelUp } from "./levelUpRun";
 import { ModeSwitch } from "./ModeSwitch";
 import { prepareStoredScene } from "./space/stored";
 import { useDayNight } from "./useDayNight";
@@ -65,7 +66,13 @@ export function BeltCanvas({
   });
 
   return (
-    <main className="belt" onPointerDown={() => flightState.skip()}>
+    <main
+      className="belt"
+      onPointerDown={() => {
+        flightState.skip();
+        levelUp.pointerDown();
+      }}
+    >
       <ThreeErrorBoundary>
         {sceneReady && (
           <Canvas

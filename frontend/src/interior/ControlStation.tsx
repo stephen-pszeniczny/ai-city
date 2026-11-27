@@ -11,10 +11,11 @@ import * as THREE from "three";
 
 import type { BuildingId } from "../api";
 import type { InteriorGrowth } from "../belt/growth/applyGrowth";
+import { levelUp } from "../belt/levelUpRun";
 import { Console } from "./Console";
 import { Gadget } from "./Gadget";
 import { Monitor, SCREEN } from "./Monitor";
-import { Robot, useRobotBrain, type RobotAway } from "./Robot";
+import { Robot, useRegisteredBrain, type RobotAway } from "./Robot";
 import { greetingAt, greetingClock, greetingPoints } from "./vaultGreeting";
 import { doorSide, ROOM_DOOR as DOOR, ROOM_OFFSET, roomView, ROOM_SIZE } from "./stationLayout";
 import { WallPanel } from "./WallPanels";
@@ -47,7 +48,7 @@ export function ControlStation({
   /** The upgrade tier the room shows. */
   tier: number;
 }) {
-  const brain = useRobotBrain(title + tint + id);
+  const brain = useRegisteredBrain(id, title + tint + id);
   const side = doorSide(id);
   const view = useMemo(() => roomView(id), [id]);
   const vault = id === "finance";
@@ -139,7 +140,7 @@ export function ControlStation({
   const clickRobot = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 5) return;
     e.stopPropagation();
-    brain.react();
+    if (!levelUp.swallowsClick()) brain.react();
   };
 
   const depth = FRONT - BACK;
