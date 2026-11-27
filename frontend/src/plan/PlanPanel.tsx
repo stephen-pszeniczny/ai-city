@@ -7,6 +7,7 @@
 // only hides buttons that would be refused anyway.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useOpenApp } from "../desktop/DesktopContext";
 
 import {
   addPlanBlock,
@@ -27,7 +28,7 @@ import { categoryLabel } from "../todo/categories";
 import { BlockForm } from "./BlockForm";
 import { itemCountLabel } from "./grocery";
 import { TodayRoutines } from "./RoutineCard";
-import { canMarkGym, dayLabel, isPast, overlapping, shiftWeek, todosFor } from "./week";
+import { canMarkGym, dayLabel, dayTile, isPast, overlapping, shiftWeek, todosFor } from "./week";
 import "./plan.css";
 
 /** Read the week; if it isn't saved yet, ask the server to open (create) it. */
@@ -39,6 +40,7 @@ async function loadWeek(start: string | null): Promise<PlanWeek> {
 }
 
 export function PlanPanel() {
+  const openApp = useOpenApp();
   const client = useQueryClient();
   const [weekStart, setWeekStart] = useState<string | null>(null); // null: this week
   const [chosenDay, setChosenDay] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function PlanPanel() {
     onError,
   });
 
-  if (week.isPending) return <p className="plan__note">Loading your week…</p>;
+  if (week.isPending) return <p className="plan__note">Loading…</p>;
   if (week.isError)
     return (
       <p className="form-error" role="alert">
@@ -78,8 +80,11 @@ export function PlanPanel() {
   const w = week.data;
   if (!w.configured)
     return (
-      <p className="plan__note">
-        Add a [plan] section to your settings file to see your week. See settings.example.toml.
+      <p
+        className="plan__note"
+        title="Add a [plan] section to your settings file (see settings.example.toml)"
+      >
+        Plan not set up
       </p>
     );
 
@@ -150,14 +155,17 @@ export function PlanPanel() {
       )}
 
       {w.exists && !w.checked_in && w.days.some((d) => !isPast(d.day, today)) && (
-        <p className="plan__note">Not checked in yet: open Sunday check-in from the dock.</p>
+        <div className="plan__row">
+          <span className="plan__tag plan__tag--warn">Not checked in</span>
+          <button type="button" className="btn btn--quiet" onClick={() => openApp("checkin")}>
+            Open check-in
+          </button>
+        </div>
       )}
 
       {!w.exists ? (
         <p className="plan__note">
-          {w.days.length === 0 && w.week_start < today
-            ? "No plan was saved for this week."
-            : "This week isn't planned yet. It can be set up from the week before."}
+          {w.days.length === 0 && w.week_start < today ? "No plan saved" : "Not planned yet"}
         </p>
       ) : (
         <>
@@ -171,14 +179,13 @@ export function PlanPanel() {
                 className={`plan__day${d.day === today ? " plan__day--today" : ""}${isPast(d.day, today) ? " plan__day--past" : ""}`}
                 onClick={() => setChosenDay(d.day)}
               >
-                {dayLabel(d.day)}
-                {d.day === today && <span className="plan__today"> (today)</span>}
+                <DayTile day={d.day} blocks={d.blocks.length} isToday={d.day === today} />
               </button>
             ))}
           </div>
 
           <ul className="plan__blocks" aria-label={`Plan for ${dayLabel(day)}`}>
-            {blocks.length === 0 && <li className="plan__note">Nothing planned. Free time.</li>}
+            {blocks.length === 0 && <li className="plan__note">Free time</li>}
             {blocks.map((b) => (
               <BlockRow
                 key={b.id}
@@ -192,9 +199,9 @@ export function PlanPanel() {
           </ul>
 
           {w.grocery_day === day && (
-            <p className="plan__grocery">
+            <span className="plan__tag plan__grocery">
               🛒 Grocery day{grocery.data ? ` · ${itemCountLabel(grocery.data.open)}` : ""}
-            </p>
+            </span>
           )}
 
           {!isPast(day, today) && (
@@ -207,7 +214,7 @@ export function PlanPanel() {
         <h3 id="plan-today">{day === today ? "Today" : dayLabel(day)}</h3>
         {day === today && <TodayRoutines day={day} />}
         <ul>
-          {todos.length === 0 && <li className="plan__note">No to-dos due.</li>}
+          {todos.length === 0 && <li className="plan__note">Nothing due</li>}
           {todos.map((t) => (
             <li key={t.id} className="plan__item">
               <label>
@@ -361,5 +368,16 @@ function AddBlock({
       }}
       onError={onError}
     />
+  );
+}
+
+function DayTile({ day, blocks, isToday }: { day: string; blocks: number; isToday: boolean }) {
+  const tile = dayTile(day, blocks);
+  return (
+    <>
+      <span className="plan__dayname">{isToday ? "Today" : tile.weekday}</span>
+      <span className="plan__daydate">{tile.date}</span>
+      <span className="plan__daycount">{tile.count}</span>
+    </>
   );
 }

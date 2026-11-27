@@ -18,9 +18,12 @@ import { StatementsPanel } from "../vault/StatementsPanel";
 import { useSampleReminder } from "../todo/useMode";
 import { GlassButton } from "../ui/Kit";
 import { appsFor, type App } from "./apps";
+import { OpenAppContext } from "./DesktopContext";
+import { appExists } from "./openApp";
 import { appListLayout, switchMode } from "./appTabs";
 import { deskTheme } from "./deskTheme";
 import "./desktop.css";
+import "./appsOnKit.css";
 
 const ICONS: Record<string, string> = {
   todo: "✓",
@@ -66,6 +69,10 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
     setOpenApp(app.id);
   }
 
+  function openById(appId: string) {
+    if (appExists(apps, appId)) setOpenApp(appId);
+  }
+
   return (
     <div className="desk-zoom">
       <section
@@ -108,36 +115,38 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
                   </GlassButton>
                 ))}
               </nav>
-              <div
-                key={openApp}
-                className={`window__pane window__pane--${switchMode(reduceMotion)}`}
-                role="region"
-                aria-label={windowTitle(openApp, apps)}
-                ref={paneRef}
-                tabIndex={-1}
-              >
-                {openApp === "todo" ? (
-                  <TodoPanel />
-                ) : openApp === "plan" ? (
-                  <PlanPanel />
-                ) : openApp === "checkin" ? (
-                  <CheckinPanel />
-                ) : openApp === "grocery" ? (
-                  <GroceryPanel />
-                ) : openApp === "sidework" ? (
-                  <SideWorkPanel />
-                ) : openApp === "income" ? (
-                  <IncomePanel />
-                ) : openApp === "statements" ? (
-                  <StatementsPanel />
-                ) : openApp === "platforms" ? (
-                  <PlatformsPanel />
-                ) : openApp === "log" ? (
-                  <LogPanel />
-                ) : (
-                  <UnderConstruction name={name} />
-                )}
-              </div>
+              <OpenAppContext.Provider value={openById}>
+                <div
+                  key={openApp}
+                  className={`window__pane window__pane--${switchMode(reduceMotion)}`}
+                  role="region"
+                  aria-label={windowTitle(openApp, apps)}
+                  ref={paneRef}
+                  tabIndex={-1}
+                >
+                  {openApp === "todo" ? (
+                    <TodoPanel />
+                  ) : openApp === "plan" ? (
+                    <PlanPanel />
+                  ) : openApp === "checkin" ? (
+                    <CheckinPanel />
+                  ) : openApp === "grocery" ? (
+                    <GroceryPanel />
+                  ) : openApp === "sidework" ? (
+                    <SideWorkPanel />
+                  ) : openApp === "income" ? (
+                    <IncomePanel />
+                  ) : openApp === "statements" ? (
+                    <StatementsPanel />
+                  ) : openApp === "platforms" ? (
+                    <PlatformsPanel />
+                  ) : openApp === "log" ? (
+                    <LogPanel />
+                  ) : (
+                    <UnderConstruction name={name} />
+                  )}
+                </div>
+              </OpenAppContext.Provider>
             </div>
             {note && (
               <p className="desktop__note" role="status">

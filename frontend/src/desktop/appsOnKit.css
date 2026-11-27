@@ -1,0 +1,378 @@
+/* Apps inside the desk computer use the design kit's look and spacing. These rules
+   re-theme the apps' shared classes only inside the computer window (.window__pane),
+   so the apps keep working unchanged elsewhere. Colours with transparency use commas
+   (the secret scanner's SIN rule). */
+
+.window__pane {
+  --text: var(--kit-text);
+  --muted: var(--kit-muted);
+  --accent: var(--kit-accent);
+  --accent-text: #8aa4ff;
+  --hairline: var(--kit-line);
+  font-size: 0.92rem;
+}
+
+/* Buttons: glass, with the main action in accent blue. */
+.window__pane .btn {
+  min-height: 36px;
+  padding: 0 var(--kit-space-4);
+  border: 1px solid rgba(120, 160, 255, 0.55);
+  border-radius: var(--kit-radius-m);
+  background: linear-gradient(135deg, rgba(61, 109, 242, 0.85), rgba(61, 109, 242, 0.6));
+  box-shadow: 0 4px 14px rgba(61, 109, 242, 0.25);
+  font-size: 0.85rem;
+  transition:
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.window__pane .btn--quiet {
+  border-color: var(--kit-line);
+  background: var(--kit-glass);
+  box-shadow: none;
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+}
+
+.window__pane .btn--quiet:hover:not(:disabled) {
+  background: var(--kit-glass-strong);
+}
+
+.window__pane .btn--danger {
+  border-color: rgba(255, 105, 97, 0.45);
+  background: rgba(255, 69, 58, 0.14);
+  color: #ff8a83;
+}
+
+.window__pane .btn:disabled {
+  border-color: var(--kit-line);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.window__pane .btn.is-on {
+  border-color: rgba(120, 160, 255, 0.6);
+  background: linear-gradient(135deg, rgba(61, 109, 242, 0.5), rgba(61, 109, 242, 0.22));
+}
+
+/* Fields: glass with a thin line. */
+.window__pane .field {
+  min-height: 36px;
+  border: 1px solid var(--kit-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.88rem;
+}
+
+.window__pane .field:focus {
+  border-color: rgba(120, 160, 255, 0.6);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(61, 109, 242, 0.25);
+}
+
+/* Errors read as a small warning chip, not a paragraph. */
+.window__pane .form-error {
+  display: inline-flex;
+  margin: var(--kit-space-2) 0 0;
+  padding: 2px var(--kit-space-3);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 105, 97, 0.45);
+  background: rgba(255, 69, 58, 0.12);
+  color: #ff8a83;
+  font-size: 0.78rem;
+}
+
+/* Tags, notes and chips: kit chips. */
+.window__pane .plan__tag,
+.window__pane .plan__note {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px var(--kit-space-2);
+  border-radius: 999px;
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass-strong);
+  color: var(--kit-muted);
+  font-size: 0.75rem;
+  list-style: none;
+}
+
+.window__pane .plan__tag--warn {
+  border-color: rgba(255, 179, 64, 0.45);
+  background: rgba(255, 179, 64, 0.12);
+  color: var(--kit-warn);
+}
+
+.window__pane .checkin__chip,
+.window__pane .grocery__chip {
+  border-radius: 999px;
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+}
+
+.window__pane .checkin__chip.is-on,
+.window__pane .grocery__chip.is-on {
+  border-color: rgba(52, 199, 89, 0.45);
+  background: rgba(52, 199, 89, 0.16);
+}
+
+/* Section headings and spacing on the kit scale. */
+.window__pane .plan,
+.window__pane .checkin {
+  gap: var(--kit-space-4);
+}
+
+.window__pane .checkin__h,
+.window__pane .plan__title {
+  color: var(--kit-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.window__pane .plan__row {
+  display: flex;
+  align-items: center;
+  gap: var(--kit-space-2);
+}
+
+/* Daily plan: the week as glass tiles. */
+.window__pane .plan__days {
+  gap: var(--kit-space-2);
+}
+
+.window__pane .plan__day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--kit-space-2) var(--kit-space-1);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+  overflow: hidden;
+}
+
+.window__pane .plan__day[aria-selected="true"] {
+  border-color: rgba(120, 160, 255, 0.6);
+  background: linear-gradient(160deg, rgba(61, 109, 242, 0.42), rgba(61, 109, 242, 0.14));
+  box-shadow: 0 0 18px rgba(61, 109, 242, 0.25);
+}
+
+.window__pane .plan__day--today::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--kit-accent);
+}
+
+.window__pane .plan__dayname {
+  color: var(--kit-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.window__pane .plan__day--today .plan__dayname {
+  color: #8aa4ff;
+}
+
+.window__pane .plan__daydate {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.window__pane .plan__daycount {
+  color: var(--kit-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+/* Blocks: a glass row with a coloured kind bar. */
+.window__pane .plan__block,
+.window__pane .plan__item {
+  border: 1px solid var(--kit-line);
+  border-left-width: 4px;
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  padding: var(--kit-space-2) var(--kit-space-3);
+}
+
+.window__pane .plan__block--work {
+  border-left-color: #3d6df2;
+}
+
+.window__pane .plan__block--commute {
+  border-left-color: #8e8e93;
+}
+
+.window__pane .plan__block--event {
+  border-left-color: #bf5af2;
+}
+
+.window__pane .plan__time {
+  min-width: 0;
+  padding: 2px var(--kit-space-2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--kit-muted);
+  font-size: 0.75rem;
+}
+
+.window__pane .plan__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.window__pane .plan__actions .btn {
+  min-height: 28px;
+  padding: 0 var(--kit-space-3);
+  font-size: 0.75rem;
+}
+
+.window__pane .plan__todo h3 {
+  margin: 0 0 var(--kit-space-2);
+  color: var(--kit-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.window__pane .plan__block--gym {
+  border-left-color: #34c759;
+}
+
+.window__pane .plan__block--side_work,
+.window__pane .plan__block--build {
+  border-left-color: var(--kit-warn);
+}
+
+/* Sunday check-in: the week at a glance as tiles with a mini timeline. */
+.window__pane .checkin__glance {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--kit-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.window__pane .checkin__glance li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: var(--kit-space-2) var(--kit-space-1);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  overflow: hidden;
+}
+
+.window__pane .checkin__glance li.is-today {
+  border-color: rgba(120, 160, 255, 0.6);
+}
+
+.window__pane .checkin__timeline {
+  position: relative;
+  width: 14px;
+  height: 64px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.window__pane .checkin__seg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 2px;
+  border-radius: 3px;
+  background: #3d6df2;
+}
+
+.window__pane .checkin__seg--commute {
+  background: #8e8e93;
+}
+
+.window__pane .checkin__seg--gym {
+  background: #34c759;
+}
+
+.window__pane .checkin__seg--event {
+  background: #bf5af2;
+}
+
+.window__pane .checkin__seg--side_work,
+.window__pane .checkin__seg--build {
+  background: var(--kit-warn);
+}
+
+/* To-dos needing attention: count tiles, then titles as chips. */
+.window__pane .checkin__counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kit-space-2);
+  margin-bottom: var(--kit-space-2);
+}
+
+.window__pane .checkin__count {
+  display: grid;
+  gap: 2px;
+  padding: var(--kit-space-2) var(--kit-space-3);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+}
+
+.window__pane .checkin__count--warn {
+  border-color: rgba(255, 179, 64, 0.45);
+}
+
+.window__pane .checkin__countnum {
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.window__pane .checkin__count--warn .checkin__countnum {
+  color: var(--kit-warn);
+}
+
+.window__pane .checkin__taskchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kit-space-1);
+  margin: 0 0 var(--kit-space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.window__pane .checkin__taskchips li {
+  gap: 4px;
+  max-width: 100%;
+  color: var(--kit-text);
+}
+
+.window__pane .checkin__chiptext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 22ch;
+}
+
+/* The Sample-mode reminder as a slim warning chip. */
+.window__pane .mode-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kit-space-2);
+  width: fit-content;
+  padding: 4px var(--kit-space-3);
+  border-radius: 999px;
+  font-size: 0.8rem;
+}

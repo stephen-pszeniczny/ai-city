@@ -115,7 +115,7 @@ export function QuickAdd() {
         {showSample && (
           <p className="sample-line">
             <WarningIcon />
-            Sample mode: this goes into demo data, not your real list.
+            Adds to demo data
           </p>
         )}
         <button

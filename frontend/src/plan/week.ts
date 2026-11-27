@@ -27,6 +27,16 @@ export function dayLabel(day: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}`;
 }
 
+/** What a day's tile in the week strip shows: weekday, date and a short block count. */
+export function dayTile(
+  day: string,
+  blocks: number,
+): { weekday: string; date: string; count: string } {
+  const d = toUtc(day);
+  const count = blocks === 0 ? "Free" : `${blocks} block${blocks === 1 ? "" : "s"}`;
+  return { weekday: WEEKDAYS[d.getUTCDay()] ?? "", date: String(d.getUTCDate()), count };
+}
+
 /** IDs of blocks whose times overlap another block's (end = start is just touching). */
 export function overlapping(blocks: PlanBlock[]): Set<number> {
   const ids = new Set<number>();

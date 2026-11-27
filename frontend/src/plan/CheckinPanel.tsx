@@ -8,6 +8,7 @@
 // week until it's checked in).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useOpenApp } from "../desktop/DesktopContext";
 
 import {
   addPlanBlock,
@@ -24,11 +25,13 @@ import {
 import { BlockForm, EVENT_KINDS } from "./BlockForm";
 import { addedEvents, chipState, needsAttention } from "./checkin";
 import { itemCountLabel } from "./grocery";
-import { dayLabel, isPast } from "./week";
+import { timelineSegments } from "./timeline";
+import { dayLabel, dayTile, isPast } from "./week";
 import { CheckRound } from "../jobs/CheckRound";
 import "./plan.css";
 
 export function CheckinPanel() {
+  const openApp = useOpenApp();
   const client = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -76,7 +79,7 @@ export function CheckinPanel() {
     onError,
   });
 
-  if (week.isPending) return <p className="plan__note">Opening the check-in…</p>;
+  if (week.isPending) return <p className="plan__note">Loading…</p>;
   if (week.isError)
     return (
       <p className="form-error" role="alert">
@@ -86,11 +89,14 @@ export function CheckinPanel() {
   const w = week.data;
   if (!w.configured)
     return (
-      <p className="plan__note">
-        Add a [plan] section to your settings file to plan your week. See settings.example.toml.
+      <p
+        className="plan__note"
+        title="Add a [plan] section to your settings file (see settings.example.toml)"
+      >
+        Plan not set up
       </p>
     );
-  if (!w.exists) return <p className="plan__note">This week can't be planned any more.</p>;
+  if (!w.exists) return <p className="plan__note">Week closed</p>;
 
   const openDays = w.days.map((d) => d.day).filter((d) => !isPast(d, w.today));
   const events = addedEvents(w);
@@ -115,13 +121,22 @@ export function CheckinPanel() {
         </h3>
         <ul className="checkin__glance">
           {w.days.map((d) => {
-            const fixed = d.blocks.filter((b) => b.source === "settings");
+            const tile = dayTile(d.day, d.blocks.length);
             return (
-              <li key={d.day}>
-                <span className="checkin__day">{dayLabel(d.day)}</span>
-                {fixed.length === 0
-                  ? "Free"
-                  : fixed.map((b) => `${b.title} ${b.start}–${b.end}`).join(" · ")}
+              <li key={d.day} className={d.day === w.today ? "is-today" : undefined}>
+                <span className="plan__dayname">{tile.weekday}</span>
+                <span className="plan__daydate">{tile.date}</span>
+                <span className="checkin__timeline" aria-label={glanceLabel(d.blocks)}>
+                  {timelineSegments(d.blocks).map((s, i) => (
+                    <span
+                      key={i}
+                      className={`checkin__seg checkin__seg--${s.kind}`}
+                      style={{ top: s.top, height: s.height }}
+                      title={s.label}
+                    />
+                  ))}
+                </span>
+                <span className="plan__daycount">{tile.count}</span>
               </li>
             );
           })}
@@ -179,7 +194,7 @@ export function CheckinPanel() {
             </button>
           ))}
         <ul className="plan__blocks" aria-label="Events added this week">
-          {events.length === 0 && <li className="plan__note">No events added yet.</li>}
+          {events.length === 0 && <li className="plan__note">No events yet</li>}
           {events.map((b) => (
             <li key={b.id} className={`plan__block plan__block--${b.kind}`}>
               <span className="plan__time">
@@ -235,13 +250,20 @@ export function CheckinPanel() {
         <h3 id="ci-todo" className="checkin__h">
           To-dos needing attention
         </h3>
-        <TaskGroup label="Overdue" tasks={attention.overdue} />
-        <TaskGroup label="Due this week" tasks={attention.dueThisWeek} />
-        <TaskGroup label="Stale" tasks={attention.stale} />
+        <div className="checkin__counts">
+          <CountTile label="Overdue" count={attention.overdue.length} warn />
+          <CountTile label="Due this week" count={attention.dueThisWeek.length} />
+          <CountTile label="Stale" count={attention.stale.length} />
+        </div>
+        <TaskGroup tone="warn" tasks={attention.overdue} />
+        <TaskGroup tasks={attention.dueThisWeek} />
+        <TaskGroup tasks={attention.stale} />
         {attention.overdue.length + attention.dueThisWeek.length + attention.stale.length === 0 ? (
-          <p className="plan__note">Nothing needs attention.</p>
+          <p className="plan__note">All clear</p>
         ) : (
-          <p className="plan__note">Open the To-do app from the dock to change them.</p>
+          <button type="button" className="btn btn--quiet" onClick={() => openApp("todo")}>
+            Open To-do
+          </button>
         )}
       </section>
 
@@ -361,19 +383,32 @@ function Chip({
   );
 }
 
-function TaskGroup({ label, tasks }: { label: string; tasks: Task[] }) {
-  if (tasks.length === 0) return null;
+function CountTile({ label, count, warn }: { label: string; count: number; warn?: boolean }) {
   return (
-    <div className="checkin__group">
-      <span className="plan__tag">{label}</span>
-      <ul>
-        {tasks.map((t) => (
-          <li key={t.id}>
-            {t.title}
-            {t.goal_date && <span className="plan__tag"> · {dayLabel(t.goal_date)}</span>}
-          </li>
-        ))}
-      </ul>
+    <div className={`checkin__count${warn && count > 0 ? " checkin__count--warn" : ""}`}>
+      <span className="checkin__countnum">{count}</span>
+      <span className="plan__daycount">{label}</span>
     </div>
   );
+}
+
+function TaskGroup({ tasks, tone }: { tasks: Task[]; tone?: "warn" }) {
+  if (tasks.length === 0) return null;
+  return (
+    <ul className="checkin__taskchips">
+      {tasks.map((t) => (
+        <li key={t.id} className={`plan__tag${tone ? ` plan__tag--${tone}` : ""}`}>
+          <span className="checkin__chiptext">{t.title}</span>
+          {t.goal_date && <span>· {dayLabel(t.goal_date)}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** What a screen reader hears for a day's tile (the timeline is only drawn). */
+function glanceLabel(blocks: readonly { title: string; start: string; end: string }[]): string {
+  return blocks.length === 0
+    ? "Free"
+    : blocks.map((b) => `${b.title} ${b.start} to ${b.end}`).join(", ");
 }
