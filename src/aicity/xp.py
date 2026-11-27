@@ -42,8 +42,11 @@ def backfill_routine_finishes(
 ) -> None:
     """Once per database: record finishes for routine days fully ticked before Belt XP.
 
-    A day counts when its ticks cover every item the routine has now.
+    A day counts when its ticks cover every item the routine has now. With no routines
+    in the settings nothing is done, so the one run is still there for later.
     """
+    if not routines:
+        return
 
     def work() -> None:
         if conn.execute("SELECT 1 FROM meta WHERE key = ?", (_BACKFILL_KEY,)).fetchone():

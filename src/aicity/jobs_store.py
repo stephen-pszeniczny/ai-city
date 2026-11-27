@@ -238,12 +238,13 @@ class JobsStore:
     def set_project_status(self, project_id: int, status: str) -> ProjectView:
         if status not in PROJECT_STATUSES:
             raise JobsError(f"Status must be one of: {', '.join(PROJECT_STATUSES)}.")
-        current = self._project(project_id)
-        if not _can_move(current.status, status):
-            raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
         stamp = self._stamp()
 
         def work() -> None:
+            # Read and check under the write lock, so two moves can't both pass.
+            current = self._project(project_id)
+            if not _can_move(current.status, status):
+                raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
             self._conn.execute(
                 "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
                 (status, stamp, project_id),

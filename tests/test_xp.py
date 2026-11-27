@@ -10,10 +10,10 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from aicity import xp_rules
+from aicity import jobs_store, xp_rules
 from aicity.db import DbKind, load_migrations, open_database
 from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
-from aicity.jobs_store import JobsStore
+from aicity.jobs_store import JobsConflict, JobsStore
 from aicity.routines import RoutineStore
 from aicity.settings import Routine
 from aicity.tasks import TaskStore
@@ -205,6 +205,20 @@ def test_adding_a_routine_item_keeps_past_xp(conn, clock):
     assert building_xp(conn, "planner", longer, TZ) == 5
 
 
+def test_ticking_never_removes_a_finish(conn, clock):
+    tick(conn, clock, "Lunch")
+    tick(conn, clock, "Bag")
+    longer = (Routine(**{**PREP.__dict__, "items": ("Lunch", "Bag", "Keys", "Wallet")}),)
+    tick(conn, clock, "Keys", routines=longer)  # "Wallet" is still unticked
+    assert xp(conn) == 5
+    tick(conn, clock, "Bag", routines=longer)  # already ticked
+    assert xp(conn) == 5
+    tick(conn, clock, "Wallet", ticked=False, routines=longer)  # wasn't ticked: no change
+    assert xp(conn) == 5
+    tick(conn, clock, "Lunch", ticked=False, routines=longer)  # a real correction
+    assert xp(conn) == 0
+
+
 def test_a_removed_item_does_not_count_towards_a_finish(conn, clock):
     tick(conn, clock, "Bag")
     swapped = (Routine(**{**PREP.__dict__, "items": ("Lunch", "Keys")}),)
@@ -231,6 +245,18 @@ def test_routine_backfill_runs_once(conn, clock):
     backfill_routine_finishes(conn, ROUTINES, clock)
     assert finishes(conn) == [("2026-11-22", "evening_prep")]
     assert xp(conn) == 5
+
+
+def test_backfill_with_no_routines_does_not_use_up_the_run(conn, clock):
+    for item in PREP.items:
+        conn.execute(
+            "INSERT INTO routine_ticks (day, routine_id, item, ticked_at) "
+            "VALUES ('2026-11-22', 'evening_prep', ?, ?)",
+            (item, STAMP),
+        )
+    backfill_routine_finishes(conn, (), clock)
+    backfill_routine_finishes(conn, ROUTINES, clock)
+    assert finishes(conn) == [("2026-11-22", "evening_prep")]
 
 
 # --- The Vault --------------------------------------------------------------------------
@@ -328,9 +354,25 @@ def test_project_changes_are_recorded_as_events(conn, jobs, clock):
 def test_a_refused_project_change_records_no_event(conn, jobs):
     made = project(jobs)
     jobs.set_project_status(made.id, "rejected")
-    with pytest.raises(Exception, match="can't move"):
+    with pytest.raises(JobsConflict, match="can't move"):
         jobs.set_project_status(made.id, "active")
     assert [e[1] for e in events(conn)] == ["found", "rejected"]
+
+
+def test_a_move_is_checked_against_the_status_at_write_time(conn, jobs, monkeypatch):
+    made = project(jobs)
+    real = jobs_store.with_transaction
+
+    def rival_moves_first(c, work, **kwargs):
+        monkeypatch.setattr(jobs_store, "with_transaction", real)
+        jobs.set_project_status(made.id, "rejected")
+        return real(c, work, **kwargs)
+
+    monkeypatch.setattr(jobs_store, "with_transaction", rival_moves_first)
+    with pytest.raises(JobsConflict, match="rejected can't move to active"):
+        jobs.set_project_status(made.id, "active")
+    assert [e[1] for e in events(conn)] == ["found", "rejected"]
+    assert jobs.projects()[0].status == "rejected"
 
 
 def test_jobs_events(conn, jobs, clock):
