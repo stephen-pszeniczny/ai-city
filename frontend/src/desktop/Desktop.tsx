@@ -21,6 +21,7 @@ import { appsFor, type App } from "./apps";
 import { appListLayout, switchMode } from "./appTabs";
 import { deskTheme } from "./deskTheme";
 import "./desktop.css";
+import "./appsOnKit.css";
 
 const ICONS: Record<string, string> = {
   todo: "✓",
