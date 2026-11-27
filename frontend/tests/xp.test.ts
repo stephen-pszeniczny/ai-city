@@ -7,6 +7,7 @@ import {
   barFraction,
   beltBarFraction,
   formatXp,
+  levelProgressText,
   levelToMark,
   showsPlusOne,
 } from "../src/belt/xp.ts";
@@ -80,6 +81,26 @@ test("a level above the last one seen is saved, the first-ever look included", (
 test("nothing is saved for a level already seen, or one lost to an undo", () => {
   assert.equal(levelToMark(belt({ level: 7, seen_level: 7 })), null);
   assert.equal(levelToMark(belt({ level: 6, seen_level: 7 })), null);
+});
+
+test("a building's bar reads as XP into the level out of the level's span", () => {
+  const b = building({ xp: 410, level_start_xp: 100, next_level_xp: 1880 });
+  assert.equal(levelProgressText(b), "310 / 1,780 XP");
+});
+
+test("a building's XP text stays inside its level, also after an undo", () => {
+  assert.equal(levelProgressText(building({ xp: 40 })), "0 / 100 XP");
+  assert.equal(levelProgressText(building({ xp: 260 })), "100 / 100 XP");
+});
+
+test("at the top level a building's bar says so instead of a span of 0", () => {
+  const top = { level: 100, level_start_xp: 17500, next_level_xp: 17500, xp: 18000 };
+  assert.equal(levelProgressText(building(top)), "Max level");
+});
+
+test("a building's level is saved by the same rule as the belt's", () => {
+  assert.equal(levelToMark(building({ level: 4, seen_level: 3 })), 4);
+  assert.equal(levelToMark(building({ level: 0, seen_level: 0 })), null); // not earning
 });
 
 test("XP is written with thousands separators", () => {

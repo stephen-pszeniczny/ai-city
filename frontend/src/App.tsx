@@ -18,6 +18,7 @@ import {
 import { getBuildings, type BuildingId } from "./api";
 import { HoldProvider } from "./belt/HoldContext";
 import { BeltCanvas } from "./belt/BeltCanvas";
+import { BuildingXpBar } from "./belt/BuildingXpBar";
 import { escapeAction, flightState } from "./belt/flightState";
 import { back, otherStationRoom, parsePath, toPath, type View } from "./belt/levels";
 import { confirmLeave, isDirty, setDirty } from "./leaveGuard";
@@ -165,6 +166,10 @@ function BeltHome() {
             Use the computer
           </button>
         </div>
+      )}
+
+      {view.level === "building" && (
+        <BuildingXpBar key={view.id} id={view.id} name={nameOf(view.id)} />
       )}
 
       {view.level === "screen" && <Desktop key={view.id} id={view.id} name={nameOf(view.id)} />}

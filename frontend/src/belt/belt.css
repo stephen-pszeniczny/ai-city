@@ -367,13 +367,13 @@
   color: var(--muted);
 }
 
-.xp-bubble__level {
+.xp-level {
   position: relative;
   font-variant-numeric: tabular-nums;
 }
 
-/* "+1" beside the level; it rises, holds and fades (BeltXpBubble removes it). */
-.xp-bubble__plus {
+/* "+1" beside the level; it rises, holds and fades (useSeenLevel removes it). */
+.xp-level__plus {
   position: absolute;
   left: calc(100% + 6px);
   top: 0;
@@ -404,18 +404,18 @@
 
 /* Reduced motion: the "+1" just shows, then goes. */
 @media (prefers-reduced-motion: reduce) {
-  .xp-bubble__plus {
+  .xp-level__plus {
     animation: none;
   }
 }
 
-.xp-bubble__progress {
+.xp-progress {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.xp-bubble__bar {
+.xp-bar {
   flex: 1;
   height: 6px;
   border-radius: 999px;
@@ -423,14 +423,14 @@
   overflow: hidden;
 }
 
-.xp-bubble__fill {
+.xp-bar__fill {
   height: 100%;
   border-radius: inherit;
   background: #3456e0;
   box-shadow: 0 0 8px #3456e0;
 }
 
-.xp-bubble__total {
+.xp-progress__text {
   font-size: 11.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -466,6 +466,55 @@
 .xp-bubble__option:focus-visible {
   outline: 2px solid #8aa4ff;
   outline-offset: 2px;
+}
+
+/* A building's XP bar, in the building view: top right (level with Back), clear of
+   the robot, desk and "Use the computer". Nothing in it is clickable. */
+.xp-building {
+  position: absolute;
+  top: 60px;
+  right: max(16px, env(safe-area-inset-right));
+  display: grid;
+  gap: 8px;
+  width: 272px;
+  padding: 10px 14px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(16, 20, 32, 0.52);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  color: var(--text);
+  font:
+    600 13px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  pointer-events: none;
+}
+
+/* A narrow window: drop below the name and "Use the computer" so neither is covered. */
+@media (max-width: 860px) {
+  .xp-building {
+    top: 152px;
+  }
+}
+
+.xp-building__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.xp-building__name {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.xp-building__unbuilt {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* The bubble already pushes both to the right. */
