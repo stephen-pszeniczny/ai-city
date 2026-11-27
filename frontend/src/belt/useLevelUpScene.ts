@@ -5,7 +5,7 @@
 //
 // BeltScene calls beforeUpdates() and afterUpdates() around its own frame updates:
 // pieces that are building in are put back to full size before they animate.
-import { useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useQueryClient } from "@tanstack/react-query";
 import { useThree, type RootState } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -15,6 +15,7 @@ import {
   hasVaultKey,
   markCelebrated,
   type BuildingId,
+  type BuildingXp,
   type Mode,
   type XpView,
 } from "../api";
@@ -54,10 +55,8 @@ type Playing = {
   departing: number | null;
 };
 
-// Kept, so asking each frame creates nothing.
-const MODE_KEY = ["mode"];
-const XP_KEY = ["xp"];
 const SWITCHING = { mutationKey: MODE_SWITCH_KEY };
+const NONE: readonly BuildingXp[] = [];
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
@@ -70,22 +69,30 @@ export function useLevelUpScene({
   world,
   view,
   reducedMotion,
+  xp,
+  mode: currentMode,
   /** The development growth preview is on: nothing plays. */
   off,
 }: {
   world: LevelUpWorld;
   view: View;
   reducedMotion: boolean;
+  xp: XpView | undefined;
+  mode: Mode | undefined;
   off: boolean;
 }) {
   const queryClient = useQueryClient();
   const scene = useThree((s) => s.scene);
   const playing = useRef<Playing | null>(null);
   const viewRef = useRef(view);
+  // Copied for the frame loop: asking React Query every frame would create objects.
+  const switchingNow = useIsMutating(SWITCHING) > 0;
+  const data = useRef({ xp, mode: currentMode, switching: switchingNow });
+  useLayoutEffect(() => {
+    data.current = { xp, mode: currentMode, switching: switchingNow };
+  });
 
   const drive = useMemo(() => {
-    const mode = () => queryClient.getQueryData<Mode>(MODE_KEY);
-    const switching = () => queryClient.isMutating(SWITCHING) > 0;
     /** The shuttle's pose, updated each frame. */
     const pose: CargoPose = { arrive: 0, tether: 0, unload: -1, depart: 0 };
     /** The camera, as it was in the last frame: for what can be seen. */
@@ -149,20 +156,23 @@ export function useLevelUpScene({
 
     const onDone = (m: Moment, ending: Ending) => {
       const p = playing.current;
+      // First: a skip or leave lands between frames, with the new pieces still small,
+      // and the tier measures them (the label's height, what's in view).
+      p?.buildIn?.dispose();
+      if (p) p.buildIn = null;
       const groups = showNewTier(m);
       asteroidOf(m.id)?.setScale(asteroidScaleAt(m.toTier, m.id as GrowthId));
       if (ending !== "leave") levelUp.setOffView(unseen(m.id, groups));
-      p?.buildIn?.dispose();
-      if (p) p.buildIn = null;
       // Run through, the shuttle flies off; skipped or left, it's simply gone.
       if (ending === "end" && p) p.departing = 0;
       else remove();
+      // Saving asks React Query itself: what's true at that moment, not at the last render.
       void celebrate(m, {
-        cachedMode: mode,
-        switching,
+        cachedMode: () => queryClient.getQueryData<Mode>(["mode"]),
+        switching: () => queryClient.isMutating(SWITCHING) > 0,
         fetchMode: getMode,
         post: markCelebrated,
-        refresh: () => queryClient.invalidateQueries({ queryKey: XP_KEY }),
+        refresh: () => queryClient.invalidateQueries({ queryKey: ["xp"] }),
       });
     };
 
@@ -212,19 +222,18 @@ export function useLevelUpScene({
     /** Between moments: start the next one once it has been due for a moment. */
     const waitForOne = (state: RootState, delta: number) => {
       const last = levelUp.last();
-      if (last && mode() !== last.mode) levelUp.abandon();
+      const { xp: known, mode: current, switching } = data.current;
+      if (last && current !== last.mode) levelUp.abandon();
       const here = viewRef.current;
       if (off || here.level !== "building") {
         levelUp.settle(null, delta);
         return;
       }
-      const current = mode();
-      const building = queryClient
-        .getQueryData<XpView>(XP_KEY)
-        ?.buildings.find((b) => b.id === here.id);
+      let building: BuildingXp | undefined;
+      for (const b of known?.buildings ?? NONE) if (b.id === here.id) building = b;
       const ready =
         !!current &&
-        !switching() &&
+        !switching &&
         !flightState.flying() &&
         (here.id !== "finance" || vaultReady(current));
       const plan = building ? planLevelUp(building, here, ready) : null;
@@ -241,7 +250,7 @@ export function useLevelUpScene({
       camera = state.camera;
       const now = state.clock.elapsedTime;
       let m = levelUp.running();
-      if (m && (switching() || mode() !== m.mode)) {
+      if (m && (data.current.switching || data.current.mode !== m.mode)) {
         // The other mode's data: drop it, and save nothing.
         levelUp.abandon();
         remove();

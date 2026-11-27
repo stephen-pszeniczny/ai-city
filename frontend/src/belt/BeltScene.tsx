@@ -272,6 +272,8 @@ export function BeltScene({
     world,
     view,
     reducedMotion,
+    xp,
+    mode,
     off: GROWTH_PREVIEW !== null,
   });
   /** One object, updated each frame, for the station's growth (no per-frame allocations). */

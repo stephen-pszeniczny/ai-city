@@ -4,6 +4,10 @@ import { test } from "node:test";
 import * as THREE from "three";
 
 import { createBuildIn } from "../src/belt/growth/buildIn.ts";
+import { make as makeAsteroid } from "./growthStub.ts";
+
+/** Opportunity Office, whose tier 3 grows the dish (and so moves its label). */
+const make3 = () => makeAsteroid("jobs");
 
 /** A piece standing off-centre on a mount, with its own base scale. */
 function piece() {
@@ -161,4 +165,22 @@ test("a small piece gets a halo that nothing cuts", () => {
   const { halos } = parts(make([group], root).overlay);
   assert.equal(halos.length, 1);
   assert.equal(((halos[0] as THREE.Sprite).material as THREE.SpriteMaterial).depthTest, false);
+});
+
+// Why the scene ends a build-in before it puts the tier on again (a skip or leave
+// arrives between frames, with the pieces still small).
+test("a tier measured mid-build is wrong; ending the build-in first gets it right", () => {
+  const { growth, world } = make3();
+  growth.setTier(3);
+  const full = growth.labelHeight();
+  const effect = createBuildIn(growth.newPiecesFor(3), world, "#41c9d6", {
+    texture: new THREE.Texture(),
+  });
+  effect.apply(0);
+  growth.setTier(3);
+  assert.ok(full > 5, `the grown dish lifts the label: ${full}`);
+  assert.equal(growth.labelHeight(), 4.6, "measured from the shrunken dish, it stays down");
+  effect.dispose();
+  growth.setTier(3);
+  assert.ok(Math.abs(growth.labelHeight() - full) < 1e-6);
 });
