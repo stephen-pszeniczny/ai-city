@@ -74,7 +74,7 @@ export function extraAntenna(tint: string, kit: Kit): Piece {
   const group = new THREE.Group();
   const b = builder(kit);
   const base = v3(-3.85, 1.95, 0);
-  const tip = v3(-4.2, 5.0, 0);
+  const tip = v3(-4.1, 4.85, 0);
   const along = (k: number) => base.clone().lerp(tip, k);
   b.cylinder(0.3, 0.4, 0.3, c.dark, base);
   b.rod(base, along(0.62), 0.09, c.steel, { sides: 8 });
@@ -119,20 +119,20 @@ export function roofDish(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const group = new THREE.Group();
   const post = still(kit, (b) => {
-    b.cylinder(0.55, 0.72, 0.4, c.dark, [-2.25, 2.2, 0], { sides: 24 });
-    b.cylinder(0.2, 0.28, 2.02, c.hull, [-2.25, 3.16, 0], { sides: 16 });
-    b.hoop(0.34, 0.05, c.lit, [-2.25, 3.0, 0]);
+    b.cylinder(0.55, 0.72, 0.4, c.dark, [-2.0, 2.2, 0], { sides: 24 });
+    b.cylinder(0.2, 0.28, 1.82, c.hull, [-2.0, 3.06, 0], { sides: 16 });
+    b.hoop(0.34, 0.05, c.lit, [-2.0, 3.0, 0]);
     for (const [x, z] of [
       [-0.8, 0.8],
       [-0.8, -0.8],
       [0.8, 0.8],
       [0.8, -0.8],
     ] as const) {
-      b.rod(v3(-2.25 + x, 2.0, z), v3(-2.25, 3.4, 0), 0.05, c.steel);
+      b.rod(v3(-2.0 + x, 2.0, z), v3(-2.0, 3.4, 0), 0.05, c.steel);
     }
   });
   const head = new THREE.Group();
-  head.position.set(-2.25, 4.27, 0);
+  head.position.set(-2.0, 4.07, 0);
   const tilt = new THREE.Group();
   tilt.rotation.x = 0.85; // the bowl faces up and toward the front
   const b = builder(kit);
@@ -276,10 +276,7 @@ const CRADLE_Y = -1.5;
 /** How big the docked shuttle is next to the one on Opportunity Office's pad. */
 const SHUTTLE_SCALE = 1.2;
 
-/**
- * Level 80: a small satellite orbiting the module. It's thin toward and away from
- * the module (its y): that gap, between the grown parts and the flights in, is narrow.
- */
+/** Level 80: a small satellite circling the module. */
 export function satellite(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const group = new THREE.Group();
@@ -311,18 +308,20 @@ export function satellite(tint: string, kit: Kit): Piece {
   return {
     group,
     update(t) {
-      const angle = satellitePose(t, craft.position);
-      craft.rotation.set(angle, 0, 0); // its y stays pointing away from the module
+      satellitePose(t, craft.position);
+      craft.rotation.x = Math.sin(t * 0.4) * 0.3; // the panels slowly tip toward the sun
       beacon.scale.setScalar(0.7 + 0.6 * Math.max(0, Math.sin(t * 4)));
     },
   };
 }
 
-/** Where the satellite is at time t, and its angle: a tilted orbit round the module. */
-function satellitePose(t: number, out: THREE.Vector3): number {
+/**
+ * Where the satellite is at time t: a tilted loop round the module's lower half. The
+ * flights in pass over the top, close above the grown parts, so there's no room there.
+ */
+function satellitePose(t: number, out: THREE.Vector3): void {
   const a = 0.7 + t * 0.19;
-  out.set(Math.sin(a) * -1.9, Math.cos(a) * 6.85, Math.sin(a) * 6.85);
-  return a;
+  out.set(Math.cos(a) * 5.7, -3.7 + Math.sin(a), Math.sin(a) * 5.0);
 }
 
 const HUB_X = MODULE_X.finance; // the hub, from Mission Control's centre

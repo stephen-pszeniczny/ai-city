@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 import { doorSide, ROOM_SIZE, VAULT_DOOR } from "../../interior/stationLayout.ts";
 import { ASTEROIDS } from "../space/orbit.ts";
+import { LOOK } from "../look.ts";
 import type { Kit } from "../materials.ts";
 import { builder, noClicks, palette, still, type Piece } from "./parts.ts";
 
@@ -18,20 +19,35 @@ const farWall = (room: "planner" | "finance") => {
 const ROYAL_BLUE = 0x4169e1;
 
 /**
- * The control room's own smooth gold. (The hull's crumpled foil, right for the
- * outside, turns to speckles this close up.)
+ * Gold for a control room, with a faint glow of its own (the room is dim, and without it
+ * gold reads as olive). The glow follows the growth glow setting.
  */
-const smoothGold = (kit: Kit) =>
+const roomGold = (
+  kit: Kit,
+  look: { color: number; roughness: number; metalness: number; emissive: number; glow: number },
+) =>
   kit.keep(
     new THREE.MeshStandardMaterial({
-      color: 0xd9a63e,
-      roughness: 0.3,
-      metalness: 0.9,
-      // The room is dim: a faint glow of its own keeps it reading as gold, not olive.
-      emissive: 0x6a4708,
-      emissiveIntensity: 0.45,
+      color: look.color,
+      roughness: look.roughness,
+      metalness: look.metalness,
+      emissive: look.emissive,
+      emissiveIntensity: look.glow * LOOK.growth.pieceGlow,
     }),
   );
+
+/**
+ * The room's smooth gold. (The hull's crumpled foil, right for the outside, turns to
+ * speckles this close up.)
+ */
+const smoothGold = (kit: Kit) =>
+  roomGold(kit, {
+    color: 0xd9a63e,
+    roughness: 0.3,
+    metalness: 0.9,
+    emissive: 0x6a4708,
+    glow: 0.45,
+  });
 
 /** Level 50, Mission Control: more screens on the wall, their readouts moving. */
 export function wallScreens(tint: string, kit: Kit): Piece {
@@ -204,15 +220,13 @@ const SHELF_AT = { x: 1.72, z: 0.5 } as const;
 export function goldShelf(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const gold = smoothGold(kit);
-  const bright = kit.keep(
-    new THREE.MeshStandardMaterial({
-      color: 0xffd36a,
-      roughness: 0.22,
-      metalness: 1,
-      emissive: 0x6b4a08,
-      emissiveIntensity: 0.55,
-    }),
-  );
+  const bright = roomGold(kit, {
+    color: 0xffd36a,
+    roughness: 0.22,
+    metalness: 1,
+    emissive: 0x6b4a08,
+    glow: 0.55,
+  });
   const group = new THREE.Group();
   group.position.set(SHELF_AT.x, 0, SHELF_AT.z);
   const b = builder(kit);
@@ -294,15 +308,13 @@ export function goldShelf(tint: string, kit: Kit): Piece {
 export function goldVaultDoor(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const gold = smoothGold(kit);
-  const bright = kit.keep(
-    new THREE.MeshStandardMaterial({
-      color: 0xffd36a,
-      roughness: 0.2,
-      metalness: 1,
-      emissive: 0x5c3f06,
-      emissiveIntensity: 0.5,
-    }),
-  );
+  const bright = roomGold(kit, {
+    color: 0xffd36a,
+    roughness: 0.2,
+    metalness: 1,
+    emissive: 0x5c3f06,
+    glow: 0.5,
+  });
   const R = VAULT_DOOR.radius;
   const face = -VAULT_DOOR.thickness / 2;
   return still(kit, (b) => {

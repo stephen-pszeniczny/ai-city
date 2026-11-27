@@ -8,6 +8,7 @@ import * as THREE from "three";
 import type { XpView } from "../src/api.ts";
 import { LADDERS, piecesUpTo, type PieceId } from "../src/belt/growth/ladders.ts";
 import { hasPiece } from "../src/belt/growth/pieces.ts";
+import { FLYING } from "../src/belt/growth/modulePieces.ts";
 import { sceneTier } from "../src/belt/growth/tiers.ts";
 import { LOOK } from "../src/belt/look.ts";
 import { createInteriorGrowth, createModuleGrowth } from "../src/belt/growth/applyGrowth.ts";
@@ -236,11 +237,17 @@ test("each label rises above what its module has grown, and comes back down", ()
     assert.equal(growth[id].labelHeight(), base);
     growth[id].setTier(10);
     station.group.updateMatrixWorld(true);
-    const still = growth[id].pieces.children.filter(
-      (c) => c.name !== "satellite" && c.name !== "securityDrones",
-    );
-    const top = Math.max(...still.map((c) => new THREE.Box3().setFromObject(c).max.y));
-    assert.ok(growth[id].labelHeight() > Math.min(top, base), id);
+    // The highest solid thing that stays put, measured mesh by mesh as the code does.
+    let top = -Infinity;
+    for (const piece of growth[id].pieces.children) {
+      if (FLYING.has(piece.name)) continue;
+      piece.traverse((o) => {
+        if (!(o as THREE.Mesh).isMesh || o.userData.reaches) return;
+        top = Math.max(top, new THREE.Box3().setFromObject(o).max.y);
+      });
+    }
+    assert.ok(top > base, `${id}: nothing reaches above the old label`);
+    assert.ok(growth[id].labelHeight() > top, `${id}: ${growth[id].labelHeight()} under ${top}`);
     assert.ok(growth[id].labelHeight() > base && growth[id].labelHeight() < 10, id);
     growth[id].setTier(0);
     assert.equal(growth[id].labelHeight(), base);
@@ -321,6 +328,39 @@ test("turning the growth glow down dims every light on the modules and in their 
   assert.ok(full.length > 0);
   assert.deepEqual(
     glowStrengths(0.5),
+    full.map((k) => k * 0.5),
+  );
+});
+
+/** How strongly each gold material in the two rooms glows of its own accord. */
+function roomGoldGlow(pieceGlow: number): number[] {
+  const growth = LOOK.growth as unknown as { pieceGlow: number };
+  const usual = growth.pieceGlow;
+  growth.pieceGlow = pieceGlow;
+  try {
+    const found = new Set<THREE.MeshStandardMaterial>();
+    for (const id of MODULES) {
+      const r = makeRoom(id);
+      r.interior.setTier(10);
+      for (const root of [r.interior.pieces, r.interior.door]) {
+        root.traverse((o) => {
+          const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+          // The golds are the only near-pure metals that glow.
+          if (m?.isMeshStandardMaterial && m.metalness >= 0.9 && m.emissive.getHex()) found.add(m);
+        });
+      }
+    }
+    return [...found].map((m) => m.emissiveIntensity);
+  } finally {
+    growth.pieceGlow = usual;
+  }
+}
+
+test("the control rooms' gold glows no brighter than the growth glow setting", () => {
+  const full = roomGoldGlow(1);
+  assert.ok(full.length >= 3, `${full.length} golds`);
+  assert.deepEqual(
+    roomGoldGlow(0.5),
     full.map((k) => k * 0.5),
   );
 });

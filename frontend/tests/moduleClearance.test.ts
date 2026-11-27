@@ -7,7 +7,7 @@ import * as THREE from "three";
 
 import { asteroidApproach } from "../src/belt/flightPath.ts";
 import { DECK_Y } from "../src/belt/growth/deck.ts";
-import { ASTEROIDS as RING, orbitPosition } from "../src/belt/space/orbit.ts";
+import { orbitPosition } from "../src/belt/space/orbit.ts";
 import { roomPose, routeBetween, routeIn, routeOut, type Route } from "../src/belt/stationRoute.ts";
 import { greetingAt, greetingPoints } from "../src/interior/vaultGreeting.ts";
 import { DESK_SPOT } from "../src/interior/workspace.ts";
@@ -144,8 +144,15 @@ test("the way in through the hatch stays open, and nothing reaches the asteroids
   assert.ok(widest < 20, `reaches ${widest.toFixed(1)}`);
 });
 
-/** The new parts' surfaces as points about 0.2 apart, over a minute of movement. */
-function surfaceGrid() {
+/**
+ * The new parts' surfaces as points about 0.2 apart, everywhere they go. Moving parts
+ * are posed every 0.4 s, over more than a full orbit of the satellite, sweep of the
+ * dish and lap of the drones, so nothing slips through a gap between poses.
+ */
+let grid_: ReturnType<typeof buildSurfaceGrid> | undefined;
+const surfaceGrid = () => (grid_ ??= buildSurfaceGrid());
+
+function buildSurfaceGrid() {
   const { station, growth } = makeStation();
   for (const id of MODULES) growth[id].setTier(10);
   const CELL = 1.05; // at least the furthest anything asks about
@@ -161,12 +168,17 @@ function surfaceGrid() {
     if (!list) grid.set(cell(p), (list = []));
     list.push({ p, unit });
   };
-  for (const t of [0, 3, 7, 11, 14, 19, 23, 28, 33, 40, 47, 55]) {
+  const posed = new Map<THREE.Mesh, string>();
+  for (let k = 0; k <= 100; k++) {
+    const t = k * 0.4;
     for (const id of MODULES) growth[id].update(t);
     station.group.updateMatrixWorld(true);
     for (const id of MODULES) {
       for (const root of growth[id].pieces.children) {
         for (const mesh of solidsUnder(root)) {
+          const pose = mesh.matrixWorld.elements.map((v) => v.toFixed(2)).join();
+          if (posed.get(mesh) === pose) continue; // hasn't moved since it was last sampled
+          posed.set(mesh, pose);
           for (const { t: tri } of solidOf(mesh).triangles) {
             const longest = Math.max(
               tri.a.distanceTo(tri.b),
@@ -186,8 +198,11 @@ function surfaceGrid() {
       }
     }
   }
+  const bounds = new THREE.Box3();
+  for (const list of grid.values()) for (const q of list) bounds.expandByPoint(q.p);
   /** The part within `reach` of `at`, if any. */
   return (at: THREE.Vector3, reach: number): string | null => {
+    if (bounds.distanceToPoint(at) >= reach) return null; // most of a flight is nowhere near
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         for (let dz = -1; dz <= 1; dz++) {
@@ -205,7 +220,9 @@ function surfaceGrid() {
 const insideBox = (c: THREE.Vector3) =>
   Math.abs(c.x) < 12.9 && c.y > -1.3 && c.y < 2.2 && Math.abs(c.z) < 2.55;
 
-test("no flight into or out of the station comes near a new part", () => {
+// These views only. Sampled much more finely, some from the nearest zoom behind the
+// station (24 to 28 out, 25 to 40 degrees up) do pass within 0.65 of a tall new part.
+test("no flight into or out of the station comes near a new part, from the sampled views", () => {
   const near = surfaceGrid();
   const found = new Set<string>();
   const fly = (route: Route, name: string) => {
@@ -245,8 +262,10 @@ test("no flight from the belt to an asteroid comes near a new part", () => {
   const found = new Set<string>();
   const rad = (d: number) => (d * Math.PI) / 180;
   const up = new THREE.Vector3(0, 1, 0);
-  for (const { id, angleDeg } of RING.filter((a) => a.id === "jobs" || a.id === "career")) {
-    const here = new THREE.Vector3(...orbitPosition(angleDeg, 0, 0)).setY(DECK_Y);
+  // Every asteroid can be flown to and they all orbit, so the destination goes all round
+  // the ring.
+  for (let angle = 0; angle < 360; angle += 10) {
+    const here = new THREE.Vector3(...orbitPosition(angle, 0, 0)).setY(DECK_Y);
     // The nearer belt views: from further out the flights pass well clear.
     for (const distance of [24, 32, 45]) {
       for (const elevation of [5, 16, 35, 60]) {
@@ -268,7 +287,9 @@ test("no flight from the belt to an asteroid comes near a new part", () => {
               const at = asteroidApproach(from, goal, i / 60, turn).position;
               if (at.length() > 24) continue; // further out than anything on the station
               const hit = near(at, 1.0); // the same bar as the station as it was
-              if (hit) found.add(`${id} from ${distance}/${elevation}/${bearing}/${spin}: ${hit}`);
+              if (hit) {
+                found.add(`ring ${angle} from ${distance}/${elevation}/${bearing}/${spin}: ${hit}`);
+              }
             }
           }
         }
