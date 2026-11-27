@@ -3,7 +3,7 @@
 // Styles live in kit.css; wrap a screen in <div className="kit"> to use the tokens.
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-import { progressPercent } from "./kit";
+import { progressPercent } from "./kitMath";
 import "./kit.css";
 
 type GlassButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

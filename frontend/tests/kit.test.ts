@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clamp01, progressPercent } from "../src/ui/kit.ts";
+import { clamp01, progressPercent } from "../src/ui/kitMath.ts";
 
 test("clamp01 keeps values between 0 and 1", () => {
   assert.equal(clamp01(-1), 0);

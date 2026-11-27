@@ -1,8 +1,9 @@
-// Level 3: zoomed into the robot's screen, which becomes a desktop computer
-// (the approved prototype, monitor 10% bigger): bezel and chin, menu bar,
-// the building's apps in a dock, the open app in its own scrolling window.
-// The real 3D room or asteroid keeps moving around the monitor's edges.
-import { useEffect, useRef, useState } from "react";
+// Level 3: zoomed into the robot's screen, which becomes a modern all-in-one computer
+// (thin dark border, aluminium chin and stand; no real brand). Menu bar on top; one
+// glass window whose left side lists the building's apps as glass buttons (the open one
+// glows with a blue bar); the open app fills the rest and slides in when switched.
+// The desktop background is tinted with the building's colour (deskTheme).
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { BuildingId } from "../api";
 import { CheckinPanel } from "../plan/CheckinPanel";
@@ -15,7 +16,10 @@ import { IncomePanel } from "../vault/IncomePanel";
 import { SideWorkPanel } from "../vault/SideWorkPanel";
 import { StatementsPanel } from "../vault/StatementsPanel";
 import { useSampleReminder } from "../todo/useMode";
+import { GlassButton } from "../ui/Kit";
 import { appsFor, type App } from "./apps";
+import { appListLayout, switchMode } from "./appTabs";
+import { deskTheme } from "./deskTheme";
 import "./desktop.css";
 
 const ICONS: Record<string, string> = {
@@ -35,16 +39,18 @@ const ICONS: Record<string, string> = {
 export function Desktop({ id, name }: { id: BuildingId; name: string }) {
   const apps = appsFor(id);
   const firstReady = apps.find((a) => a.ready)?.id ?? null;
-  const [openApp, setOpenApp] = useState<string | null>(firstReady ?? "construction");
+  const [openApp, setOpenApp] = useState<string>(firstReady ?? "construction");
   const [note, setNote] = useState<string | null>(null);
   const sample = useSampleReminder();
   const clock = useClock();
-  const windowRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+  const theme = deskTheme(id);
+  const layout = appListLayout(apps.length);
+  const paneRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard and screen-reader focus moves into the open window. (The window
-  // itself, named by its title: the app's own heading is hidden in here.)
+  // Keyboard and screen-reader focus moves into the open app.
   useEffect(() => {
-    windowRef.current?.focus({ preventScroll: true });
+    paneRef.current?.focus({ preventScroll: true });
   }, [openApp]);
 
   function launch(app: App) {
@@ -62,7 +68,11 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
 
   return (
     <div className="desk-zoom">
-      <section className="monitor" aria-label={`${name} computer`}>
+      <section
+        className="monitor kit"
+        aria-label={`${name} computer`}
+        style={{ "--desk-accent": theme.accent } as CSSProperties}
+      >
         <div className="monitor__screen">
           <header className="menubar">
             <span className="menubar__logo" aria-hidden="true">
@@ -74,83 +84,89 @@ export function Desktop({ id, name }: { id: BuildingId; name: string }) {
             <span className="menubar__clock">{clock}</span>
           </header>
 
-          <div className="desktop">
-            {openApp ? (
+          <div className="desktop" style={{ backgroundImage: theme.wallpaper }}>
+            <div className="window">
+              <nav
+                className={`window__apps${layout.scroll ? " is-scrolling" : ""}`}
+                aria-label="Apps"
+              >
+                <div className="window__lights" aria-hidden="true">
+                  <i />
+                  <i />
+                  <i />
+                </div>
+                {apps.map((app) => (
+                  <GlassButton
+                    key={app.id}
+                    active={openApp === app.id}
+                    icon={ICONS[app.id] ?? "•"}
+                    className={app.ready ? "" : "is-later"}
+                    onClick={() => launch(app)}
+                    aria-label={app.ready ? `Open ${app.name}` : `${app.name} (coming later)`}
+                  >
+                    {app.name}
+                  </GlassButton>
+                ))}
+              </nav>
               <div
-                className="window"
-                role="dialog"
+                key={openApp}
+                className={`window__pane window__pane--${switchMode(reduceMotion)}`}
+                role="region"
                 aria-label={windowTitle(openApp, apps)}
-                ref={windowRef}
+                ref={paneRef}
                 tabIndex={-1}
               >
-                <div className="window__bar">
-                  <button
-                    type="button"
-                    className="window__close"
-                    aria-label={`Close ${windowTitle(openApp, apps)}`}
-                    onClick={() => setOpenApp(null)}
-                  />
-                  <span className="window__title">{windowTitle(openApp, apps)}</span>
-                </div>
-                <div className="window__body">
-                  {openApp === "todo" ? (
-                    <TodoPanel />
-                  ) : openApp === "plan" ? (
-                    <PlanPanel />
-                  ) : openApp === "checkin" ? (
-                    <CheckinPanel />
-                  ) : openApp === "grocery" ? (
-                    <GroceryPanel />
-                  ) : openApp === "sidework" ? (
-                    <SideWorkPanel />
-                  ) : openApp === "income" ? (
-                    <IncomePanel />
-                  ) : openApp === "statements" ? (
-                    <StatementsPanel />
-                  ) : openApp === "platforms" ? (
-                    <PlatformsPanel />
-                  ) : openApp === "log" ? (
-                    <LogPanel />
-                  ) : (
-                    <UnderConstruction name={name} />
-                  )}
-                </div>
+                {openApp === "todo" ? (
+                  <TodoPanel />
+                ) : openApp === "plan" ? (
+                  <PlanPanel />
+                ) : openApp === "checkin" ? (
+                  <CheckinPanel />
+                ) : openApp === "grocery" ? (
+                  <GroceryPanel />
+                ) : openApp === "sidework" ? (
+                  <SideWorkPanel />
+                ) : openApp === "income" ? (
+                  <IncomePanel />
+                ) : openApp === "statements" ? (
+                  <StatementsPanel />
+                ) : openApp === "platforms" ? (
+                  <PlatformsPanel />
+                ) : openApp === "log" ? (
+                  <LogPanel />
+                ) : (
+                  <UnderConstruction name={name} />
+                )}
               </div>
-            ) : (
-              <p className="desktop__hint">Choose an app from the dock.</p>
-            )}
+            </div>
             {note && (
               <p className="desktop__note" role="status">
                 {note}
               </p>
             )}
           </div>
-
-          <nav className="dock" aria-label="Apps">
-            {apps.map((app) => (
-              <button
-                key={app.id}
-                type="button"
-                className={`dock__app${app.ready ? "" : " dock__app--later"}`}
-                onClick={() => launch(app)}
-                aria-label={app.ready ? `Open ${app.name}` : `${app.name} (coming later)`}
-              >
-                <span className="dock__icon" aria-hidden="true">
-                  {ICONS[app.id] ?? "•"}
-                </span>
-                <span className="dock__name">{app.name}</span>
-                {openApp === app.id && <span className="dock__dot" aria-hidden="true" />}
-              </button>
-            ))}
-          </nav>
           <div className="monitor__glare" aria-hidden="true" />
         </div>
-        <div className="monitor__chin" aria-hidden="true">
-          <span className="monitor__led" />
-        </div>
+        <div className="monitor__chin" aria-hidden="true" />
+        <div className="monitor__stand" aria-hidden="true" />
+        <div className="monitor__foot" aria-hidden="true" />
       </section>
     </div>
   );
+}
+
+/** True when the Mac asks for less motion (switching apps is then instant). */
+function useReducedMotion(): boolean {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduce, setReduce] = useState(() => window.matchMedia?.(query).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const on = () => setReduce(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return reduce;
 }
 
 function windowTitle(openApp: string, apps: App[]): string {
