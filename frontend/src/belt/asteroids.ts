@@ -6,9 +6,13 @@ import * as THREE from "three";
 import type { BuildingId } from "../api";
 import { BUILT } from "./built";
 import { createConstructionSign, createWorksite } from "./construction";
+import { createGrowth, type GrowthHandle } from "./growth/applyGrowth";
+import { DECK_CENTRE_Y, DECK_R, DECK_Y, ROCK_SCALE } from "./growth/deck";
+import { rockGround } from "./growth/ground";
 import { createHoloBanner, makeHologram } from "./hologram";
 import { createLandmark } from "./landmarks";
-import { LOOK } from "./look";
+import { detailFor } from "./lod";
+import { LOOK, motionScale } from "./look";
 import { PROJECTOR_LENS, workToDeck } from "../interior/workspace";
 import type { Kit } from "./materials";
 import { ASTEROIDS, orbitPosition, rockGeometry } from "./space";
@@ -22,28 +26,40 @@ export type AsteroidBuilding = {
   anchor: THREE.Vector3;
   /** Turns with the asteroid; its deck top is at y = DECK_Y. The robot's desk sits here. */
   spin: THREE.Group;
-  /** What stands on the deck (landmark, or hologram + worksite + banner): hidden while inside. */
+  /** What stands on the deck (landmark and upgrades, or hologram + worksite + banner). */
   holder: THREE.Group;
+  /** Upgrades: tier 0 until set. Only built buildings grow. */
+  growth: GrowthHandle;
   /** The solid "under construction" sign for beside the robot's desk (made once), or null if built. */
   deskSign: THREE.Group | null;
-  update(t: number, speed: number, camera: THREE.Camera): void;
+  /** `hold`: the computer screen is open, so upgrade pieces stop moving. */
+  update(t: number, speed: number, camera: THREE.Camera, hold?: boolean): void;
 };
 
-/** Rock size, deck radius and where the deck's top sits (the robot's desk stands here). */
-const ROCK_SCALE = 4.8;
-export const DECK_R = 3.0;
-const DECK_CENTRE_Y = 1.92;
-export const DECK_Y = DECK_CENTRE_Y + 0.16;
+export { DECK_R, DECK_Y };
+
 /** Banner size per unit of camera distance (about 200 px wide on a 900 px tall view). */
 const BANNER_SCALE = 0.03;
 
-export function createAsteroids(kit: Kit): AsteroidBuilding[] {
+export function createAsteroids(
+  kit: Kit,
+  { reducedMotion = false }: { reducedMotion?: boolean } = {},
+): AsteroidBuilding[] {
   const { mats, glow, keep, addBlinker } = kit;
   const t0 = performance.now();
   const built = ASTEROIDS.map((def, i): AsteroidBuilding => {
     const group = new THREE.Group(); // follows the orbit
     const spin = new THREE.Group(); // turns with the asteroid
     group.add(spin);
+    // What an upgrade makes bigger: the rock, the deck and what stands on it. It
+    // scales about the deck's top (`grown` holds it there), so the deck stays at
+    // the same height and the desk, camera and flights don't move.
+    const grown = new THREE.Group();
+    grown.position.y = DECK_Y;
+    const body = new THREE.Group();
+    body.position.y = -DECK_Y;
+    grown.add(body);
+    spin.add(grown);
     group.traverse((o) => (o.userData.buildingId = def.id));
 
     const rock = new THREE.Mesh(
@@ -67,7 +83,7 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
     );
     rim.rotation.x = Math.PI / 2;
     rim.position.y = DECK_Y;
-    spin.add(rock, deck, rim);
+    body.add(rock, deck, rim);
     const winGeo = keep(new THREE.BoxGeometry(0.22, 0.12, 0.04));
     for (let k = 0; k < 10; k++) {
       const a = (k / 10) * Math.PI * 2 + 0.3;
@@ -75,22 +91,38 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       const r = DECK_R + 0.12;
       w.position.set(Math.cos(a) * r, DECK_CENTRE_Y - 0.03, Math.sin(a) * r);
       w.lookAt(Math.cos(a) * 9, DECK_CENTRE_Y - 0.03, Math.sin(a) * 9);
-      spin.add(w);
+      body.add(w);
     }
-    addBlinker(spin, new THREE.Vector3(3.5, 0.8, 0.9), def.tint, 2.4 + i * 0.13, i * 0.37, {
+    addBlinker(body, new THREE.Vector3(3.5, 0.8, 0.9), def.tint, 2.4 + i * 0.13, i * 0.37, {
       size: 0.1,
     });
 
     const holder = new THREE.Group();
     holder.position.y = DECK_Y;
-    spin.add(holder);
+    body.add(holder);
+    // The same spot outside what grows, for upgrades that go on the robot's desk.
+    const deskMount = new THREE.Group();
+    deskMount.position.y = DECK_Y;
+    spin.add(deskMount);
 
     const updates: ((t: number) => void)[] = [];
     let signFace: THREE.Group | null = null;
     const lm = createLandmark(def.id as Parameters<typeof createLandmark>[0], def.tint, kit);
     holder.add(lm.group);
-    updates.push(lm.update);
+    const growth = createGrowth({
+      id: def.id,
+      tint: def.tint,
+      kit,
+      built: BUILT.has(def.id),
+      holder,
+      desk: deskMount,
+      landmark: lm,
+      ground: rockGround(rock.geometry, ROCK_SCALE, DECK_Y),
+      onScale: (scale) => grown.scale.setScalar(scale),
+    });
+    // A built asteroid's landmark animates through its growth (it can change stage).
     if (!BUILT.has(def.id)) {
+      updates.push(lm.update);
       // Not built yet: the landmark is only a holographic projection, with the
       // mining rig and scaffolding working at the deck's edge...
       // The projection floats above the deck, beamed up from the robot's desk projector.
@@ -132,12 +164,19 @@ export function createAsteroids(kit: Kit): AsteroidBuilding[] {
       anchor,
       spin,
       holder,
+      growth,
       deskSign,
-      update(t, speed, camera) {
+      update(t, speed, camera, hold = false) {
         const [x, y, z] = orbitPosition(def.angleDeg, t, speed);
         group.position.set(x, y, z);
         spin.rotation.y = t * spinRate;
         updates.forEach((u) => u(t));
+        if (BUILT.has(def.id)) {
+          growth.update(t, { hold, motion: motionScale(reducedMotion) });
+          camera.getWorldPosition(camPos);
+          growth.setDetail(detailFor(camPos.distanceTo(group.position)));
+          anchor.y = DECK_Y + growth.labelHeight();
+        }
         if (signFace) {
           camera.getWorldPosition(camPos);
           signFace.getWorldPosition(facePos);

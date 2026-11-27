@@ -2,6 +2,8 @@
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
+import { grownLandmark } from "./growth/landmarkStages.ts";
+import type { LandmarkStage } from "./growth/ladders.ts";
 import type { Kit } from "./materials";
 
 type Landmark = { group: THREE.Group; update(t: number): void };
@@ -13,7 +15,20 @@ const cylX = (r: number, len: number, mat: THREE.Material, seg = 32) => {
   return m;
 };
 
-export function createLandmark(id: AsteroidId, tint: string, kit: Kit): Landmark {
+/** `stage` 1 is the look a building starts with; later stages come with upgrades. */
+export function createLandmark(
+  id: AsteroidId,
+  tint: string,
+  kit: Kit,
+  stage: LandmarkStage = 1,
+): Landmark {
+  if (stage > 1) {
+    // Only the buildings with an upgrade ladder have grown landmarks.
+    if (id !== "jobs" && id !== "career") throw new Error(`"${id}" has no grown landmark yet.`);
+    const grown = grownLandmark(id, stage as 2 | 3 | 4, tint, kit);
+    grown.group.userData.stage = stage;
+    return grown;
+  }
   const { mats, glow, keep, addBlinker } = kit;
   const g = new THREE.Group();
   const updates: ((t: number) => void)[] = [];

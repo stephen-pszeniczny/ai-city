@@ -12,6 +12,7 @@ import { getBuildings, listTasks, type BuildingId } from "../api";
 import { Shuttle } from "../notifications/Shuttle";
 import { BUILT } from "./built";
 import { flightState } from "./flightState";
+import { previewTier } from "./growth/preview";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { StationInterior } from "../interior/StationInterior";
 import { hallwayStatus } from "./hallwayStatus";
@@ -30,6 +31,9 @@ import type { DayNight } from "./useDayNight";
 
 /** Pointer movement (px) below which a press counts as a click, not a drag. */
 const CLICK_SLOP = 5;
+/** Development only (npm run dev): /?growthPreview=<0 to 10> shows the upgrades. Read
+ * once, as moving between buildings drops it from the address. */
+const GROWTH_PREVIEW = import.meta.env.DEV ? previewTier(window.location.search) : null;
 
 export function BeltScene({
   view,
@@ -56,8 +60,8 @@ export function BeltScene({
   // React to run this more than once in development.
   const world = useMemo(() => {
     const kit = createKit();
-    return { kit, station: createStation(kit), asteroids: createAsteroids(kit) };
-  }, []);
+    return { kit, station: createStation(kit), asteroids: createAsteroids(kit, { reducedMotion }) };
+  }, [reducedMotion]);
   useEffect(
     () => () => {
       for (const g of [world.station.group, ...world.asteroids.map((a) => a.group)]) disposeTree(g);
@@ -65,6 +69,11 @@ export function BeltScene({
     },
     [world],
   );
+
+  useEffect(() => {
+    if (GROWTH_PREVIEW === null) return;
+    for (const a of world.asteroids) a.growth.setTier(GROWTH_PREVIEW);
+  }, [world]);
 
   // Created in an effect (not useMemo): it adds itself to the scene, and React
   // may run memo code twice in development, which would leave a stray copy.
@@ -220,7 +229,7 @@ export function BeltScene({
         world.station.update(t);
         world.kit.updateBlinkers(t);
       }
-      for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
+      for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera, hold);
       world.kit.setStationLights(space.nightAmount());
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.

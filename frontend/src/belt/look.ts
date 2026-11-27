@@ -90,7 +90,7 @@ export const LOOK = {
     /** The most an asteroid grows by tier 10 (1 = never grows). */
     maxAsteroidScale: 1.3,
     /** A lower limit for one asteroid, such as { jobs: 1.1 }, if it looks fine smaller. */
-    scaleByBuilding: {} as Partial<Record<BuildingId, number>>,
+    scaleByBuilding: { jobs: 1.18, career: 1.18 } as Partial<Record<BuildingId, number>>,
     /** Glow of the growth pieces' lights (0 = off, 1 = full). */
     pieceGlow: 1.0,
     /** How much the growth pieces move: drones, satellites, moonlets (0 = still). */

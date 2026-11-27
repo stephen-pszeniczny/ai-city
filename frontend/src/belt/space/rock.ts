@@ -4,9 +4,9 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
-import { fbm, perlin } from "./noise";
-import { fingerprint, geometryToArrays, rememberRock, setVersions, storedRock } from "./stored";
-import { mulberry32 } from "../../interior/robotBrain";
+import { fbm, perlin } from "./noise.ts";
+import { fingerprint, geometryToArrays, rememberRock, setVersions, storedRock } from "./stored.ts";
+import { mulberry32 } from "../../interior/robotBrain.ts";
 
 /** Where the flat top starts (rock units, before scaling). */
 const FLAT_Y = 0.38;
