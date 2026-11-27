@@ -1,5 +1,7 @@
 // Every "how much" for the 3D belt in one place.
 // To tone something down, lower its number and reload the page.
+import type { BuildingId } from "../api";
+
 export const LOOK = {
   /** Beyond this distance (scene units) desks and robots switch to their simpler version. */
   farDetailDistance: 22,
@@ -81,6 +83,20 @@ export const LOOK = {
     reducedMotionBannerSeconds: 5,
     /** Shuttles that fly one by one before the rest share one "+N more" shuttle. */
     maxSeparateShuttles: 3,
+  },
+
+  /** Upgrades: the pieces each building gains every 10 levels. */
+  growth: {
+    /** The most an asteroid grows by tier 10 (1 = never grows). */
+    maxAsteroidScale: 1.3,
+    /** A lower limit for one asteroid, such as { jobs: 1.1 }, if it looks fine smaller. */
+    scaleByBuilding: {} as Partial<Record<BuildingId, number>>,
+    /** Glow of the growth pieces' lights (0 = off, 1 = full). */
+    pieceGlow: 1.0,
+    /** How much the growth pieces move: drones, satellites, moonlets (0 = still). */
+    pieceMotion: 1.0,
+    /** Seconds a new piece takes to build itself in during an upgrade. */
+    buildInSeconds: 2.5,
   },
 
   /** Gap between shooting stars, in seconds. */
