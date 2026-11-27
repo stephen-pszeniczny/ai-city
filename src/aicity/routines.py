@@ -90,9 +90,26 @@ class RoutineStore:
                     "DELETE FROM routine_ticks WHERE day = ? AND routine_id = ? AND item = ?",
                     (day.isoformat(), routine_id, item),
                 )
+            self._record_finish(routine, day)
 
         with_transaction(self._conn, work, immediate=True)
         return self._view(routine, day)
+
+    def _record_finish(self, routine: Routine, day: date) -> None:
+        """Keep routine_finishes in step: a row while every current item is ticked.
+
+        Belt XP counts these rows, so changing the routine's items later never changes
+        what past days earned.
+        """
+        key = (day.isoformat(), routine.id)
+        if self._view(routine, day).done == len(routine.items):
+            self._conn.execute(
+                "INSERT OR IGNORE INTO routine_finishes (day, routine_id, finished_at) "
+                "VALUES (?, ?, ?)",
+                (*key, self._stamp()),
+            )
+        else:
+            self._conn.execute("DELETE FROM routine_finishes WHERE day = ? AND routine_id = ?", key)
 
     def _view(self, routine: Routine, day: date) -> RoutineDay:
         ticked = {

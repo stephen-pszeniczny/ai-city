@@ -199,11 +199,19 @@ class JobsStore:
                 "hours_per_week": hours_per_week,
             }
         )
-        project_id = self._write(
-            "INSERT INTO job_projects (platform_id, title, pay_cents, currency, hours_per_week, "
-            "status, found_on, status_at) VALUES (?, ?, ?, ?, ?, 'found', ?, ?)",
-            (platform_id, *values, self._today().isoformat(), self._stamp()),
-        )
+        stamp = self._stamp()
+
+        def work() -> int:
+            new_id = self._conn.execute(
+                "INSERT INTO job_projects (platform_id, title, pay_cents, currency, "
+                "hours_per_week, status, found_on, status_at) "
+                "VALUES (?, ?, ?, ?, ?, 'found', ?, ?)",
+                (platform_id, *values, self._today().isoformat(), stamp),
+            ).lastrowid
+            self._record_project_event(new_id, "found", stamp)
+            return new_id
+
+        project_id = with_transaction(self._conn, work, immediate=True)
         return self._project(project_id)
 
     def edit_project(self, project_id: int, **fields) -> ProjectView:
@@ -233,10 +241,16 @@ class JobsStore:
         current = self._project(project_id)
         if not _can_move(current.status, status):
             raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
-        self._write(
-            "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
-            (status, self._stamp(), project_id),
-        )
+        stamp = self._stamp()
+
+        def work() -> None:
+            self._conn.execute(
+                "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
+                (status, stamp, project_id),
+            )
+            self._record_project_event(project_id, status, stamp)
+
+        with_transaction(self._conn, work, immediate=True)
         return self._project(project_id)
 
     def active_platform_names(self) -> list[str]:
@@ -333,6 +347,13 @@ class JobsStore:
         if row is None:
             raise JobsNotFound("No project with that ID.")
         return self._project_view(row)
+
+    def _record_project_event(self, project_id: int, status: str, stamp: str) -> None:
+        """The permanent record of the stages a project reached (Belt XP counts them)."""
+        self._conn.execute(
+            "INSERT INTO job_project_events (project_id, status, at) VALUES (?, ?, ?)",
+            (project_id, status, stamp),
+        )
 
     def _project_view(self, r: tuple) -> ProjectView:
         names = {p.id: p.name for p in self._settings.platforms}
