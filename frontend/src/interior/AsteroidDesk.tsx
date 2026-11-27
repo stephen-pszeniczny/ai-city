@@ -15,7 +15,7 @@ import { detailFor, type Detail } from "../belt/lod";
 import { Desk, DESK_Z } from "./Desk";
 import { DeskProps } from "./DeskProps";
 import { Gadget } from "./Gadget";
-import { Monitor, type ScreenLine } from "./Monitor";
+import { Monitor } from "./Monitor";
 import { Robot, useRobotBrain } from "./Robot";
 import { deckToWork, MONITOR_AT, MONITOR_TURN, WORK_AT, WORK_SCALE } from "./workspace";
 
@@ -29,7 +29,6 @@ export function AsteroidDesk({
   title,
   tint,
   built,
-  lines,
   inside,
   atScreen,
   sign,
@@ -41,7 +40,6 @@ export function AsteroidDesk({
   tint: string;
   built: boolean;
   /** Mission Control's open tasks (empty elsewhere). */
-  lines: readonly ScreenLine[];
   /** The camera is in this building (always full detail). */
   inside: boolean;
   /** Zoomed into the screen: the desktop overlay takes the monitor's place, so it and the robot hide. */
@@ -105,15 +103,7 @@ export function AsteroidDesk({
           <DeskProps tint={tint} detail={detail} projector={!built} lampMark={lampMark} />
           <Gadget id={id} tint={tint} detail={detail} reducedMotion={reducedMotion} orbit={orbit} />
           <group position={MONITOR_AT} rotation={MONITOR_TURN} visible={!atScreen}>
-            <Monitor
-              id={id}
-              title={title}
-              tint={tint}
-              built={built}
-              lines={lines}
-              brain={brain}
-              live={near}
-            />
+            <Monitor id={id} title={title} tint={tint} built={built} brain={brain} live={near} />
           </group>
         </group>
         {/* Where the shared close-up lights sit at this desk (belt/deskLights.ts):
