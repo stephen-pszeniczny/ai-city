@@ -8,6 +8,7 @@
 // week until it's checked in).
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useOpenApp } from "../desktop/DesktopContext";
 
 import {
   addPlanBlock,
@@ -29,6 +30,7 @@ import { CheckRound } from "../jobs/CheckRound";
 import "./plan.css";
 
 export function CheckinPanel() {
+  const openApp = useOpenApp();
   const client = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -76,7 +78,7 @@ export function CheckinPanel() {
     onError,
   });
 
-  if (week.isPending) return <p className="plan__note">Opening the check-in…</p>;
+  if (week.isPending) return <p className="plan__note">Loading…</p>;
   if (week.isError)
     return (
       <p className="form-error" role="alert">
@@ -86,11 +88,14 @@ export function CheckinPanel() {
   const w = week.data;
   if (!w.configured)
     return (
-      <p className="plan__note">
-        Add a [plan] section to your settings file to plan your week. See settings.example.toml.
+      <p
+        className="plan__note"
+        title="Add a [plan] section to your settings file (see settings.example.toml)"
+      >
+        Plan not set up
       </p>
     );
-  if (!w.exists) return <p className="plan__note">This week can't be planned any more.</p>;
+  if (!w.exists) return <p className="plan__note">Week closed</p>;
 
   const openDays = w.days.map((d) => d.day).filter((d) => !isPast(d, w.today));
   const events = addedEvents(w);
@@ -179,7 +184,7 @@ export function CheckinPanel() {
             </button>
           ))}
         <ul className="plan__blocks" aria-label="Events added this week">
-          {events.length === 0 && <li className="plan__note">No events added yet.</li>}
+          {events.length === 0 && <li className="plan__note">No events yet</li>}
           {events.map((b) => (
             <li key={b.id} className={`plan__block plan__block--${b.kind}`}>
               <span className="plan__time">
@@ -239,9 +244,11 @@ export function CheckinPanel() {
         <TaskGroup label="Due this week" tasks={attention.dueThisWeek} />
         <TaskGroup label="Stale" tasks={attention.stale} />
         {attention.overdue.length + attention.dueThisWeek.length + attention.stale.length === 0 ? (
-          <p className="plan__note">Nothing needs attention.</p>
+          <p className="plan__note">All clear</p>
         ) : (
-          <p className="plan__note">Open the To-do app from the dock to change them.</p>
+          <button type="button" className="btn btn--quiet" onClick={() => openApp("todo")}>
+            Open To-do
+          </button>
         )}
       </section>
 

@@ -131,3 +131,9 @@
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+.window__pane .plan__row {
+  display: flex;
+  align-items: center;
+  gap: var(--kit-space-2);
+}
