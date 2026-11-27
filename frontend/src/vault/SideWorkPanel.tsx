@@ -57,7 +57,7 @@ function SideWork() {
 
   const view = useQuery({ queryKey: KEY, queryFn: getSideWork, retry: false });
 
-  if (view.status === "pending") return <p className="sw-note">Counting…</p>;
+  if (view.status === "pending") return <p className="sw-note">Loading…</p>;
   if (view.status === "error") return <p className="sw-note">{errorText(view.error)}</p>;
   const v = view.data;
 
@@ -70,7 +70,7 @@ function SideWork() {
           Pay
         </h3>
         {v.groups.length === 0 ? (
-          <p className="sw-note">Nothing logged yet.</p>
+          <p className="sw-note">Nothing logged</p>
         ) : (
           <ul className="sw-groups">
             {v.groups.map((g) => (
@@ -133,10 +133,12 @@ function ManualRate() {
         save.mutate();
       }}
     >
-      <p>
-        Some exchange rates are pending (the Bank of Canada couldn't be reached, or today's rate
-        isn't out yet). They fill in on their own next time, or type one:
-      </p>
+      <span
+        className="sw-chip"
+        title="The Bank of Canada couldn't be reached, or today's rate isn't out yet. They fill in on their own next time, or type one."
+      >
+        Rates pending
+      </span>
       <label>
         Day <input type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
       </label>
@@ -209,7 +211,12 @@ function LogForm({ v }: { v: SideWorkView }) {
       <h3 id="sw-log-title" className="sw-h">
         Log work
       </h3>
-      <p className="sw-hint">Only the date is needed. Never add project or task details.</p>
+      <span
+        className="sw-chip sw-chip--plain"
+        title="Only the date is needed. Never add project or task details."
+      >
+        Date only · no project details
+      </span>
       <div className="sw-fields">
         <label>
           Date
@@ -241,27 +248,29 @@ function LogForm({ v }: { v: SideWorkView }) {
             />
           </label>
         )}
-        <fieldset className="sw-time">
-          <legend>Time</legend>
-          <input
-            inputMode="numeric"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
-            placeholder="0"
-            aria-label="Hours"
-            aria-invalid={hoursError !== null}
-          />
-          <span aria-hidden="true">h</span>
-          <input
-            inputMode="numeric"
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
-            placeholder="45"
-            aria-label="Minutes"
-            aria-invalid={hoursError !== null}
-          />
-          <span aria-hidden="true">min</span>
-        </fieldset>
+        <div className="sw-time" role="group" aria-labelledby="sw-time-label">
+          <span id="sw-time-label">Time</span>
+          <span className="sw-time__row">
+            <input
+              inputMode="numeric"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              placeholder="0"
+              aria-label="Hours"
+              aria-invalid={hoursError !== null}
+            />
+            <span aria-hidden="true">h</span>
+            <input
+              inputMode="numeric"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              placeholder="45"
+              aria-label="Minutes"
+              aria-invalid={hoursError !== null}
+            />
+            <span aria-hidden="true">min</span>
+          </span>
+        </div>
         <label>
           Rate / hour
           <input
