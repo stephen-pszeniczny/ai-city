@@ -158,18 +158,35 @@ class JobsStore:
         unknown = set(fields) - _PROFILE_FIELDS
         if unknown:
             raise JobsError(f"Unknown profile field(s): {', '.join(sorted(unknown))}.")
-        row = _checked_profile({**self._profile(platform_id), **fields})
-        self._write(
-            "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
-            "pay_currency, resume_label, domains_json, assessments_json, profile_updated_on, "
-            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT (platform_id) DO UPDATE SET pay_low_cents = excluded.pay_low_cents, "
-            "pay_high_cents = excluded.pay_high_cents, pay_currency = excluded.pay_currency, "
-            "resume_label = excluded.resume_label, domains_json = excluded.domains_json, "
-            "assessments_json = excluded.assessments_json, "
-            "profile_updated_on = excluded.profile_updated_on, updated_at = excluded.updated_at",
-            (platform_id, *row, self._stamp()),
-        )
+
+        def work() -> None:
+            stored = self._profile(platform_id)
+            row = _checked_profile({**stored, **fields})
+            stamp = self._stamp()
+            self._conn.execute(
+                "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
+                "pay_currency, resume_label, domains_json, assessments_json, "
+                "profile_updated_on, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (platform_id) DO UPDATE SET "
+                "pay_low_cents = excluded.pay_low_cents, "
+                "pay_high_cents = excluded.pay_high_cents, "
+                "pay_currency = excluded.pay_currency, "
+                "resume_label = excluded.resume_label, domains_json = excluded.domains_json, "
+                "assessments_json = excluded.assessments_json, "
+                "profile_updated_on = excluded.profile_updated_on, "
+                "updated_at = excluded.updated_at",
+                (platform_id, *row, stamp),
+            )
+            updated_on = row[-1]
+            if updated_on is not None and updated_on != stored["profile_updated_on"]:
+                # The permanent record of profile refreshes (Belt XP counts them).
+                self._conn.execute(
+                    "INSERT INTO platform_profile_refreshes (platform_id, refreshed_on, "
+                    "created_at) VALUES (?, ?, ?)",
+                    (platform_id, updated_on, stamp),
+                )
+
+        with_transaction(self._conn, work, immediate=True)
         return self._card(platform)
 
     # --- Opportunity log --------------------------------------------------------
@@ -199,11 +216,19 @@ class JobsStore:
                 "hours_per_week": hours_per_week,
             }
         )
-        project_id = self._write(
-            "INSERT INTO job_projects (platform_id, title, pay_cents, currency, hours_per_week, "
-            "status, found_on, status_at) VALUES (?, ?, ?, ?, ?, 'found', ?, ?)",
-            (platform_id, *values, self._today().isoformat(), self._stamp()),
-        )
+        stamp = self._stamp()
+
+        def work() -> int:
+            new_id = self._conn.execute(
+                "INSERT INTO job_projects (platform_id, title, pay_cents, currency, "
+                "hours_per_week, status, found_on, status_at) "
+                "VALUES (?, ?, ?, ?, ?, 'found', ?, ?)",
+                (platform_id, *values, self._today().isoformat(), stamp),
+            ).lastrowid
+            self._record_project_event(new_id, "found", stamp)
+            return new_id
+
+        project_id = with_transaction(self._conn, work, immediate=True)
         return self._project(project_id)
 
     def edit_project(self, project_id: int, **fields) -> ProjectView:
@@ -230,13 +255,20 @@ class JobsStore:
     def set_project_status(self, project_id: int, status: str) -> ProjectView:
         if status not in PROJECT_STATUSES:
             raise JobsError(f"Status must be one of: {', '.join(PROJECT_STATUSES)}.")
-        current = self._project(project_id)
-        if not _can_move(current.status, status):
-            raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
-        self._write(
-            "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
-            (status, self._stamp(), project_id),
-        )
+        stamp = self._stamp()
+
+        def work() -> None:
+            # Read and check under the write lock, so two moves can't both pass.
+            current = self._project(project_id)
+            if not _can_move(current.status, status):
+                raise JobsConflict(f"A project that is {current.status} can't move to {status}.")
+            self._conn.execute(
+                "UPDATE job_projects SET status = ?, status_at = ? WHERE id = ?",
+                (status, stamp, project_id),
+            )
+            self._record_project_event(project_id, status, stamp)
+
+        with_transaction(self._conn, work, immediate=True)
         return self._project(project_id)
 
     def active_platform_names(self) -> list[str]:
@@ -333,6 +365,13 @@ class JobsStore:
         if row is None:
             raise JobsNotFound("No project with that ID.")
         return self._project_view(row)
+
+    def _record_project_event(self, project_id: int, status: str, stamp: str) -> None:
+        """The permanent record of the stages a project reached (Belt XP counts them)."""
+        self._conn.execute(
+            "INSERT INTO job_project_events (project_id, status, at) VALUES (?, ?, ?)",
+            (project_id, status, stamp),
+        )
 
     def _project_view(self, r: tuple) -> ProjectView:
         names = {p.id: p.name for p in self._settings.platforms}

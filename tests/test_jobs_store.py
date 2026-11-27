@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 
+from aicity import jobs_store
 from aicity.db import DbKind, open_database
 from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
 from aicity.jobs_store import JobsConflict, JobsError, JobsNotFound, JobsStore
@@ -182,6 +183,50 @@ def test_set_profile_partial_update_keeps_other_fields(store):
 def test_bad_profile_fields(store, fields):
     with pytest.raises(JobsError):
         store.set_profile("platform_a", **fields)
+
+
+def refreshes(conn):
+    return conn.execute(
+        "SELECT platform_id, refreshed_on, created_at FROM platform_profile_refreshes ORDER BY id"
+    ).fetchall()
+
+
+def test_profile_date_change_adds_refresh_row(store, conn, clock):
+    store.set_profile("platform_a", profile_updated_on="2026-11-20")
+    first = ("platform_a", "2026-11-20", "2026-11-29T15:00:00Z")
+    assert refreshes(conn) == [first]
+
+    clock.now = NOW + timedelta(hours=1)
+    store.set_profile("platform_a", profile_updated_on="2026-11-20")  # same date again
+    store.set_profile("platform_a", resume_label="v2")  # the date isn't part of this change
+    assert refreshes(conn) == [first]
+
+    store.set_profile("platform_a", profile_updated_on="2026-11-29")
+    assert refreshes(conn) == [first, ("platform_a", "2026-11-29", "2026-11-29T16:00:00Z")]
+
+
+def test_no_refresh_row_without_a_date_or_on_a_refused_change(store, conn):
+    store.set_profile("platform_a", resume_label="v2")
+    with pytest.raises(JobsError):
+        store.set_profile("platform_a", profile_updated_on="2026-11-20", pay_low_cents=-1)
+    assert refreshes(conn) == []
+    store.set_profile("platform_a", profile_updated_on="2026-11-20")
+    store.set_profile("platform_a", profile_updated_on=None)  # clearing it isn't a refresh
+    assert len(refreshes(conn)) == 1
+
+
+def test_refresh_is_checked_against_the_date_at_write_time(store, conn, monkeypatch):
+    real = jobs_store.with_transaction
+
+    def rival_saves_first(c, work, **kwargs):
+        monkeypatch.setattr(jobs_store, "with_transaction", real)
+        store.set_profile("platform_a", profile_updated_on="2026-11-20", resume_label="v2")
+        return real(c, work, **kwargs)
+
+    monkeypatch.setattr(jobs_store, "with_transaction", rival_saves_first)
+    saved = store.set_profile("platform_a", profile_updated_on="2026-11-20")
+    assert len(refreshes(conn)) == 1
+    assert saved.resume_label == "v2"  # the other save's field isn't overwritten
 
 
 def test_refresh_rules(store, clock):

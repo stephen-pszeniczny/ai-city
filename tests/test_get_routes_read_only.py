@@ -41,6 +41,7 @@ EXPECTED_AT_LEAST = {
     "/api/jobs/badge",
     "/api/jobs/platforms",
     "/api/jobs/projects",
+    "/api/xp",
 }
 # Extra query strings worth trying on particular routes.
 QUERY_VARIANTS = {

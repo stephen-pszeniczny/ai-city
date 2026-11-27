@@ -29,6 +29,7 @@ from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
 from aicity.notifications import SINCE_KEY
 from aicity.plan import PlanStore, monday_of
 from aicity.settings import (
+    BUILDING_IDS,
     BlockRule,
     IncomeSettings,
     MainJob,
@@ -40,6 +41,7 @@ from aicity.settings import (
 from aicity.side_work import SideWorkStore
 from aicity.side_work_math import expected_cents, pay_period, rate_text, to_cad_cents
 from aicity.tasks import TaskStore, utc_now
+from aicity.xp import XpStore, backfill_routine_finishes, belt_view, building_view
 
 SEEDED_KEY = "sample_seeded"
 
@@ -81,6 +83,11 @@ SAMPLE_ROUTINES: tuple[Routine, ...] = (
 SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
 )
+
+# Made-up XP added to each earning building in Sample mode only (never stored), so
+# screenshots show a belt part-way up: with the seeded records, about Mission Control
+# level 34, the Vault 27 and Opportunity Office 22.
+SAMPLE_XP_HEAD_START: dict[str, int] = {"planner": 4500, "finance": 60, "jobs": 270}
 
 # Sample mode's Opportunity Office settings: made-up platforms, never the private
 # settings. Nothing is ever fetched from them.
@@ -166,6 +173,7 @@ def seed_sample_database(clock: Callable[[], datetime] = utc_now) -> bool:
         seed_checkin_notification(conn, now)
         seed_grocery(conn, now)
         seed_jobs(conn, now)
+        seed_xp(conn, now)  # last: it marks the levels all the data above adds up to
         return seeded
     finally:
         conn.close()
@@ -370,6 +378,48 @@ def seed_jobs(conn: sqlite3.Connection, now: datetime) -> bool:
             if status != "found":
                 store.set_project_status(project.id, status)
         conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (JOBS_SEEDED_KEY,))
+
+    with_transaction(conn, work, immediate=True)
+    return True
+
+
+XP_SEEDED_KEY = "sample_xp_seeded"
+# The building left with one upgrade still to celebrate, so a demo can play it.
+_XP_UPGRADE_WAITING = "jobs"
+
+
+def seed_xp(conn: sqlite3.Connection, now: datetime) -> bool:
+    """Mark Belt XP as already shown, once, so Sample opens as a belt that has grown.
+
+    Every earning building's level and upgrades count as seen and celebrated, and so
+    does the belt level, except that one upgrade is left waiting. Sample only.
+    """
+    label = conn.execute("SELECT value FROM meta WHERE key = 'db_kind'").fetchone()
+    if label is None or label[0] != DbKind.SAMPLE.value:
+        raise DatabaseError("Sample XP only goes into the Sample database.")
+    if conn.execute("SELECT 1 FROM meta WHERE key = ?", (XP_SEEDED_KEY,)).fetchone():
+        return False
+    # First, so a routine day already ticked is in the levels marked here.
+    backfill_routine_finishes(conn, SAMPLE_ROUTINES, lambda: now)
+    store = XpStore(conn, clock=lambda: now)
+
+    def work() -> None:
+        views = [
+            building_view(
+                conn, bid, SAMPLE_ROUTINES, None, head_start=SAMPLE_XP_HEAD_START.get(bid, 0)
+            )
+            for bid in BUILDING_IDS
+        ]
+        for view in views:
+            if not view.earning:
+                continue
+            tier = view.tier
+            if view.id == _XP_UPGRADE_WAITING:
+                tier = max(tier - 1, 0)
+            store.mark_celebrated(view.id, tier, current_tier=view.tier)
+            store.mark_seen(view.id, view.level)
+        store.mark_seen("belt", belt_view(views, BUILDING_IDS, seen_level=0).level)
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, '1')", (XP_SEEDED_KEY,))
 
     with_transaction(conn, work, immediate=True)
     return True

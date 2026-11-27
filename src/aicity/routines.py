@@ -86,13 +86,30 @@ class RoutineStore:
                     (day.isoformat(), routine_id, item, self._stamp()),
                 )
             else:
-                self._conn.execute(
+                removed = self._conn.execute(
                     "DELETE FROM routine_ticks WHERE day = ? AND routine_id = ? AND item = ?",
                     (day.isoformat(), routine_id, item),
-                )
+                ).rowcount
+            self._record_finish(routine, day, unticked=not ticked and removed > 0)
 
         with_transaction(self._conn, work, immediate=True)
         return self._view(routine, day)
+
+    def _record_finish(self, routine: Routine, day: date, *, unticked: bool) -> None:
+        """Keep routine_finishes in step: added once every current item is ticked.
+
+        Only really unticking an item removes it (a correction). Belt XP counts these
+        rows, so changing the routine's items never takes away what a day earned.
+        """
+        key = (day.isoformat(), routine.id)
+        if self._view(routine, day).done == len(routine.items):
+            self._conn.execute(
+                "INSERT OR IGNORE INTO routine_finishes (day, routine_id, finished_at) "
+                "VALUES (?, ?, ?)",
+                (*key, self._stamp()),
+            )
+        elif unticked:
+            self._conn.execute("DELETE FROM routine_finishes WHERE day = ? AND routine_id = ?", key)
 
     def _view(self, routine: Routine, day: date) -> RoutineDay:
         ticked = {

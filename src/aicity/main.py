@@ -25,6 +25,7 @@ from aicity import (
     routine_routes,
     task_routes,
     vault_routes,
+    xp_routes,
 )
 from aicity.db import DbKind
 from aicity.mac_messages import MacMessage, plan_mac_messages
@@ -86,6 +87,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Before the first request, background check or not: Belt XP's one-time record
+        # of routine days finished before it existed (a GET may never write).
+        xp_routes.backfill_at_start(app.state.clock)
         if background:
             app.state.reminder_loop = ReminderLoop(
                 lambda: app.state.clock(),
@@ -134,6 +138,7 @@ def create_app(
     routine_routes.register(app)
     grocery_routes.register(app)
     jobs_routes.register(app)
+    xp_routes.register(app)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
