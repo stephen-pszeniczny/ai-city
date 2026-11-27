@@ -408,6 +408,36 @@ def test_jobs_events(conn, jobs, clock):
     assert xp(conn, "jobs") == 155 + 20
 
 
+def add_refresh(conn, platform_id, created_at):
+    conn.execute(
+        "INSERT INTO platform_profile_refreshes (platform_id, refreshed_on, created_at) "
+        "VALUES (?, '2026-11-01', ?)",
+        (platform_id, created_at),
+    )
+
+
+def test_profile_refresh_counts_once_per_platform_per_month(conn):
+    # A typo fix and a toggle back in the same month earn nothing more.
+    for created_at in ("2026-11-02T15:00:00Z", "2026-11-02T15:01:00Z", "2026-11-28T15:00:00Z"):
+        add_refresh(conn, "platform_a", created_at)
+    assert xp(conn, "jobs") == 20
+    add_refresh(conn, "platform_b", "2026-11-28T15:00:00Z")  # another platform
+    assert xp(conn, "jobs") == 40
+    add_refresh(conn, "platform_a", "2026-12-15T15:00:00Z")  # the next month
+    assert xp(conn, "jobs") == 60
+    add_refresh(conn, "platform_a", "2027-11-15T15:00:00Z")  # the same month a year on
+    assert xp(conn, "jobs") == 80
+
+
+def test_profile_refresh_month_is_local(conn):
+    add_refresh(conn, "platform_a", "2026-11-15T15:00:00Z")
+    # Already December in UTC, still 23:30 on 30 November in Toronto.
+    add_refresh(conn, "platform_a", "2026-12-01T04:30:00Z")
+    assert xp(conn, "jobs") == 20
+    add_refresh(conn, "platform_a", "2026-12-01T05:00:00Z")  # midnight in Toronto
+    assert xp(conn, "jobs") == 40
+
+
 def test_rejected_project_keeps_stages_reached(conn, jobs):
     made = project(jobs)
     jobs.set_project_status(made.id, "accepted")
@@ -614,6 +644,20 @@ def test_belt_totals_xp_of_earning_buildings_and_passes_seen_through():
     ]
     belt = belt_view(buildings, BUILDING_IDS, seen_level=2)
     assert (belt.level, belt.total_xp, belt.seen_level) == (3, 540, 2)
+
+
+@pytest.mark.parametrize(
+    ("seen_level", "level", "progress"),
+    [
+        (5, 5, 0.0),  # a correction dropped the sum: the level already shown stays
+        (3, 3, 2 / 9),  # level with what was shown: the bar is the real one
+        (2, 3, 2 / 9),  # above it: nothing is held
+    ],
+)
+def test_belt_level_never_goes_below_the_one_shown(seen_level, level, progress):
+    belt = belt_view([made_view("planner", 29, total=70)], BUILDING_IDS, seen_level=seen_level)
+    assert (belt.level, belt.total_xp, belt.seen_level) == (level, 70, seen_level)
+    assert belt.progress == pytest.approx(progress)
 
 
 # --- Migration 018 ----------------------------------------------------------------------

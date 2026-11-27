@@ -99,7 +99,8 @@ def building_view(
 def belt_view(buildings: list[BuildingXp], all_ids: tuple[str, ...], *, seen_level: int) -> BeltXp:
     """The belt: every building's level added up, shared across all of all_ids.
 
-    Buildings not earning count as level 0. seen_level is the stored one for "belt".
+    Buildings not earning count as level 0. seen_level is the stored one for "belt":
+    the belt level never goes below it, and the bar is empty while it is held there.
     """
     earning = [b for b in buildings if b.earning]
     levels = sum(b.level for b in earning)
@@ -113,6 +114,8 @@ def belt_view(buildings: list[BuildingXp], all_ids: tuple[str, ...], *, seen_lev
         progress = 1.0
     else:
         progress = (levels % count) / count
+    if level < seen_level:
+        level, progress = seen_level, 0.0
     return BeltXp(level, progress, sum(b.xp for b in earning), seen_level)
 
 
@@ -219,7 +222,7 @@ def _jobs(conn: sqlite3.Connection, tz: tzinfo) -> int:
         xp_rules.CHECK_XP * _capped_per_day(checks, tz, xp_rules.CHECKS_PER_DAY)
         + xp_rules.PROJECT_XP * _count(conn, "job_projects")
         + xp_rules.PROJECT_STAGE_XP * _project_stages(conn)
-        + xp_rules.PROFILE_REFRESH_XP * _count(conn, "platform_profile_refreshes")
+        + xp_rules.PROFILE_REFRESH_XP * _refresh_months(conn, tz)
     )
 
 
@@ -258,6 +261,18 @@ def _capped_per_day(stamps: Iterable[tuple[str]], tz: tzinfo, cap: int) -> int:
     """How many UTC stamps count when each local day counts at most `cap` of them."""
     days = Counter(datetime.fromisoformat(stamp).astimezone(tz).date() for (stamp,) in stamps)
     return sum(min(n, cap) for n in days.values())
+
+
+def _refresh_months(conn: sqlite3.Connection, tz: tzinfo) -> int:
+    """Profile refreshes, counting each platform once per local calendar month, so
+    fixing a typo or switching a date back and forth earns nothing more."""
+    counted = set()
+    for platform_id, stamp in conn.execute(
+        "SELECT platform_id, created_at FROM platform_profile_refreshes"
+    ):
+        local = datetime.fromisoformat(stamp).astimezone(tz)
+        counted.add((platform_id, local.year, local.month))
+    return len(counted)
 
 
 def _project_stages(conn: sqlite3.Connection) -> int:
