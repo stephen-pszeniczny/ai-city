@@ -321,7 +321,7 @@ export function satellite(tint: string, kit: Kit): Piece {
  */
 function satellitePose(t: number, out: THREE.Vector3): void {
   const a = 0.7 + t * 0.19;
-  out.set(Math.cos(a) * 5.7, -3.7 + Math.sin(a), Math.sin(a) * 5.0);
+  out.set(Math.cos(a) * 5.5, -3.7 + Math.sin(a), Math.sin(a) * 5.0);
 }
 
 const HUB_X = MODULE_X.finance; // the hub, from Mission Control's centre

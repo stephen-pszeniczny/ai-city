@@ -125,8 +125,10 @@ test("the way in through the hatch stays open, and nothing reaches the asteroids
   for (const id of MODULES) growth[id].setTier(10);
   const v = new THREE.Vector3();
   let widest = 0;
-  for (let i = 0; i < 60; i++) {
-    for (const id of MODULES) growth[id].update(i * 0.79);
+  // Every 0.1 s over more than a full orbit of the satellite (33 s): coarser steps miss
+  // a brief dip.
+  for (let i = 0; i < 480; i++) {
+    for (const id of MODULES) growth[id].update(i * 0.1);
     station.group.updateMatrixWorld(true);
     for (const id of MODULES) {
       for (const mesh of solidsUnder(growth[id].pieces)) {
