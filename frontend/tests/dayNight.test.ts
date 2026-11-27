@@ -1,4 +1,4 @@
-// Tests for the day/night rules: the Sky override, refresh timing and the fade. Run: npm test.
+// Tests for the day/night rules: the sky override, refresh timing and the fade. Run: npm test.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -9,8 +9,8 @@ import {
   isPastChange,
   loadChoice,
   msUntilRefresh,
-  nextChoice,
   saveChoice,
+  SKY_CHOICES,
 } from "../src/belt/dayNight.ts";
 import { LOOK } from "../src/belt/look.ts";
 
@@ -22,10 +22,8 @@ const daylight = (is_night: boolean) => ({
   moon_phase: 0.5,
 });
 
-test("cycles auto → day → night → auto", () => {
-  assert.equal(nextChoice("auto"), "day");
-  assert.equal(nextChoice("day"), "night");
-  assert.equal(nextChoice("night"), "auto");
+test("the switch has three segments, in order: day, night, auto", () => {
+  assert.deepEqual(SKY_CHOICES, ["day", "night", "auto"]);
 });
 
 test("auto follows the daylight answer; day and night ignore it", () => {
@@ -60,6 +58,14 @@ test("a saved choice loads back", () => {
   };
   saveChoice(storage, "night");
   assert.equal(loadChoice(storage), "night");
+});
+
+test("every segment's choice is remembered", () => {
+  for (const choice of SKY_CHOICES) {
+    let saved = "";
+    saveChoice({ setItem: (_k: string, v: string) => void (saved = v) }, choice);
+    assert.equal(loadChoice({ getItem: () => saved }), choice);
+  }
 });
 
 test("saving to storage that throws, or no storage, doesn't throw", () => {
@@ -99,7 +105,7 @@ test("blend: start, middle, end, and zero fade", () => {
   assert.equal(blend(1, 0, 25, 20), 0);
 });
 
-test("a change from the Sky button fades quickly", () => {
+test("a change from the sky switch fades quickly", () => {
   assert.equal(fadeSecondsFor("auto", "day", { fadeSeconds: 20, buttonFadeSeconds: 3 }), 3);
 });
 

@@ -49,7 +49,7 @@ export const LOOK = {
   dayNight: {
     /** Seconds the sunset/sunrise fade takes when it switches while you watch. */
     fadeSeconds: 20,
-    /** Seconds the fade takes after pressing the Sky button (quicker, so it feels responsive). */
+    /** Seconds the fade takes after pressing the sky switch (quicker, so it feels responsive). */
     buttonFadeSeconds: 3,
     /** Sunlight left at night (day is 3.4). Higher = lighter nights. */
     nightSunStrength: 0.3,

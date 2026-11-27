@@ -10,13 +10,13 @@ import { Component, useEffect, useRef, useState, type CSSProperties, type ReactN
 import { getBuildings, type BuildingId } from "../api";
 import { useSampleReminder } from "../todo/useMode";
 import { BeltScene } from "./BeltScene";
+import { BeltXpBubble } from "./BeltXpBubble";
 import { BELT_HOME, CameraRig, type SceneApi } from "./CameraRig";
 import { flightState } from "./flightState";
 import type { View } from "./levels";
 import { Labels, type LabelElements } from "./Labels";
 import { ModeSwitch } from "./ModeSwitch";
 import { prepareStoredScene } from "./space/stored";
-import { SkyToggle } from "./SkyToggle";
 import { useDayNight } from "./useDayNight";
 import { bannerText, shortTitle, type ShuttleTrip } from "../notifications/rules";
 import type { Notifications } from "../notifications/useNotifications";
@@ -121,7 +121,7 @@ export function BeltCanvas({
         <span className="belt__brand">Asteroid Belt</span>
         {sample && <span className="belt__sample">Sample data</span>}
         {/* Switching is done from the belt only, never from inside a building. */}
-        {view.level === "belt" && <SkyToggle choice={sky.choice} onCycle={sky.cycle} />}
+        {view.level === "belt" && <BeltXpBubble sky={sky} />}
         {view.level === "belt" && <ModeSwitch />}
       </header>
 

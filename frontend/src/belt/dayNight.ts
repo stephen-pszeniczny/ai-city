@@ -1,4 +1,4 @@
-// Day and night mode rules (SPEC section 7, "The belt"): the Sky override, when to
+// Day and night mode rules (SPEC section 7, "The belt"): the sky override, when to
 // ask the backend again, and the fade between the two looks. No 3D in here.
 //
 // The override lives in this browser's storage: a per-viewer convenience. Storage
@@ -14,14 +14,12 @@ export const CHOICE_LABELS: Record<SkyChoice, string> = {
   night: "Night",
 };
 
-const ORDER: SkyChoice[] = ["auto", "day", "night"];
+/** The switch's segments, in the order shown. */
+export const SKY_CHOICES: readonly SkyChoice[] = ["day", "night", "auto"];
+
 const STORAGE_KEY = "aicity.sky";
 const MIN_REFRESH_MS = 60_000; // one minute
 const MAX_REFRESH_MS = 6 * 3_600_000; // six hours
-
-export function nextChoice(c: SkyChoice): SkyChoice {
-  return ORDER[(ORDER.indexOf(c) + 1) % ORDER.length] ?? "auto";
-}
 
 /** Auto follows the backend; with no answer (engine down) it shows day. */
 export function isNight(choice: SkyChoice, daylight: Daylight | undefined): boolean {
@@ -33,7 +31,7 @@ export function isNight(choice: SkyChoice, daylight: Daylight | undefined): bool
 export function loadChoice(storage: Pick<Storage, "getItem"> | null): SkyChoice {
   try {
     const saved = storage?.getItem(STORAGE_KEY);
-    return ORDER.includes(saved as SkyChoice) ? (saved as SkyChoice) : "auto";
+    return SKY_CHOICES.includes(saved as SkyChoice) ? (saved as SkyChoice) : "auto";
   } catch {
     return "auto";
   }

@@ -76,7 +76,7 @@ export function BeltScene({
   }, [scene, gl, reducedMotion]);
 
   // Day or night: the first known answer for each new space is shown at once;
-  // later changes fade (quicker after the Sky button), or jump with reduced motion.
+  // later changes fade (quicker after the sky switch), or jump with reduced motion.
   const shownFor = useRef<Space | null>(null);
   const lastChoice = useRef(sky.choice);
   useEffect(() => {

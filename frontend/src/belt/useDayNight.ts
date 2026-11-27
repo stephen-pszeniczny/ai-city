@@ -1,5 +1,5 @@
 // Day or night for the belt right now: the backend's answer (worked out from the
-// settings' location) combined with the Sky button's override.
+// settings' location) combined with the sky switch's override.
 //
 // The backend is asked again at its next_change (sunrise or sunset), when the page
 // becomes visible again, and at least every six hours. Timers can stall while the
@@ -14,7 +14,6 @@ import {
   isPastChange,
   loadChoice,
   msUntilRefresh,
-  nextChoice,
   saveChoice,
   type SkyChoice,
 } from "./dayNight";
@@ -35,7 +34,7 @@ export type DayNight = {
   choice: SkyChoice;
   /** False until there's something real to show (backend answered, or failed, or an override is set). */
   ready: boolean;
-  cycle(): void;
+  choose(c: SkyChoice): void;
 };
 
 export function useDayNight(): DayNight {
@@ -59,12 +58,9 @@ export function useDayNight(): DayNight {
     return () => window.clearInterval(id);
   }, [nextChange, refetch]);
 
-  const cycle = useCallback(() => {
-    setChoice((c) => {
-      const next = nextChoice(c);
-      saveChoice(browserStorage(), next);
-      return next;
-    });
+  const choose = useCallback((c: SkyChoice) => {
+    saveChoice(browserStorage(), c);
+    setChoice(c);
   }, []);
 
   return {
@@ -72,6 +68,6 @@ export function useDayNight(): DayNight {
     moonPhase: daylight.data?.moon_phase ?? 0.5,
     choice,
     ready: choice !== "auto" || daylight.status !== "pending",
-    cycle,
+    choose,
   };
 }
