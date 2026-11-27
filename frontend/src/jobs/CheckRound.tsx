@@ -43,7 +43,7 @@ function Round() {
   if (list.isPending) return <p className="plan__note">Loading…</p>;
   if (list.isError) {
     if (list.error instanceof ApiError && list.error.status === 400) {
-      return <p className="plan__note">Opportunity Office isn't set up.</p>;
+      return <p className="plan__note">Not set up</p>;
     }
     return (
       <p className="form-error" role="alert">
@@ -52,7 +52,7 @@ function Round() {
     );
   }
   const due = list.data.due;
-  if (due.length === 0) return <p className="plan__note">No platforms to check.</p>;
+  if (due.length === 0) return <p className="plan__note">No platforms due</p>;
 
   return (
     <ul className="jobs__cards" aria-label="Platforms to check">

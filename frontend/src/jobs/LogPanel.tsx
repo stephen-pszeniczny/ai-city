@@ -61,9 +61,7 @@ function Log() {
       )}
       <ProjectList label="Open" projects={open} />
       {finished.length > 0 && <ProjectList label="Finished" projects={finished} />}
-      {projects.data.projects.length === 0 && !adding && (
-        <p className="sw-note">Nothing logged yet.</p>
-      )}
+      {projects.data.projects.length === 0 && !adding && <p className="sw-note">Nothing logged</p>}
     </div>
   );
 }

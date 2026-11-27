@@ -492,3 +492,72 @@
   font-size: 0.85rem;
   font-weight: 600;
 }
+
+/* Opportunity Office: kit glass cards and chips. */
+.window__pane .jobs {
+  gap: var(--kit-space-4);
+}
+
+.window__pane .jobs__chip {
+  padding: 2px var(--kit-space-3);
+  border: 1px solid var(--kit-line);
+  background: var(--kit-glass-strong);
+  font-size: 0.78rem;
+}
+
+.window__pane .jobs__chip--warn {
+  border-color: rgba(255, 179, 64, 0.45);
+  background: rgba(255, 179, 64, 0.12);
+  color: var(--kit-warn);
+}
+
+.window__pane .jobs__chip--good {
+  border-color: rgba(52, 199, 89, 0.45);
+  background: rgba(52, 199, 89, 0.16);
+}
+
+.window__pane .jobs__cards {
+  gap: var(--kit-space-3);
+}
+
+.window__pane .jobs-card {
+  position: relative;
+  gap: var(--kit-space-2);
+  padding: var(--kit-space-3) var(--kit-space-4);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+  overflow: hidden;
+}
+
+.window__pane .jobs-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--desk-accent, var(--kit-accent));
+  opacity: 0.6;
+}
+
+.window__pane .jobs-card--active {
+  border-color: rgba(52, 199, 89, 0.45);
+}
+
+.window__pane .jobs-card--active::before {
+  background: #34c759;
+}
+
+.window__pane .jobs-card__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.window__pane .jobs-card__actions .btn {
+  min-height: 30px;
+  font-size: 0.78rem;
+}
