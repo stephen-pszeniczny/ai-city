@@ -236,6 +236,12 @@ export function builder(kit: Kit) {
 
 export type Builder = ReturnType<typeof builder>;
 
+/** Light effects (beams, rings, a ship in flight) take no clicks: they cross in front of
+ * other buildings, and a click there belongs to what's behind them. */
+export function noClicks(root: THREE.Object3D): void {
+  root.traverse((o) => (o.raycast = () => {}));
+}
+
 /** A still piece: builds with `make` and merges the result. */
 export function still(kit: Kit, make: (b: Builder, group: THREE.Group) => void): Piece {
   const group = new THREE.Group();

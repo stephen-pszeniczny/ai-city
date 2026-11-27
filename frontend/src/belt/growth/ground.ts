@@ -21,6 +21,16 @@ const azBin = (a: number) =>
 
 /** `rock` is the rock's geometry (rock units), `scale` its mesh scale, `deckY` the deck's top. */
 export function rockGround(rock: THREE.BufferGeometry, scale: number, deckY: number): Ground {
+  let worked: Ground | null = null;
+  const ground = () => (worked ??= surfaceOf(rock, scale, deckY));
+  return {
+    top: (x, z) => ground().top(x, z),
+    radius: (azimuth, y) => ground().radius(azimuth, y),
+    maxRadius: (y) => ground().maxRadius(y),
+  };
+}
+
+function surfaceOf(rock: THREE.BufferGeometry, scale: number, deckY: number): Ground {
   const p = rock.attributes.position as THREE.BufferAttribute;
   const side = new Map<string, number>();
   const tops = new Map<string, number>();

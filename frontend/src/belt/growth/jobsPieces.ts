@@ -10,6 +10,7 @@ import type { Ground } from "./ground.ts";
 import {
   builder,
   chaseLamps,
+  noClicks,
   palette,
   polar,
   still,
@@ -121,6 +122,7 @@ export function signalRings(tint: string, kit: Kit): Piece {
     group.add(ring);
     return { ring, material };
   });
+  noClicks(group);
   return {
     group,
     update(t) {
@@ -367,6 +369,7 @@ export function deepSpaceArray(tint: string, kit: Kit, ground: Ground): Piece {
   const pulses = [0, 1, 2].map(() => new THREE.Mesh(pulseGeo, c.lamp));
   beam.add(shaft, ...pulses);
   beam.traverse((o) => (o.userData.reaches = true));
+  noClicks(beam);
   group.add(beam);
   const station = new THREE.Vector3();
   const up = new THREE.Vector3(0, 1, 0);

@@ -86,6 +86,13 @@ export function createGrowth({
   first.group.name = "landmark";
   first.group.userData.stage = 1;
   tag(first.group, id);
+  // Once a grown stage replaces it, nothing in the scene frees the first one, so the kit does.
+  if (ladder) {
+    first.group.traverse((o) => {
+      const geometry = (o as THREE.Mesh).geometry;
+      if (geometry) kit.keep(geometry);
+    });
+  }
   let landmark = first;
   const made = new Map<string, Piece>();
   let shown: Piece[] = [];

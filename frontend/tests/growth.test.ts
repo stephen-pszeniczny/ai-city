@@ -11,6 +11,7 @@ import { rockGround } from "../src/belt/growth/ground.ts";
 import { asteroidScaleAt, piecesUpTo, PIECE_IDS } from "../src/belt/growth/ladders.ts";
 import { createPiece, hasPiece } from "../src/belt/growth/pieces.ts";
 import { previewTier } from "../src/belt/growth/preview.ts";
+import { PAD_AT } from "../src/belt/growth/sharedPieces.ts";
 import { createLandmark } from "../src/belt/landmarks.ts";
 import type { Kit } from "../src/belt/materials.ts";
 import { rockGeometry } from "../src/belt/space/rock.ts";
@@ -236,11 +237,9 @@ test("every part is clickable as its building and freed with the kit", () => {
         root.traverse((o) => {
           if (o !== a.desk) assert.equal(o.userData.buildingId, id, o.name || o.type);
           const mesh = o as THREE.Mesh;
-          if (!mesh.isMesh || (tier < 3 && root === a.first.group)) return;
-          if (root !== a.first.group) {
-            assert.ok(a.kept.has(mesh.geometry), `${id} ${tier}: geometry not kept`);
-            assert.ok(a.kept.has(mesh.material), `${id} ${tier}: material not kept`);
-          }
+          if (!mesh.isMesh) return;
+          assert.ok(a.kept.has(mesh.geometry), `${id} ${tier}: geometry not kept`);
+          assert.ok(a.kept.has(mesh.material), `${id} ${tier}: material not kept`);
         });
       }
     }
@@ -269,6 +268,48 @@ test("far away, only small details are hidden: every piece still shows", () => {
     a.growth.setDetail("near");
     assert.deepEqual(a.growth.pieces.children.map(visibleMeshes), near);
   }
+});
+
+test("light effects never take a click meant for what's behind them", () => {
+  const effects = [
+    ["jobs", "deepSpaceArray"],
+    ["jobs", "signalRings"],
+    ["career", "shipLaunch"],
+  ] as const;
+  const ray = new THREE.Raycaster();
+  for (const [id, name] of effects) {
+    const a = make(id);
+    a.growth.setTier(10);
+    a.growth.update(15); // mid-launch, so the flying ship is out
+    a.world.updateMatrixWorld(true);
+    const piece = a.growth.pieces.getObjectByName(name)!;
+    let tried = 0;
+    piece.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      const effect = o.userData.reaches || name === "signalRings";
+      if (!mesh.isMesh || !effect) return;
+      // Aim straight at one of its own triangles.
+      const p = mesh.geometry.attributes.position as THREE.BufferAttribute;
+      const index = mesh.geometry.index;
+      const corner = (k: number) =>
+        new THREE.Vector3().fromBufferAttribute(p, index ? index.getX(k) : k);
+      const at = corner(0).add(corner(1)).add(corner(2)).divideScalar(3);
+      at.applyMatrix4(mesh.matrixWorld);
+      const from = at.clone().add(new THREE.Vector3(3, 7, 5));
+      ray.set(from, at.clone().sub(from).normalize());
+      assert.deepEqual(ray.intersectObject(mesh, false).length, 0, `${name} takes clicks`);
+      tried++;
+    });
+    assert.ok(tried > 0, name);
+  }
+  // A solid piece is still clickable: straight down onto the landing pad.
+  const a = make("jobs");
+  a.growth.setTier(10);
+  a.world.updateMatrixWorld(true);
+  const over = PAD_AT.clone().multiplyScalar(a.body.scale.x).setY(9);
+  ray.set(over, new THREE.Vector3(0, -1, 0));
+  const pad = a.growth.pieces.getObjectByName("outrigger")!;
+  assert.ok(ray.intersectObject(pad, true).length > 0);
 });
 
 const positionsOf = (root: THREE.Object3D) => {

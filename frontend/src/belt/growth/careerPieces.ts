@@ -8,7 +8,7 @@ import { DECK_R } from "./deck.ts";
 import type { Ground } from "./ground.ts";
 import { LANDMARK_SPOT } from "./jobsPieces.ts";
 import { buildShip, SHIP_REST } from "./landmarkStages.ts";
-import { builder, chaseLamps, palette, polar, still, type Piece } from "./parts.ts";
+import { builder, chaseLamps, noClicks, palette, polar, still, type Piece } from "./parts.ts";
 import { LOWER_WIDTH, LOWER_Y, lowerInner, REACH_DEGREES } from "./sharedPieces.ts";
 
 const footing = (ground: Ground, at: THREE.Vector3) => Math.max(-0.9, ground.top(at.x, at.z));
@@ -390,6 +390,7 @@ export function shipLaunch(tint: string, kit: Kit): Piece {
   flyer.add(trail);
   flyer.visible = false;
   flyer.traverse((o) => (o.userData.reaches = true));
+  noClicks(flyer);
   group.add(flyer);
 
   const rest = LANDMARK_SPOT.clone().setY(SHIP_REST[4].y);
