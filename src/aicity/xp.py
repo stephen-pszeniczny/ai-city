@@ -4,12 +4,18 @@ Nothing is stored or kept in step: XP is counted from the records as they stand,
 past work counts, and correcting a record (reopening a to-do, removing a typed pay)
 corrects the XP. Resting never takes any away. Values and caps are in xp_rules.
 
-building_xp only reads. backfill_routine_finishes writes, once per database.
+The one thing remembered is what the page has already shown (XpStore): the last
+level seen and the last upgrade celebrated. A level never shows below a celebrated
+upgrade, even when a correction takes the XP under it.
+
+building_xp and the views only read. XpStore's mark_ methods write, and so does
+backfill_routine_finishes, once per database.
 """
 
 import sqlite3
 from collections import Counter
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime, tzinfo
 
 from aicity import xp_rules
@@ -21,6 +27,35 @@ _BACKFILL_KEY = "xp_routine_backfill"
 # The order a project moves through; each step past "found" is a stage. "rejected"
 # isn't a step, so being rejected never takes stages away.
 _PROJECT_ORDER = ("found", "applied", "assessment", "accepted", "active", "ended")
+_LEVELS_PER_TIER = 10  # an upgrade at every 10th level
+
+
+class XpError(ValueError):
+    """A change to the seen or celebrated state that isn't allowed."""
+
+
+@dataclass(frozen=True)
+class BuildingXp:
+    """One building as the page shows it. All zeros for a building not earning yet."""
+
+    id: str
+    earning: bool
+    xp: int
+    level: int  # never below celebrated_tier * 10
+    level_start_xp: int  # xp can be under this after a correction
+    next_level_xp: int  # the same as level_start_xp at the top level
+    tier: int  # upgrades reached, 0 to 10
+    seen_level: int
+    celebrated_tier: int
+    upgrade_waiting: bool
+
+
+@dataclass(frozen=True)
+class BeltXp:
+    level: int  # at least 1
+    progress: float  # 0 to 1, towards the next belt level
+    total_xp: int
+    seen_level: int
 
 
 def building_xp(
@@ -35,6 +70,82 @@ def building_xp(
     if building not in xp_rules.EARNING_BUILDINGS:
         return 0
     return _TOTALS[building](conn, tz)
+
+
+def building_view(
+    conn: sqlite3.Connection, building: str, routines: tuple[Routine, ...], tz: tzinfo
+) -> BuildingXp:
+    """A building's XP, level and upgrades, with what the page has already shown."""
+    if building not in xp_rules.EARNING_BUILDINGS:
+        return BuildingXp(building, False, 0, 0, 0, 0, 0, 0, 0, False)
+    xp = building_xp(conn, building, routines, tz)
+    seen_level, celebrated_tier = _seen(conn, building)
+    level = max(xp_rules.level_for_xp(building, xp), celebrated_tier * _LEVELS_PER_TIER)
+    tier = level // _LEVELS_PER_TIER
+    return BuildingXp(
+        id=building,
+        earning=True,
+        xp=xp,
+        level=level,
+        level_start_xp=xp_rules.xp_for_level(building, level),
+        next_level_xp=xp_rules.xp_for_level(building, min(level + 1, xp_rules.MAX_LEVEL)),
+        tier=tier,
+        seen_level=seen_level,
+        celebrated_tier=celebrated_tier,
+        upgrade_waiting=tier > celebrated_tier,
+    )
+
+
+def belt_view(buildings: list[BuildingXp], all_ids: tuple[str, ...], *, seen_level: int) -> BeltXp:
+    """The belt: every building's level added up, shared across all of all_ids.
+
+    Buildings not earning count as level 0. seen_level is the stored one for "belt".
+    """
+    earning = [b for b in buildings if b.earning]
+    levels = sum(b.level for b in earning)
+    count = len(all_ids)
+    level = max(1, levels // count)
+    if levels < 2 * count:
+        # The shown level stays 1 until the sum reaches two per building, so one bar
+        # covers all of it and never starts over without a level change.
+        progress = levels / (2 * count)
+    elif level >= xp_rules.MAX_LEVEL:
+        progress = 1.0
+    else:
+        progress = (levels % count) / count
+    return BeltXp(level, progress, sum(b.xp for b in earning), seen_level)
+
+
+class XpStore:
+    """What the page has already shown, per building ID or "belt". It only goes up."""
+
+    def __init__(self, conn: sqlite3.Connection, clock: Callable[[], datetime]) -> None:
+        self._conn = conn
+        self._clock = clock
+
+    def seen(self, key: str) -> tuple[int, int]:
+        """(seen_level, celebrated_tier); (0, 0) when nothing is stored."""
+        return _seen(self._conn, key)
+
+    def mark_seen(self, key: str, level: int) -> None:
+        self._save(key, level, 0)
+
+    def mark_celebrated(self, building: str, tier: int, current_tier: int) -> None:
+        if tier > current_tier:
+            raise XpError("That upgrade tier hasn't been reached yet.")
+        self._save(building, 0, tier)
+
+    def _save(self, key: str, seen_level: int, celebrated_tier: int) -> None:
+        # One statement, so the higher value wins however two saves are ordered.
+        stamp = self._clock().astimezone(UTC).strftime(_STAMP_FORMAT)
+        self._conn.execute(
+            "INSERT INTO xp_seen (key, seen_level, celebrated_tier, updated_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT (key) DO UPDATE SET "
+            "seen_level = max(seen_level, excluded.seen_level), "
+            "celebrated_tier = max(celebrated_tier, excluded.celebrated_tier), "
+            "updated_at = excluded.updated_at",
+            (key, seen_level, celebrated_tier, stamp),
+        )
 
 
 def backfill_routine_finishes(
@@ -129,6 +240,13 @@ _TOTALS = {"planner": _planner, "finance": _finance, "jobs": _jobs, "career": _c
 
 
 # --- Helpers ----------------------------------------------------------------
+
+
+def _seen(conn: sqlite3.Connection, key: str) -> tuple[int, int]:
+    row = conn.execute(
+        "SELECT seen_level, celebrated_tier FROM xp_seen WHERE key = ?", (key,)
+    ).fetchone()
+    return (row[0], row[1]) if row else (0, 0)
 
 
 def _count(conn: sqlite3.Connection, source: str) -> int:

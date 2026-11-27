@@ -7,8 +7,9 @@
 -- job_project_events: one row each time a logged project is added or changes status,
 --   so a rejected project keeps the stages it reached. Starts with each existing
 --   project's current status (earlier stages weren't recorded).
--- routine_finishes: a row exists while that day's routine is fully ticked, so later
---   settings changes never change past XP. Not history: unticking removes the row.
+-- routine_finishes: a row is added once that day's routine is fully ticked, so later
+--   settings changes never change past XP. Not history: only a real untick that
+--   leaves the routine incomplete removes the row.
 -- xp_seen: the last level shown and upgrade celebrated, per building ID or 'belt'.
 --
 -- Stamps are UTC like 2026-11-29T15:00:00Z; dates YYYY-MM-DD.

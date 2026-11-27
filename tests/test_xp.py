@@ -15,9 +15,17 @@ from aicity.db import DbKind, load_migrations, open_database
 from aicity.jobs_settings import DEFAULT_CHECK_DAYS, JobPlatform, JobsSettings
 from aicity.jobs_store import JobsConflict, JobsStore
 from aicity.routines import RoutineStore
-from aicity.settings import Routine
+from aicity.settings import BUILDING_IDS, Routine
 from aicity.tasks import TaskStore
-from aicity.xp import backfill_routine_finishes, building_xp
+from aicity.xp import (
+    BuildingXp,
+    XpError,
+    XpStore,
+    backfill_routine_finishes,
+    belt_view,
+    building_view,
+    building_xp,
+)
 from aicity.xp_rules import NORMAL_YEAR_XP, level_for_xp, xp_for_level
 
 TZ = ZoneInfo("America/Toronto")
@@ -455,6 +463,157 @@ def test_unbuilt_or_disabled_building_earns_zero(conn):
     assert "career" not in xp_rules.EARNING_BUILDINGS
     assert xp(conn, "career") == 0
     assert xp(conn, "training") == 0
+
+
+# --- Seen and celebrated ----------------------------------------------------------------
+
+
+def view(conn, building="planner"):
+    return building_view(conn, building, ROUTINES, TZ)
+
+
+def test_seen_is_zero_when_absent(conn, clock):
+    assert XpStore(conn, clock).seen("planner") == (0, 0)
+
+
+def test_mark_seen_never_lowers(conn, clock):
+    store = XpStore(conn, clock)
+    store.mark_seen("belt", 7)
+    store.mark_seen("belt", 3)
+    assert store.seen("belt") == (7, 0)
+    store.mark_seen("belt", 9)
+    assert store.seen("belt") == (9, 0)
+    assert store.seen("planner") == (0, 0)
+
+
+def test_celebrated_never_lowers_and_keeps_seen(conn, clock):
+    store = XpStore(conn, clock)
+    store.mark_celebrated("planner", 2, current_tier=3)
+    assert store.seen("planner") == (0, 2)
+    store.mark_seen("planner", 25)
+    store.mark_celebrated("planner", 1, current_tier=3)
+    assert store.seen("planner") == (25, 2)
+    store.mark_celebrated("planner", 3, current_tier=3)
+    assert store.seen("planner") == (25, 3)
+
+
+def test_celebrated_cannot_exceed_tier(conn, clock):
+    store = XpStore(conn, clock)
+    with pytest.raises(XpError, match="tier"):
+        store.mark_celebrated("planner", 2, current_tier=1)
+    assert conn.execute("SELECT count(*) FROM xp_seen").fetchone()[0] == 0
+
+
+# --- Building and belt views ------------------------------------------------------------
+
+
+def test_building_view_of_a_new_database(conn):
+    assert view(conn) == BuildingXp(
+        id="planner",
+        earning=True,
+        xp=0,
+        level=1,
+        level_start_xp=0,
+        next_level_xp=xp_for_level("planner", 2),
+        tier=0,
+        seen_level=0,
+        celebrated_tier=0,
+        upgrade_waiting=False,
+    )
+
+
+@pytest.mark.parametrize("building", ["career", "gym"])
+def test_building_view_of_a_building_not_earning_is_all_zeros(conn, building):
+    assert view(conn, building) == BuildingXp(
+        id=building,
+        earning=False,
+        xp=0,
+        level=0,
+        level_start_xp=0,
+        next_level_xp=0,
+        tier=0,
+        seen_level=0,
+        celebrated_tier=0,
+        upgrade_waiting=False,
+    )
+
+
+def add_gym_done(conn, count):
+    conn.execute(
+        "INSERT INTO plan_weeks (id, week_start, created_at) VALUES (1, '2026-11-23', ?)", (STAMP,)
+    )
+    conn.executemany(
+        "INSERT INTO plan_blocks (week_id, day, start_time, end_time, title, kind, source, "
+        "status, created_at, updated_at) "
+        "VALUES (1, '2026-11-24', '11:45', '13:00', 'Gym', 'gym', 'added', 'done', ?, ?)",
+        [(STAMP, STAMP)] * count,
+    )
+
+
+def test_building_view_at_the_top_level(conn):
+    add_gym_done(conn, NORMAL_YEAR_XP["planner"] // xp_rules.GYM_XP + 1)
+    top = view(conn)
+    assert (top.level, top.tier) == (100, 10)
+    assert top.level_start_xp == top.next_level_xp == xp_for_level("planner", 100)
+
+
+def test_undo_lowers_xp_but_not_below_celebrated(conn, tasks, clock):
+    level_20, level_15 = xp_for_level("planner", 20), xp_for_level("planner", 15)
+    # Gym blocks make up the bulk; to-dos, five a day, take it over level 20.
+    add_gym_done(conn, (level_15 - 100) // xp_rules.GYM_XP)
+    done = []
+    while xp(conn) < level_20:
+        clock.now = NOW + timedelta(days=len(done) // xp_rules.TODOS_PER_DAY)
+        done.append(done_task(tasks))
+    before = view(conn)
+    assert (before.level, before.tier, before.upgrade_waiting) == (20, 2, True)
+
+    store = XpStore(conn, clock)
+    store.mark_celebrated("planner", 2, current_tier=before.tier)
+    store.mark_seen("planner", before.level)
+    while level_for_xp("planner", xp(conn)) > 15:
+        tasks.reopen(done.pop())
+
+    after = view(conn)
+    assert level_for_xp("planner", after.xp) == 15
+    assert level_15 <= after.xp < before.xp
+    assert (after.level, after.tier, after.upgrade_waiting) == (20, 2, False)
+    assert (after.level_start_xp, after.next_level_xp) == (level_20, xp_for_level("planner", 21))
+    assert (after.seen_level, after.celebrated_tier) == (20, 2)
+
+
+def made_view(building, level, total=0, earning=True):
+    return BuildingXp(building, earning, total, level, 0, 0, level // 10, 0, 0, False)
+
+
+@pytest.mark.parametrize(
+    ("levels", "level", "progress"),
+    [
+        ((100, 100, 100), 33, 3 / 9),
+        ((1, 1, 1), 1, 3 / 18),
+        ((9,), 1, 0.5),
+        ((17,), 1, 17 / 18),
+        ((18,), 2, 0.0),
+        ((20,), 2, 2 / 9),
+        ((100,) * 9, 100, 1.0),
+        ((), 1, 0.0),
+    ],
+)
+def test_belt_level_sum_div_9(levels, level, progress):
+    buildings = [made_view(BUILDING_IDS[i], lv) for i, lv in enumerate(levels)]
+    belt = belt_view(buildings, BUILDING_IDS, seen_level=0)
+    assert belt.level == level
+    assert belt.progress == pytest.approx(progress)
+
+
+def test_belt_totals_xp_of_earning_buildings_and_passes_seen_through():
+    buildings = [
+        made_view("planner", 20, total=500),
+        made_view("finance", 7, total=40),
+        made_view("gym", 50, total=999, earning=False),
+    ]
+    belt = belt_view(buildings, BUILDING_IDS, seen_level=2)
+    assert (belt.level, belt.total_xp, belt.seen_level) == (3, 540, 2)
 
 
 # --- Migration 018 ----------------------------------------------------------------------

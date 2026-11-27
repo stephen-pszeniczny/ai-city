@@ -158,18 +158,35 @@ class JobsStore:
         unknown = set(fields) - _PROFILE_FIELDS
         if unknown:
             raise JobsError(f"Unknown profile field(s): {', '.join(sorted(unknown))}.")
-        row = _checked_profile({**self._profile(platform_id), **fields})
-        self._write(
-            "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
-            "pay_currency, resume_label, domains_json, assessments_json, profile_updated_on, "
-            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT (platform_id) DO UPDATE SET pay_low_cents = excluded.pay_low_cents, "
-            "pay_high_cents = excluded.pay_high_cents, pay_currency = excluded.pay_currency, "
-            "resume_label = excluded.resume_label, domains_json = excluded.domains_json, "
-            "assessments_json = excluded.assessments_json, "
-            "profile_updated_on = excluded.profile_updated_on, updated_at = excluded.updated_at",
-            (platform_id, *row, self._stamp()),
-        )
+
+        def work() -> None:
+            stored = self._profile(platform_id)
+            row = _checked_profile({**stored, **fields})
+            stamp = self._stamp()
+            self._conn.execute(
+                "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
+                "pay_currency, resume_label, domains_json, assessments_json, "
+                "profile_updated_on, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (platform_id) DO UPDATE SET "
+                "pay_low_cents = excluded.pay_low_cents, "
+                "pay_high_cents = excluded.pay_high_cents, "
+                "pay_currency = excluded.pay_currency, "
+                "resume_label = excluded.resume_label, domains_json = excluded.domains_json, "
+                "assessments_json = excluded.assessments_json, "
+                "profile_updated_on = excluded.profile_updated_on, "
+                "updated_at = excluded.updated_at",
+                (platform_id, *row, stamp),
+            )
+            updated_on = row[-1]
+            if updated_on is not None and updated_on != stored["profile_updated_on"]:
+                # The permanent record of profile refreshes (Belt XP counts them).
+                self._conn.execute(
+                    "INSERT INTO platform_profile_refreshes (platform_id, refreshed_on, "
+                    "created_at) VALUES (?, ?, ?)",
+                    (platform_id, updated_on, stamp),
+                )
+
+        with_transaction(self._conn, work, immediate=True)
         return self._card(platform)
 
     # --- Opportunity log --------------------------------------------------------
