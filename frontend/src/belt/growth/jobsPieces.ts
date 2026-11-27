@@ -36,7 +36,7 @@ export const LANDMARK_SPOT = polar(137, 2.5);
  */
 export const DISH_SPOT = polar(82, 9.1, -0.9);
 /** The grown radar dish's head height over its platform at each landmark stage. */
-export const DISH_HEIGHT = { 2: 2.5, 3: 2.95, 4: 3.4 } as const;
+export const DISH_HEIGHT = { 2: 1.9, 3: 2.2, 4: 2.55 } as const;
 export const RING2_OUTER = 4.3;
 
 /** The rock's top at a spot, never so low that a building would hang off the side. */

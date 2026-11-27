@@ -155,7 +155,7 @@ function radar(stage: Stage, tint: string, kit: Kit): Model {
   if (stage >= 3) {
     // Two more dishes on raised towers, linked to the first by glowing cables.
     const size = stage === 4 ? 0.82 : 0.68;
-    const height = stage === 4 ? 2.5 : 2.2;
+    const height = stage === 4 ? 1.9 : 1.65;
     for (const [i, side] of SIDE_DISHES.entries()) {
       const foot = side.at;
       const { head, boom } = dishTower(c, kit, b, side, height, size, false);
