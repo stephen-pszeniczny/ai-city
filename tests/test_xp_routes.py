@@ -347,6 +347,22 @@ def test_bad_settings_at_start_skip_only_personal(app, caplog):
     assert "Routine backfill skipped" in caplog.text
 
 
+def test_a_settings_file_that_isnt_utf8_does_not_stop_the_start(app, caplog):
+    tick_both_routines(DbKind.SAMPLE)
+    tick_both_routines(DbKind.PERSONAL)
+    target = config.data_dir() / "settings" / "settings.toml"
+    target.write_bytes(b"# caf\xe9\n" + target.read_bytes())  # one Latin-1 byte in a comment
+    with TestClient(app, base_url=APP_URL) as started:
+        assert started.get("/api/health").status_code == 200
+    # Personal comes first, and its failure doesn't skip Sample.
+    assert finished(DbKind.PERSONAL) == []
+    assert finished(DbKind.SAMPLE) == [(sample_data.SAMPLE_ROUTINES[0].id,)]
+    # The type only: the message could quote the private file.
+    assert [r.getMessage() for r in caplog.records if r.name == "aicity.xp_routes"] == [
+        "Routine backfill skipped the personal database (UnicodeDecodeError)."
+    ]
+
+
 def test_a_broken_database_does_not_stop_the_start_or_the_other_one(app, caplog):
     add_private_routine()
     tick_both_routines(DbKind.PERSONAL)

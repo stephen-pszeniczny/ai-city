@@ -32,8 +32,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from aicity import sample_data
-from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
-from aicity.settings import BUILDING_IDS, Routine, SettingsError, load_settings
+from aicity.db import DbKind, db_path, open_database, with_transaction
+from aicity.settings import BUILDING_IDS, Routine, load_settings
 from aicity.xp import (
     BeltXp,
     BuildingXp,
@@ -68,14 +68,15 @@ class Celebrated(BaseModel):
 def backfill_at_start(clock: Callable[[], datetime]) -> None:
     """Run each existing database's one-time routine backfill (main.py, at app start).
 
-    It never creates a database. A problem is logged (by type only) and that database
-    is skipped, to be tried again at the next start; the app still starts.
+    It never creates a database, and the app always starts: whatever goes wrong with
+    one database is logged (by type only, never its message) and that database is
+    skipped, to be tried again at the next start. The other one is still done.
     """
     for kind in DbKind:
-        path = db_path(kind)
-        if not path.exists():
-            continue
         try:
+            path = db_path(kind)
+            if not path.exists():
+                continue
             routines = (
                 sample_data.SAMPLE_ROUTINES if kind == DbKind.SAMPLE else load_settings().routines
             )
@@ -84,7 +85,8 @@ def backfill_at_start(clock: Callable[[], datetime]) -> None:
                 backfill_routine_finishes(conn, routines, clock)
             finally:
                 conn.close()
-        except (SettingsError, DatabaseError, sqlite3.Error, OSError) as exc:
+        # Anything at all: this runs before the first request, so it must not stop the start.
+        except Exception as exc:  # noqa: BLE001
             log.warning(
                 "Routine backfill skipped the %s database (%s).", kind.value, type(exc).__name__
             )
