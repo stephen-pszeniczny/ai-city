@@ -60,7 +60,7 @@ copy stay; run `update` to put it back.
 
 **Made-up Sample tasks** → added once, the first time the app starts with a Sample database that doesn't have them yet. They only ever go into the Sample file.
 
-**Day and night** → the **Sky** button next to the switch cycles Auto → Day → Night. Auto follows sunrise and sunset at the `[location]` in your settings file, worked out on this Mac. Day or Night stays until you set it back to Auto. The choice is remembered in this browser only.
+**Day and night** → the Belt XP bubble (top right of the belt) has **Day**, **Night** and **Auto**. Auto follows sunrise and sunset at the `[location]` in your settings file, worked out on this Mac. Day or Night stays until you set it back to Auto. The choice is remembered in this browser only.
 
 **Reminders (the shuttle and ticker)** → when a task's reminder time arrives, a small rocket flies across the belt towing a banner with the task's title, and the reminder joins the ticker at the bottom of the screen. Click its title to fly to the task; **Dismiss** takes it off the ticker; finishing the task clears it too. Reminders are checked every 30 seconds while the app is running, for both Personal and Sample (each shows only in its own mode). Reminders set before the very first run are skipped on purpose; ones that came due while the Mac was off or asleep show up as soon as the app is running again.
 
@@ -149,6 +149,27 @@ _Added as problems come up. Format: **Symptom** → what to do._
 **Flight School monthly log** → on the 1st (change it with `reminder_day` under `[career]`), Mission Control gets the to-do "Log last month for Flight School" with a reminder. In Claude Code, type `/flight-log`: paste or type what you did last month (rough notes are fine; photos of handwritten pages can be shown, they're never saved), then review each proposal (accept, edit or reject). When none are left, the month is done, its progress is saved and the to-do ticks off. Needs a `[career]` section in the settings file (copy the commented example; the defaults are fine). Check where things stand with `.venv/bin/python scripts/flight.py status`.
 
 **Flight School resume (import once, export any time)** → `.venv/bin/python scripts/flight.py resume-import <your resume.docx>` shows how it would be split into sections (headings start a section; tables are skipped) and saves nothing. If it looks right, run the same command with `--confirm`: it's saved once as `v1 <month year>`. Each month with an accepted resume change becomes the next version. `scripts/flight.py resume-export <file.docx>` writes the current resume as a fresh Word file (its own clean layout, not your original's design).
+
+**Belt XP: how it works** → XP is counted from your records each time, never stored. Correcting a record (reopening a to-do, removing a typed pay) corrects the XP; archiving a finished to-do or rejecting a project keeps it. Every 10th level is an upgrade: it plays the next time you open that building (click or Escape skips it), and the level never shows below an upgrade you've seen.
+
+**Belt XP: changing what things earn** → edit `src/aicity/xp_rules.py`: XP per event, daily caps, which buildings earn (only together with the rest of "adding a building" below), and `NORMAL_YEAR_XP` (a year's XP, which is level 100; bigger = slower levels). A change re-prices past work too, so levels can move. Run `.venv/bin/pytest -q` (some tests expect the current numbers), merge, then update the app (section 5).
+
+**Belt XP: toning down the growth** → in `frontend/src/belt/look.ts`, block `growth`: `pieceGlow` (lights) and `pieceMotion` (drones, satellites, moonlets) go from 1 (full) towards 0; `buildInSeconds` and `moment` are the level-up timings. 0.5 for glow and motion passes the tests; 0 fails the ones that expect glow or movement. Asteroid size (`scaleByBuilding`, `maxAsteroidScale`): don't change it on its own. Tests check that the level-up shuttle clears the grown pieces, and a smaller size fails them, so ask Claude Code. Then in `frontend/`: `npm test`, merge, update the app.
+
+**Belt XP: previewing upgrades** → start the development setup (section 2, "While building the page") and open http://127.0.0.1:5173/?growthPreview=10 (any number 0 to 10). The installed app ignores this.
+
+**Belt XP: adding a building** (a job for Claude Code, in the phase that builds it; this is the checklist) →
+1. `src/aicity/xp_rules.py`: add its ID to `EARNING_BUILDINGS`, give it a `NORMAL_YEAR_XP` and event values.
+2. `src/aicity/xp.py`: write its total function and add it to `_TOTALS`. It counts only what the database records, so an event with no lasting record needs a new migration first.
+3. `src/aicity/sample_data.py`: add it to `SAMPLE_XP_HEAD_START` (a test requires the same buildings as step 1) and add made-up records for it. A Sample database already made keeps its old "seen" levels: reset it (section 2, "Fresh Sample data").
+4. `frontend/src/belt/built.ts`: add the same ID (a test compares it with step 1). Update the list in `frontend/tests/badges.test.ts`.
+5. `frontend/src/belt/growth/ladders.ts`: add it to `GrowthId`, give it a 10-tier ladder in `LADDERS`, and list new pieces in `PIECE_IDS`.
+6. A model for each new piece, registered in `growth/pieces.ts`; names in `levelUpNames.ts` (`PIECE_NAMES`, and `LANDMARK_NAMES` for its landmark).
+7. Landmark (asteroids): stage 1 is already in `landmarks.ts`. Add stages 2 to 4 in `growth/landmarkStages.ts` (`standLandmark`, `grownLandmark`), and remove the Opportunity Office / Flight School only checks there, in `landmarks.ts` and in `growth/applyGrowth.ts`. **Miss the `applyGrowth.ts` one and the asteroid never grows, with no error.** Those functions treat anything that isn't `jobs` as Flight School, so add a real branch.
+8. If it needs them: a size limit in `look.ts` `scaleByBuilding`, and a level-up shuttle spot in `cargoRoute.ts` (`SPOTS`).
+9. Tests: add it to the lists in `frontend/tests/ladders.test.ts` and `growthStub.ts` (growth, clearance and shuttle tests loop over these, but some name `jobs` and `career` directly, so check those). In `tests/test_xp.py` and `tests/test_xp_routes.py`, fix tests that expect it to earn nothing. Run both test suites.
+
+**Flight School** already has its XP rules, ladder, piece models and landmark stages: switching it on is steps 1, 3 and 4 plus the tests. It has no made-up Sample records yet.
 
 **A commit is blocked by gitleaks** → read the RuleID it printed. If it's a real secret or account number, follow section 7, Case A. If it's a false positive, ask Claude Code to add a narrow allowlist entry to `.gitleaks.toml`. Never disable the rule, and never use `--no-verify`.
 

@@ -160,3 +160,16 @@ Earlier directions also dropped: an upgrade tree with a Stars currency (the owne
 - How each ladder piece is modelled, keeping each asteroid recognisable and the work view clear.
 - How the cheer action, the shuttle and the build-in animation look, using the existing shuttle and robot code where possible.
 - How the work is split into PRs.
+
+## As built
+
+Where the build differs from, or settles, the design above (2026-11-27):
+
+- XP is worked out on the fly. Besides the "seen and celebrated" record, three small record tables were added for events the existing ones didn't keep for good: fully ticked routine days, profile refreshes and project status changes.
+- The values are in `src/aicity/xp_rules.py`.
+- Reading XP never writes. The one-time backfill of routine days finished before Belt XP runs when the app starts.
+- A profile refresh counts once per platform per local calendar month, going by when it was recorded, so correcting or switching the date earns nothing more.
+- Archiving a finished to-do and rejecting a project keep the XP already earned.
+- The Opportunity Office dish stands on its own platform out past the deck, clear of the desk.
+- A level-up shows a card naming the new upgrade.
+- Sample mode adds a fixed, made-up head start to each earning building (never stored) so it opens as a grown belt, with one upgrade waiting. Flight School's made-up Sample history is not written yet; it comes when Flight School is switched on.
