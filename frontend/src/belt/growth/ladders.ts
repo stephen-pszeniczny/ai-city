@@ -140,6 +140,16 @@ const stepsUpTo = (id: GrowthId, tier: number): Step[] =>
 export const piecesUpTo = (id: GrowthId, tier: number): PieceId[] =>
   stepsUpTo(id, tier).flatMap((step) => step.pieces);
 
+/** A station module's pieces at this tier: those outside it, or those in its control room. */
+export const modulePiecesUpTo = (
+  id: GrowthId,
+  tier: number,
+  where: "outside" | "inside",
+): PieceId[] =>
+  stepsUpTo(id, tier)
+    .filter((step) => !!step.interior === (where === "inside"))
+    .flatMap((step) => step.pieces);
+
 /** The landmark's stage at this tier. Station modules have no landmark and stay at 1. */
 export const landmarkStageAt = (id: GrowthId, tier: number): LandmarkStage =>
   stepsUpTo(id, tier).reduce<LandmarkStage>((stage, step) => step.landmarkStage ?? stage, 1);

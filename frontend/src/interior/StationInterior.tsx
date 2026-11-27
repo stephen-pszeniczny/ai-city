@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
+import type { InteriorGrowth } from "../belt/growth/applyGrowth";
 import type { HallwayRow } from "../belt/hallwayStatus";
 import { ControlStation } from "./ControlStation";
 import { Hallway } from "./Hallway";
@@ -23,6 +24,8 @@ export function StationInterior({
   summary,
   screenOf,
   onOpenScreen,
+  rooms,
+  tiers,
 }: {
   titleOf: (id: BuildingId) => string;
   tintOf: (id: BuildingId) => string;
@@ -32,6 +35,9 @@ export function StationInterior({
   /** Which room's screen is open (its monitor and robot hide), if any. */
   screenOf: Module | null;
   onOpenScreen: (id: Module) => void;
+  /** Each control room's upgrades, and the tier it shows. */
+  rooms: Record<Module, InteriorGrowth>;
+  tiers: Record<Module, number>;
 }) {
   return (
     <PanelTexturesProvider>
@@ -46,7 +52,7 @@ export function StationInterior({
         tintOf={tintOf}
       />
       <Hallway fromX={HALL.startX} toX={HALL.endX} tint={tintOf("finance")} vault tintOf={tintOf} />
-      <VaultDoor />
+      <VaultDoor finish={rooms.finance.door} />
       {(["planner", "finance"] as const).map((id) => (
         <group key={id} position={[MODULE_X[id], 0, 0]}>
           <ControlStation
@@ -56,6 +62,8 @@ export function StationInterior({
             built={built.has(id)}
             atScreen={screenOf === id}
             onOpenScreen={() => onOpenScreen(id)}
+            interior={rooms[id]}
+            tier={tiers[id]}
           />
         </group>
       ))}

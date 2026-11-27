@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import type { BuildingId } from "../api";
+import type { InteriorGrowth } from "../belt/growth/applyGrowth";
 import { Console } from "./Console";
 import { Gadget } from "./Gadget";
 import { Monitor, SCREEN } from "./Monitor";
@@ -31,6 +32,8 @@ export function ControlStation({
   built,
   atScreen,
   onOpenScreen,
+  interior,
+  tier,
 }: {
   id: Module;
   title: string;
@@ -39,12 +42,18 @@ export function ControlStation({
   /** Zoomed into the screen: the desktop overlay takes the monitor's place, so it and the robot hide. */
   atScreen: boolean;
   onOpenScreen: () => void;
+  /** This room's upgrades (the wall screens, map table, gold shelf and so on). */
+  interior: InteriorGrowth;
+  /** The upgrade tier the room shows. */
+  tier: number;
 }) {
   const brain = useRobotBrain(title + tint + id);
   const side = doorSide(id);
   const view = useMemo(() => roomView(id), [id]);
   const vault = id === "finance";
   const reducedMotion = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  // Also behind the open computer screen: a new tier doesn't wait for the hold to end.
+  useLayoutEffect(() => interior.setTier(tier), [interior, tier]);
 
   const mats = useMemo(() => {
     const t = new THREE.Color(tint);
@@ -266,6 +275,9 @@ export function ControlStation({
           </mesh>
         )}
       </group>
+
+      {/* The upgrades. They take no part in the clicks below. */}
+      <primitive object={interior.pieces} />
 
       {/* The work area. Clicking the console or screen opens the screen; the robot reacts. */}
       <group onClick={clickRobot} visible={!atScreen}>

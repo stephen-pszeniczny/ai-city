@@ -1,16 +1,18 @@
-// One model per upgrade piece, tinted in its building's colour. The asteroids'
-// pieces are here; the station modules' (and the control rooms') join MODELS when
-// they're drawn.
+// One model per upgrade piece, tinted in its building's colour.
 //
 // A piece comes already placed: asteroid pieces in deck coordinates (the deck's
 // centre, y = 0 on its top), except the desk rocket, which is in the desk's own
-// coordinates. A building that wants a shared piece elsewhere moves its group.
+// coordinates; station pieces in their module's or control room's coordinates (see
+// modulePieces.ts and roomPieces.ts). A building that wants a shared piece
+// elsewhere moves its group.
 import type { Kit } from "../materials.ts";
 import * as career from "./careerPieces.ts";
 import type { Ground } from "./ground.ts";
 import * as jobs from "./jobsPieces.ts";
 import type { PieceId } from "./ladders.ts";
+import * as modules from "./modulePieces.ts";
 import type { Piece } from "./parts.ts";
+import * as rooms from "./roomPieces.ts";
 import * as shared from "./sharedPieces.ts";
 
 type Model = (tint: string, kit: Kit, ground: Ground) => Piece;
@@ -43,6 +45,28 @@ const MODELS: Partial<Record<PieceId, Model>> = {
   gantryArm: career.gantryArm,
   controlTower: career.controlTower,
   shipLaunch: career.shipLaunch,
+  // Mission Control and the Vault, outside.
+  hullLights: modules.hullLights,
+  extraAntenna: modules.extraAntenna,
+  roofDish: modules.roofDish,
+  solarWings: modules.solarWings,
+  windowRing: modules.windowRing,
+  dockingPort: modules.dockingPort,
+  satellite: modules.satellite,
+  beaconTower: modules.beaconTower,
+  goldTrimLights: modules.goldTrimLights,
+  armourPlates: modules.armourPlates,
+  goldDome: modules.goldDome,
+  secureDock: modules.secureDock,
+  armouredShuttle: modules.armouredShuttle,
+  securityDrones: modules.securityDrones,
+  goldBeaconRing: modules.goldBeaconRing,
+  // And inside their control rooms.
+  wallScreens: rooms.wallScreens,
+  mapTable: rooms.mapTable,
+  depositBoxes: rooms.depositBoxes,
+  goldShelf: rooms.goldShelf,
+  goldVaultDoor: rooms.goldVaultDoor,
 };
 
 /** Pieces that stand on the robot's desk rather than the asteroid. */
