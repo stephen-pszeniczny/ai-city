@@ -615,6 +615,40 @@ export async function getSampleStatement(): Promise<string> {
 /** The Vault's belt badge: counts only, so no key is needed. */
 export const getVaultBadge = () => request<{ text: string | null }>("GET", "/api/vault/badge");
 
+// --- Belt XP ------------------------------------------------------------------
+
+/** One building's XP. All zeros for a building not earning yet. */
+export type BuildingXp = {
+  id: BuildingId;
+  earning: boolean;
+  xp: number;
+  level: number;
+  level_start_xp: number; // xp can be under this after a correction
+  next_level_xp: number; // the same as level_start_xp at the top level
+  tier: number; // upgrades reached, 0 to 10
+  seen_level: number;
+  celebrated_tier: number;
+  upgrade_waiting: boolean;
+};
+
+export type BeltXp = {
+  level: number; // at least 1
+  progress: number; // 0 to 1, towards the next belt level
+  total_xp: number;
+  seen_level: number;
+};
+
+export type XpView = { belt: BeltXp; buildings: BuildingXp[] };
+
+/** Counts only, from every building, so it needs no Touch ID. */
+export const getXp = () => request<XpView>("GET", "/api/xp");
+/** The page has shown this level. */
+export const markXpSeen = (key: BuildingId | "belt", level: number) =>
+  request<void>("POST", "/api/xp/seen", { key, level });
+/** The page has played this upgrade. */
+export const markCelebrated = (id: BuildingId, tier: number) =>
+  request<void>("POST", `/api/xp/${id}/celebrated`, { tier });
+
 // --- Shared plumbing ----------------------------------------------------------
 
 async function request<T>(
@@ -638,6 +672,7 @@ async function request<T>(
   if (!response.ok) {
     throw new ApiError(response.status, await errorMessage(response));
   }
+  if (response.status === 204) return undefined as T; // saved, with nothing to read
   return (await response.json()) as T;
 }
 
