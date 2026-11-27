@@ -25,7 +25,8 @@ import {
   formatDifference,
   formatMoney,
   formatWindow,
-  hoursProblem,
+  combineTime,
+  formatTime,
   statusLabel,
 } from "./sideWork";
 import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
@@ -169,10 +170,12 @@ function LogForm({ v }: { v: SideWorkView }) {
   const [company, setCompany] = useState(v.schedules[0]?.id ?? OTHER);
   const [otherName, setOtherName] = useState("");
   const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
   const [rate, setRate] = useState("");
   const [currency, setCurrency] = useState<Currency>("USD");
   const [role, setRole] = useState("");
-  const hoursError = hoursProblem(hours);
+  const time = combineTime(hours, minutes);
+  const hoursError = time.problem;
 
   const add = useMutation({
     mutationFn: () =>
@@ -185,12 +188,13 @@ function LogForm({ v }: { v: SideWorkView }) {
               ? company.slice(PLATFORM.length)
               : company,
         role: role.trim() || null,
-        hours: hours.trim() || null,
+        hours: time.value,
         rate: rate.trim() || null,
         currency,
       }),
     onSuccess: () => {
       setHours("");
+      setMinutes("");
       return client.invalidateQueries({ queryKey: KEY });
     },
   });
@@ -237,16 +241,27 @@ function LogForm({ v }: { v: SideWorkView }) {
             />
           </label>
         )}
-        <label>
-          Hours
+        <fieldset className="sw-time">
+          <legend>Time</legend>
           <input
-            inputMode="decimal"
+            inputMode="numeric"
             value={hours}
             onChange={(e) => setHours(e.target.value)}
-            placeholder="1.5"
+            placeholder="0"
+            aria-label="Hours"
             aria-invalid={hoursError !== null}
           />
-        </label>
+          <span aria-hidden="true">h</span>
+          <input
+            inputMode="numeric"
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            placeholder="45"
+            aria-label="Minutes"
+            aria-invalid={hoursError !== null}
+          />
+          <span aria-hidden="true">min</span>
+        </fieldset>
         <label>
           Rate / hour
           <input
@@ -304,7 +319,7 @@ function Group({ g }: { g: SideWorkGroup }) {
           <li key={e.id}>
             <span>{formatDay(e.worked_on)}</span>
             <span>
-              {e.hours ? `${e.hours} h` : "hours ?"}
+              {formatTime(e.hours)}
               {e.rate_cents !== null && ` × ${formatMoney(e.rate_cents, e.currency)}`}
             </span>
             {e.role && <span className="sw-dim">{e.role}</span>}
