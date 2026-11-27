@@ -272,6 +272,18 @@ def test_backfill_with_no_routines_does_not_use_up_the_run(conn, clock):
 # --- The Vault --------------------------------------------------------------------------
 
 
+def test_a_finished_backfill_takes_no_write_lock(conn, clock, tmp_path):
+    backfill_routine_finishes(conn, ROUTINES, clock)
+    conn.execute("PRAGMA busy_timeout = 0")  # fail at once rather than wait
+    writer = open_database(tmp_path / "sample.db", DbKind.SAMPLE)
+    try:
+        writer.execute("BEGIN IMMEDIATE")
+        backfill_routine_finishes(conn, ROUTINES, clock)
+        writer.execute("ROLLBACK")
+    finally:
+        writer.close()
+
+
 def add_deposit(conn, deposit_id, kind="main_job"):
     conn.execute(
         "INSERT OR IGNORE INTO statement_imports (id, first_day, last_day, kept, duplicates, "

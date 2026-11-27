@@ -87,6 +87,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Before the first request, background check or not: Belt XP's one-time record
+        # of routine days finished before it existed (a GET may never write).
+        xp_routes.backfill_at_start(app.state.clock)
         if background:
             app.state.reminder_loop = ReminderLoop(
                 lambda: app.state.clock(),

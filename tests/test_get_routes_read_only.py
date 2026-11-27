@@ -1,8 +1,5 @@
 """Every GET route must only read: calling it may never change any data.
 
-One exception, made before the snapshot (see setup): GET /api/xp's one-time routine
-backfill.
-
 The test finds GET routes by itself (from FastAPI's public route listing,
 app.openapi(), which works even though the docs pages are switched off), so
 a route added later is checked without editing this file. It fills in path parameters from PARAM_VALUES;
@@ -78,10 +75,6 @@ def setup(tmp_path, monkeypatch):
     client.patch(f"/api/tasks/{ids[0]}", json={"notes": "edited"})
     client.post(f"/api/tasks/{ids[1]}/complete")
     client.post(f"/api/tasks/{ids[2]}/archive")
-    # The one allowed write: the first GET /api/xp in a database records, once and for
-    # good, the routine days finished before Belt XP. Done here, so from now on it too
-    # must only read.
-    assert client.get("/api/xp").status_code == 200
     return app, client, tmp_path, ids
 
 

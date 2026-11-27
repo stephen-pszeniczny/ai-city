@@ -10,6 +10,10 @@ upgrade, even when a correction takes the XP under it.
 
 building_xp and the views only read. XpStore's mark_ methods write, and so does
 backfill_routine_finishes, once per database.
+
+tz says which local day a time falls on, for the daily caps. None, which the app uses,
+means the Mac's own zone rules applied to each time, so daylight saving is right on
+both sides of a clock change (one fixed offset wouldn't be).
 """
 
 import sqlite3
@@ -59,11 +63,11 @@ class BeltXp:
 
 
 def building_xp(
-    conn: sqlite3.Connection, building: str, routines: tuple[Routine, ...], tz: tzinfo
+    conn: sqlite3.Connection, building: str, routines: tuple[Routine, ...], tz: tzinfo | None
 ) -> int:
     """A building's total XP. 0 for any building that isn't earning yet.
 
-    tz decides which local day a time falls on, for the daily caps. Routine XP comes
+    tz decides which local day a time falls on (see the module docstring). Routine XP comes
     from the finishes recorded at the time, so today's routine settings don't change it
     (`routines` is only needed by backfill_routine_finishes).
     """
@@ -76,7 +80,7 @@ def building_view(
     conn: sqlite3.Connection,
     building: str,
     routines: tuple[Routine, ...],
-    tz: tzinfo,
+    tz: tzinfo | None,
     *,
     head_start: int = 0,
 ) -> BuildingXp:
@@ -168,11 +172,11 @@ def backfill_routine_finishes(
     A day counts when its ticks cover every item the routine has now. With no routines
     in the settings nothing is done, so the one run is still there for later.
     """
-    if not routines:
+    if not routines or _backfilled(conn):  # a plain read: no write lock once it's done
         return
 
     def work() -> None:
-        if conn.execute("SELECT 1 FROM meta WHERE key = ?", (_BACKFILL_KEY,)).fetchone():
+        if _backfilled(conn):  # again under the lock: another program may have just run it
             return
         stamp = clock().astimezone(UTC).strftime(_STAMP_FORMAT)
         for routine in routines:
@@ -189,10 +193,14 @@ def backfill_routine_finishes(
     with_transaction(conn, work, immediate=True)
 
 
+def _backfilled(conn: sqlite3.Connection) -> bool:
+    return conn.execute("SELECT 1 FROM meta WHERE key = ?", (_BACKFILL_KEY,)).fetchone() is not None
+
+
 # --- One total per building -------------------------------------------------
 
 
-def _planner(conn: sqlite3.Connection, tz: tzinfo) -> int:
+def _planner(conn: sqlite3.Connection, tz: tzinfo | None) -> int:
     # A to-do counts once, on the day it was last completed, unless it was reopened
     # after that. Archiving it afterwards changes nothing.
     completions = conn.execute(
@@ -209,7 +217,7 @@ def _planner(conn: sqlite3.Connection, tz: tzinfo) -> int:
     )
 
 
-def _finance(conn: sqlite3.Connection, tz: tzinfo) -> int:
+def _finance(conn: sqlite3.Connection, tz: tzinfo | None) -> int:
     confirmed = _count(
         conn,
         "main_job_payments WHERE archived_at IS NULL "
@@ -225,7 +233,7 @@ def _finance(conn: sqlite3.Connection, tz: tzinfo) -> int:
     )
 
 
-def _jobs(conn: sqlite3.Connection, tz: tzinfo) -> int:
+def _jobs(conn: sqlite3.Connection, tz: tzinfo | None) -> int:
     checks = conn.execute("SELECT checked_at FROM platform_checks")
     return (
         xp_rules.CHECK_XP * _capped_per_day(checks, tz, xp_rules.CHECKS_PER_DAY)
@@ -235,7 +243,7 @@ def _jobs(conn: sqlite3.Connection, tz: tzinfo) -> int:
     )
 
 
-def _career(conn: sqlite3.Connection, tz: tzinfo) -> int:
+def _career(conn: sqlite3.Connection, tz: tzinfo | None) -> int:
     # Study days are already local calendar days. Each day's minutes are added up first.
     study = sum(
         min(minutes, xp_rules.STUDY_MINUTES_PER_DAY) // xp_rules.STUDY_MINUTES_PER_XP
@@ -266,13 +274,13 @@ def _count(conn: sqlite3.Connection, source: str) -> int:
     return conn.execute(f"SELECT count(*) FROM {source}").fetchone()[0]
 
 
-def _capped_per_day(stamps: Iterable[tuple[str]], tz: tzinfo, cap: int) -> int:
+def _capped_per_day(stamps: Iterable[tuple[str]], tz: tzinfo | None, cap: int) -> int:
     """How many UTC stamps count when each local day counts at most `cap` of them."""
     days = Counter(datetime.fromisoformat(stamp).astimezone(tz).date() for (stamp,) in stamps)
     return sum(min(n, cap) for n in days.values())
 
 
-def _refresh_months(conn: sqlite3.Connection, tz: tzinfo) -> int:
+def _refresh_months(conn: sqlite3.Connection, tz: tzinfo | None) -> int:
     """Profile refreshes, counting each platform once per local calendar month, so
     fixing a typo or switching a date back and forth earns nothing more."""
     counted = set()

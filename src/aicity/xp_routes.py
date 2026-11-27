@@ -11,16 +11,17 @@ No Touch ID check, like vault_routes.badge: the answers are counts only (buildin
 and numbers), never a title, name, amount or anything else from a record, including
 from the locked buildings.
 
-The GET only reads, except that the first one in each database records the routine days
-finished before Belt XP (xp.backfill_routine_finishes). The POSTs do the same first, so
-their 409 checks count XP exactly as the GET does.
+The GET only reads (the front door relies on no GET changing data). The routine days
+finished before Belt XP are recorded when the app starts instead (backfill_at_start).
+Each POST checks and saves in one transaction, so what it checked can't change first.
 
 Routines come from the private settings; Sample mode uses its own made-up ones, and
 adds a made-up head start to each building (sample_data.SAMPLE_XP_HEAD_START).
 """
 
+import logging
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
@@ -31,8 +32,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from aicity import sample_data
-from aicity.db import DbKind, db_path, open_database
-from aicity.settings import BUILDING_IDS, Routine, load_settings
+from aicity.db import DatabaseError, DbKind, db_path, open_database, with_transaction
+from aicity.settings import BUILDING_IDS, Routine, SettingsError, load_settings
 from aicity.xp import (
     BeltXp,
     BuildingXp,
@@ -43,6 +44,8 @@ from aicity.xp import (
     building_view,
 )
 from aicity.xp_rules import MAX_LEVEL
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/xp")
 
@@ -60,6 +63,31 @@ class Seen(BaseModel):
 class Celebrated(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     tier: Annotated[int, Field(ge=0, le=_MAX_TIER)]
+
+
+def backfill_at_start(clock: Callable[[], datetime]) -> None:
+    """Run each existing database's one-time routine backfill (main.py, at app start).
+
+    It never creates a database. A problem is logged (by type only) and that database
+    is skipped, to be tried again at the next start; the app still starts.
+    """
+    for kind in DbKind:
+        path = db_path(kind)
+        if not path.exists():
+            continue
+        try:
+            routines = (
+                sample_data.SAMPLE_ROUTINES if kind == DbKind.SAMPLE else load_settings().routines
+            )
+            conn = open_database(path, kind)
+            try:
+                backfill_routine_finishes(conn, routines, clock)
+            finally:
+                conn.close()
+        except (SettingsError, DatabaseError, sqlite3.Error, OSError) as exc:
+            log.warning(
+                "Routine backfill skipped the %s database (%s).", kind.value, type(exc).__name__
+            )
 
 
 @contextmanager
@@ -81,15 +109,13 @@ def _views(
     request: Request, conn: sqlite3.Connection, kind: DbKind, routines: tuple[Routine, ...]
 ) -> tuple[BeltXp, dict[str, BuildingXp]]:
     """The belt and every building, in BUILDING_IDS order: what the page is shown."""
-    clock = request.app.state.clock
-    backfill_routine_finishes(conn, routines, clock)
-    tz = datetime.now().astimezone().tzinfo  # the Mac's own time zone
     head_start = sample_data.SAMPLE_XP_HEAD_START if kind == DbKind.SAMPLE else {}
     buildings = {
-        bid: building_view(conn, bid, routines, tz, head_start=head_start.get(bid, 0))
+        # tz None: the Mac's own zone rules for each time, daylight saving included.
+        bid: building_view(conn, bid, routines, None, head_start=head_start.get(bid, 0))
         for bid in BUILDING_IDS
     }
-    belt_seen = XpStore(conn, clock).seen(BELT_KEY)[0]
+    belt_seen = XpStore(conn, request.app.state.clock).seen(BELT_KEY)[0]
     belt = belt_view(list(buildings.values()), BUILDING_IDS, seen_level=belt_seen)
     return belt, buildings
 
@@ -106,12 +132,16 @@ def mark_seen(request: Request, body: Seen) -> Response:
     if body.key != BELT_KEY and body.key not in BUILDING_IDS:
         raise HTTPException(422, "Unknown key: use a building ID or 'belt'.")
     with _open(request) as (conn, kind, routines):
-        belt, buildings = _views(request, conn, kind, routines)
-        shown = belt.level if body.key == BELT_KEY else buildings[body.key].level
-        # Seen levels only go up, so one that's too high would stick for good.
-        if body.level > shown:
-            raise XpError("That level hasn't been reached yet.")
-        XpStore(conn, request.app.state.clock).mark_seen(body.key, body.level)
+
+        def work() -> None:
+            belt, buildings = _views(request, conn, kind, routines)
+            shown = belt.level if body.key == BELT_KEY else buildings[body.key].level
+            # Seen levels only go up, so one that's too high would stick for good.
+            if body.level > shown:
+                raise XpError("That level hasn't been reached yet.")
+            XpStore(conn, request.app.state.clock).mark_seen(body.key, body.level)
+
+        with_transaction(conn, work, immediate=True)
     return Response(status_code=204)
 
 
@@ -120,10 +150,14 @@ def mark_celebrated(request: Request, building_id: str, body: Celebrated) -> Res
     if building_id not in BUILDING_IDS:
         raise HTTPException(404, "Building not found.")
     with _open(request) as (conn, kind, routines):
-        _belt, buildings = _views(request, conn, kind, routines)
-        XpStore(conn, request.app.state.clock).mark_celebrated(
-            building_id, body.tier, current_tier=buildings[building_id].tier
-        )
+
+        def work() -> None:
+            _belt, buildings = _views(request, conn, kind, routines)
+            XpStore(conn, request.app.state.clock).mark_celebrated(
+                building_id, body.tier, current_tier=buildings[building_id].tier
+            )
+
+        with_transaction(conn, work, immediate=True)
     return Response(status_code=204)
 
 
