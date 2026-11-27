@@ -24,5 +24,8 @@ test("a block entirely outside the day is left out", () => {
 });
 
 test("the hover label keeps the title and times", () => {
-  assert.equal(timelineSegments([{ ...b("12:00", "13:00", "gym"), title: "Gym" }])[0]?.label, "Gym 12:00–13:00");
+  assert.equal(
+    timelineSegments([{ ...b("12:00", "13:00", "gym"), title: "Gym" }])[0]?.label,
+    "Gym 12:00–13:00",
+  );
 });
