@@ -36,7 +36,7 @@ export function VaultLockScreen({
         🔒
       </span>
       <h2>{place} is locked</h2>
-      <p>Touch ID once and it stays open until the app reloads.</p>
+      <p className="sw-chip sw-chip--plain">Opens until the app reloads</p>
       <button type="button" onClick={unlock} disabled={waiting} autoFocus>
         {waiting ? "Waiting for Touch ID…" : "Unlock with Touch ID"}
       </button>

@@ -25,7 +25,8 @@ import {
   formatDifference,
   formatMoney,
   formatWindow,
-  hoursProblem,
+  combineTime,
+  formatTime,
   statusLabel,
 } from "./sideWork";
 import { EMPTY_BONUS_NOTES, IncomeFields, bonusNotesBody, type BonusNotes } from "./IncomeFields";
@@ -56,7 +57,7 @@ function SideWork() {
 
   const view = useQuery({ queryKey: KEY, queryFn: getSideWork, retry: false });
 
-  if (view.status === "pending") return <p className="sw-note">Counting…</p>;
+  if (view.status === "pending") return <p className="sw-note">Loading…</p>;
   if (view.status === "error") return <p className="sw-note">{errorText(view.error)}</p>;
   const v = view.data;
 
@@ -69,7 +70,7 @@ function SideWork() {
           Pay
         </h3>
         {v.groups.length === 0 ? (
-          <p className="sw-note">Nothing logged yet.</p>
+          <p className="sw-note">Nothing logged</p>
         ) : (
           <ul className="sw-groups">
             {v.groups.map((g) => (
@@ -132,10 +133,12 @@ function ManualRate() {
         save.mutate();
       }}
     >
-      <p>
-        Some exchange rates are pending (the Bank of Canada couldn't be reached, or today's rate
-        isn't out yet). They fill in on their own next time, or type one:
-      </p>
+      <span
+        className="sw-chip"
+        title="The Bank of Canada couldn't be reached, or today's rate isn't out yet. They fill in on their own next time, or type one."
+      >
+        Rates pending
+      </span>
       <label>
         Day <input type="date" value={day} onChange={(e) => setDay(e.target.value)} required />
       </label>
@@ -169,10 +172,12 @@ function LogForm({ v }: { v: SideWorkView }) {
   const [company, setCompany] = useState(v.schedules[0]?.id ?? OTHER);
   const [otherName, setOtherName] = useState("");
   const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
   const [rate, setRate] = useState("");
   const [currency, setCurrency] = useState<Currency>("USD");
   const [role, setRole] = useState("");
-  const hoursError = hoursProblem(hours);
+  const time = combineTime(hours, minutes);
+  const hoursError = time.problem;
 
   const add = useMutation({
     mutationFn: () =>
@@ -185,12 +190,13 @@ function LogForm({ v }: { v: SideWorkView }) {
               ? company.slice(PLATFORM.length)
               : company,
         role: role.trim() || null,
-        hours: hours.trim() || null,
+        hours: time.value,
         rate: rate.trim() || null,
         currency,
       }),
     onSuccess: () => {
       setHours("");
+      setMinutes("");
       return client.invalidateQueries({ queryKey: KEY });
     },
   });
@@ -205,7 +211,12 @@ function LogForm({ v }: { v: SideWorkView }) {
       <h3 id="sw-log-title" className="sw-h">
         Log work
       </h3>
-      <p className="sw-hint">Only the date is needed. Never add project or task details.</p>
+      <span
+        className="sw-chip sw-chip--plain"
+        title="Only the date is needed. Never add project or task details."
+      >
+        Date only · no project details
+      </span>
       <div className="sw-fields">
         <label>
           Date
@@ -237,16 +248,29 @@ function LogForm({ v }: { v: SideWorkView }) {
             />
           </label>
         )}
-        <label>
-          Hours
-          <input
-            inputMode="decimal"
-            value={hours}
-            onChange={(e) => setHours(e.target.value)}
-            placeholder="1.5"
-            aria-invalid={hoursError !== null}
-          />
-        </label>
+        <div className="sw-time" role="group" aria-labelledby="sw-time-label">
+          <span id="sw-time-label">Time</span>
+          <span className="sw-time__row">
+            <input
+              inputMode="numeric"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+              placeholder="0"
+              aria-label="Hours"
+              aria-invalid={hoursError !== null}
+            />
+            <span aria-hidden="true">h</span>
+            <input
+              inputMode="numeric"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              placeholder="45"
+              aria-label="Minutes"
+              aria-invalid={hoursError !== null}
+            />
+            <span aria-hidden="true">min</span>
+          </span>
+        </div>
         <label>
           Rate / hour
           <input
@@ -304,7 +328,7 @@ function Group({ g }: { g: SideWorkGroup }) {
           <li key={e.id}>
             <span>{formatDay(e.worked_on)}</span>
             <span>
-              {e.hours ? `${e.hours} h` : "hours ?"}
+              {formatTime(e.hours)}
               {e.rate_cents !== null && ` × ${formatMoney(e.rate_cents, e.currency)}`}
             </span>
             {e.role && <span className="sw-dim">{e.role}</span>}

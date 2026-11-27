@@ -422,3 +422,25 @@
 .in-chipline .sw-chip {
   margin-left: 0;
 }
+
+/* Side-work time: hours and minutes boxes side by side (Tab moves hours → minutes),
+   laid out like the other labelled fields. */
+.sw-time {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sw-time__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.sw .sw-time__row input {
+  width: 0;
+  flex: 1 1 0;
+  text-align: center;
+}

@@ -60,12 +60,34 @@ export function statusLabel(status: GroupStatus): string {
   return STATUS[status];
 }
 
-/** Why typed hours won't be accepted, or null if fine (blank means unknown). */
-export function hoursProblem(text: string): string | null {
-  const t = text.trim();
-  if (t === "") return null;
-  if (!/^\d+(\.\d{1,2})?$/.test(t)) return "Hours must be a number like 1.5 (up to 2 decimals).";
-  const n = Number(t);
-  if (n <= 0 || n > 168) return "Hours must be more than 0 and at most 168.";
-  return null;
+const MAX_HOURS = 168;
+
+/**
+ * Hours and minutes typed in two boxes, as the decimal hours the engine stores (up to
+ * 2 decimals, so 20 min is "0.33"). Both blank means unknown (allowed).
+ */
+export function combineTime(
+  hoursText: string,
+  minutesText: string,
+): { value: string | null; problem: string | null } {
+  const h = hoursText.trim();
+  const m = minutesText.trim();
+  if (h === "" && m === "") return { value: null, problem: null };
+  const whole = /^\d+$/;
+  if ((h !== "" && !whole.test(h)) || (m !== "" && !whole.test(m)) || Number(m || 0) > 59) {
+    return { value: null, problem: "Whole hours and 0–59 minutes" };
+  }
+  const total = Math.round((Number(h || 0) + Number(m || 0) / 60) * 100) / 100;
+  if (total <= 0 || total > MAX_HOURS) return { value: null, problem: "Over 0 and at most 168 h" };
+  return { value: String(total), problem: null };
+}
+
+/** Saved decimal hours as "1 h 10 min", "45 min" or "2 h"; unknown is "time ?". */
+export function formatTime(hours: string | null): string {
+  if (hours === null) return "time ?";
+  const totalMinutes = Math.round(Number(hours) * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }

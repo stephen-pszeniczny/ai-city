@@ -71,10 +71,12 @@ function Statements() {
         <h3 id="st-upload" className="sw-h">
           Import a statement
         </h3>
-        <p className="sw-hint">
-          Download your chequing statement as CSV, then choose it here. Only income from your main
-          job and side work is kept; spending is never stored, and the file isn't kept.
-        </p>
+        <span
+          className="sw-chip sw-chip--plain"
+          title="Download your chequing statement as CSV, then choose it here. Only income from your main job and side work is kept; spending is never stored, and the file isn't kept."
+        >
+          Income only · file not kept
+        </span>
         <div className="st-actions">
           <label className="st-file">
             Choose statement (CSV)
@@ -118,7 +120,7 @@ function Statements() {
             ))}
           </ul>
         ) : (
-          <p className="sw-note">No statements imported yet.</p>
+          <p className="sw-note">None imported yet</p>
         )}
       </section>
     </div>
@@ -237,17 +239,19 @@ function Review({
         {preview.already_imported} already imported · {preview.spending} spending rows ignored
         {preview.other_currency > 0 && ` · ${preview.other_currency} non-CAD rows skipped`}
       </p>
-      {nothingNew && <p className="sw-note">Everything in this statement was already imported.</p>}
+      {nothingNew && <p className="sw-note">All already imported</p>}
 
       {preview.main_job.length > 0 && (
         <section aria-labelledby="rv-main">
           <h3 id="rv-main" className="sw-h">
             Main-job pay
           </h3>
-          <p className="sw-hint">
-            Link a deposit to the pay you typed in, or add it as new. Stub details are optional; add
-            them now or later.
-          </p>
+          <span
+            className="sw-chip sw-chip--plain"
+            title="Link a deposit to the pay you typed in, or add it as new. Stub details are optional; add them now or later."
+          >
+            Link or add · stub optional
+          </span>
           <ul className="sw-groups">
             {preview.main_job.map((r) => {
               const c = main[r.ref]!;
@@ -387,10 +391,12 @@ function Review({
           <h3 id="rv-other" className="sw-h">
             Other money in
           </h3>
-          <p className="sw-hint">
-            Refunds, transfers and the like. Skipped rows are never stored; add one only if it's
-            side income.
-          </p>
+          <span
+            className="sw-chip sw-chip--plain"
+            title="Refunds, transfers and the like. Skipped rows are never stored; add one only if it's side income."
+          >
+            Skipped unless side income
+          </span>
           <ul className="sw-groups">
             {preview.other_income.map((r) => {
               const c = other[r.ref]!;

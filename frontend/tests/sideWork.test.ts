@@ -8,7 +8,8 @@ import {
   formatDifference,
   formatMoney,
   formatWindow,
-  hoursProblem,
+  combineTime,
+  formatTime,
   statusLabel,
 } from "../src/vault/sideWork.ts";
 
@@ -52,9 +53,39 @@ test("status labels", () => {
   assert.equal(statusLabel("no_schedule"), "No pay schedule");
 });
 
-test("hours match the engine's rule: more than 0, at most 168, up to 2 decimals", () => {
-  for (const ok of ["1", "1.5", "0.25", "168", " 2 ", ""]) assert.equal(hoursProblem(ok), null, ok);
-  for (const bad of ["0", "-2", "168.01", "12.345", "1:30", "abc"]) {
-    assert.notEqual(hoursProblem(bad), null, bad);
+test("hours and minutes combine into the decimal hours the engine stores", () => {
+  assert.deepEqual(combineTime("", "45"), { value: "0.75", problem: null });
+  assert.deepEqual(combineTime("2", ""), { value: "2", problem: null });
+  assert.deepEqual(combineTime("1", "10"), { value: "1.17", problem: null });
+  assert.deepEqual(combineTime("0", "20"), { value: "0.33", problem: null });
+  assert.deepEqual(combineTime(" 1 ", " 30 "), { value: "1.5", problem: null });
+});
+
+test("both boxes blank means hours unknown, which is allowed", () => {
+  assert.deepEqual(combineTime("", ""), { value: null, problem: null });
+});
+
+test("bad time gives a short problem and no value", () => {
+  for (const [h, m] of [
+    ["1", "60"],
+    ["-1", "0"],
+    ["1.5", ""],
+    ["", "7.5"],
+    ["abc", ""],
+    ["0", "0"],
+    ["168", "1"],
+    ["", "0"],
+  ]) {
+    const r = combineTime(h!, m!);
+    assert.equal(r.value, null, `${h} h ${m} min`);
+    assert.notEqual(r.problem, null, `${h} h ${m} min`);
   }
+  assert.deepEqual(combineTime("168", ""), { value: "168", problem: null });
+});
+
+test("saved hours read as hours and minutes", () => {
+  assert.equal(formatTime("1.17"), "1 h 10 min");
+  assert.equal(formatTime("0.75"), "45 min");
+  assert.equal(formatTime("2"), "2 h");
+  assert.equal(formatTime(null), "time ?");
 });

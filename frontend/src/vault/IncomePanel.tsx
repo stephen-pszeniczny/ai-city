@@ -30,7 +30,7 @@ export function IncomePanel() {
 
 function Income() {
   const view = useQuery({ queryKey: KEY, queryFn: getIncome, retry: false });
-  if (view.status === "pending") return <p className="sw-note">Adding it up…</p>;
+  if (view.status === "pending") return <p className="sw-note">Loading…</p>;
   if (view.status === "error") return <p className="sw-note">{errorText(view.error)}</p>;
   const v = view.data;
   return (
@@ -157,8 +157,11 @@ function MainJobPays({ v }: { v: IncomeView }) {
         </button>
       )}
       {v.main_job_pay.length === 0 ? (
-        <p className="sw-note">
-          No main-job pay yet. Add it on payday, or import a statement from the Statements app.
+        <p
+          className="sw-note"
+          title="Add it on payday, or import a statement in the Statements app."
+        >
+          No main-job pay yet
         </p>
       ) : (
         <ul className="sw-entries sw-entries--stacked">
