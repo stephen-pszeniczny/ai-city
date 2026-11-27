@@ -255,7 +255,7 @@ export function standLandmark(
   kit: Kit,
 ): void {
   const c = palette(tint, kit);
-  const wide = { jobs: 0.72, career: 1.05 }[id];
+  const wide = { jobs: 0.45, career: 0.95 }[id];
   const b = builder(kit);
   b.cylinder(wide, wide * 0.82, 0.6, c.dark, [0, -0.28, 0], { sides: 28 });
   b.hoop(wide, 0.045, c.lit, [0, 0.025, 0]);

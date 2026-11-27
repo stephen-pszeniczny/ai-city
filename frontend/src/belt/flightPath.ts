@@ -29,9 +29,16 @@ export function asteroidArc(from: Pose, goal: Pose, k: number): Pose {
  * How the flight to a desk lines up: how far back along the desk camera's own view
  * the swing aims, when the run down that line starts and when the swing is over
  * (both as shares of the flight; they overlap, so the camera never stops), and how
- * much the swing lifts midway (a share of the distance flown).
+ * much the swing rises midway (a share of the distance flown, up to `highest`). The
+ * rise carries it clear of the station and, mostly, of the neighbouring asteroids.
  */
-export const APPROACH = { back: 16, runFrom: 0.5, swingUntil: 0.75, lift: 0.08 } as const;
+export const APPROACH = {
+  back: 16,
+  runFrom: 0.5,
+  swingUntil: 0.75,
+  lift: 0.32,
+  highest: 22,
+} as const;
 
 /** Which way round a flight turned, kept from frame to frame. */
 export type Turn = { angle?: number };
@@ -67,8 +74,9 @@ export function asteroidApproach(from: Pose, goal: Pose, k: number, turn: Turn =
       THREE.MathUtils.lerp(start.y, end.y, swing),
     )
     .add(goal.target);
-  // A lift midway, gone (and level) once lined up.
-  position.y += Math.sin(Math.PI * swing) * APPROACH.lift * from.position.distanceTo(goal.position);
+  // A rise midway, gone (and level) once lined up.
+  const rise = Math.min(APPROACH.highest, APPROACH.lift * from.position.distanceTo(goal.position));
+  position.y += Math.sin(Math.PI * swing) * rise;
   const target = from.target.clone().lerp(goal.target, swing);
   return { position, target };
 }

@@ -6,8 +6,10 @@ import * as THREE from "three";
 
 import { asteroidApproach, type Pose } from "../src/belt/flightPath.ts";
 import { DECK_Y } from "../src/belt/growth/deck.ts";
+import { ASTEROIDS as RING, orbitPosition } from "../src/belt/space/orbit.ts";
+import { createStation } from "../src/belt/station.ts";
 import { DESK_SPOT } from "../src/interior/workspace.ts";
-import { ASTEROIDS, make, shown, type Asteroid } from "./growthStub.ts";
+import { ASTEROIDS, make, shown, stubKit, type Asteroid } from "./growthStub.ts";
 
 type Part = { mesh: THREE.Mesh; unit: string; path: string };
 
@@ -224,8 +226,54 @@ function clippedApproaches(id: Asteroid, tier: number): { clipped: number; by: s
 
 for (const id of ASTEROIDS) {
   for (const tier of [0, 10]) {
-    test(`${id} tier ${tier}: no flight in (or out) passes through anything`, () => {
+    test(`${id} tier ${tier}: no flight in (or out) passes through anything on the asteroid`, () => {
       assert.deepEqual(clippedApproaches(id, tier), { clipped: 0, by: [] });
     });
   }
 }
+
+test("flights from belt viewpoints never come near the station", () => {
+  const station = createStation(stubKit().kit);
+  station.group.updateMatrixWorld(true);
+  const boxes: THREE.Box3[] = [];
+  station.group.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) boxes.push(new THREE.Box3().setFromObject(o));
+  });
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const up = new THREE.Vector3(0, 1, 0);
+  let closest = Infinity;
+  for (const { id, angleDeg } of RING.filter((a) => a.id === "jobs" || a.id === "career")) {
+    const here = new THREE.Vector3(...orbitPosition(angleDeg, 0, 0)).setY(DECK_Y);
+    // Anywhere the belt camera can be (it circles the station), for any turn of the deck.
+    for (const distance of [24, 32, 45, 60, 82, 120, 320]) {
+      for (const elevation of [5, 16, 35, 60, 85]) {
+        for (let bearing = 0; bearing < 360; bearing += 20) {
+          for (let spin = 0; spin < 360; spin += 45) {
+            const [e, b] = [radians(elevation), radians(bearing)];
+            const from: Pose = {
+              position: new THREE.Vector3(
+                distance * Math.cos(e) * Math.cos(b),
+                distance * Math.sin(e),
+                distance * Math.cos(e) * Math.sin(b),
+              ),
+              target: new THREE.Vector3(),
+            };
+            const onDeck = (v: THREE.Vector3) =>
+              v.clone().applyAxisAngle(up, radians(spin)).add(here);
+            const goal = { position: onDeck(DESK_SPOT.camera), target: onDeck(DESK_SPOT.screen) };
+            const turn = {};
+            for (let i = 0; i <= 60; i++) {
+              const at = asteroidApproach(from, goal, i / 60, turn).position;
+              if (at.length() > 30) continue;
+              for (const box of boxes) closest = Math.min(closest, box.distanceToPoint(at));
+            }
+            assert.ok(
+              closest > 1,
+              `${id}: ${closest.toFixed(2)} from ${distance}/${elevation}/${bearing}`,
+            );
+          }
+        }
+      }
+    }
+  }
+});

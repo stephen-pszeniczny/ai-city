@@ -28,7 +28,7 @@ import {
 } from "./sharedPieces.ts";
 
 /** Where a grown landmark stands: its own pad at the back, to the right of the screen. */
-export const LANDMARK_SPOT = polar(137, 3.35);
+export const LANDMARK_SPOT = polar(137, 2.5);
 /** The grown radar dish's head height at each landmark stage. */
 export const DISH_HEIGHT = { 2: 3.0, 3: 3.9, 4: 4.7 } as const;
 export const RING2_OUTER = 4.3;

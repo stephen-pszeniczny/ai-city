@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { asteroidScaleAt, piecesUpTo, PIECE_IDS } from "../src/belt/growth/ladders.ts";
 import { createPiece, hasPiece } from "../src/belt/growth/pieces.ts";
 import { previewTier } from "../src/belt/growth/preview.ts";
+import { DECK_R } from "../src/belt/growth/deck.ts";
 import { LANDMARK_SPOT } from "../src/belt/growth/jobsPieces.ts";
 import { PAD_AT } from "../src/belt/growth/sharedPieces.ts";
 import { DESK_SPOT, MONITOR_AT, MONITOR_TURN, workToDeck } from "../src/interior/workspace.ts";
@@ -115,6 +116,24 @@ test("a tier outside 0 to 10 is held at the nearest end", () => {
   assert.equal(a.growth.tier, 10);
   a.growth.setTier(-3);
   assert.equal(a.growth.tier, 0);
+});
+
+test("Opportunity Office's first landmark stands wholly on the deck", () => {
+  // Nothing has grown yet, so there's no second ring for its pad or mast to rest on.
+  const a = make("jobs");
+  a.world.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let widest = 0;
+  a.first.group.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const p = mesh.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
+      if (v.y < 0.3) widest = Math.max(widest, Math.hypot(v.x, v.z)); // what touches the deck
+    }
+  });
+  assert.ok(widest <= DECK_R, `reaches ${widest.toFixed(2)}`);
 });
 
 test("an unbuilt asteroid's landmark stays in the middle, for its hologram", () => {
