@@ -83,8 +83,11 @@ export const getMode = async (): Promise<Mode> =>
   (await request<{ mode: Mode }>("GET", "/api/mode")).mode;
 
 /** Switch modes. Going to Personal waits for Touch ID; a refusal throws ApiError. */
-export const setMode = async (mode: Mode): Promise<Mode> =>
-  (await request<{ mode: Mode }>("PUT", "/api/mode", { mode })).mode;
+export const setMode = async (mode: Mode): Promise<Mode> => {
+  const now = (await request<{ mode: Mode }>("PUT", "/api/mode", { mode })).mode;
+  forgetVaultKey(); // the engine locks the Vault on any switch, so the old key is dead
+  return now;
+};
 
 export const getBuildings = () => request<Building[]>("GET", "/api/buildings");
 

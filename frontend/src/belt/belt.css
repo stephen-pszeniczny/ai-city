@@ -536,18 +536,19 @@
   color: #ffd166;
 }
 
-/* ...and a glass card names what's new, low in the middle, above the ticker. */
+/* ...and a glass card names what's new, bottom left: clear of the robot, desk,
+   screen and controls in every building view, and above the ticker however wide. */
 .levelup-card {
   position: absolute;
-  left: 50%;
+  left: max(16px, env(safe-area-inset-left));
   bottom: 76px;
-  transform: translateX(-50%);
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: 8px;
+  box-sizing: border-box;
   width: max-content;
-  max-width: min(560px, calc(100% - 32px));
-  padding: 12px 18px;
+  max-width: 250px;
+  padding: 10px 14px;
   border-radius: 18px;
   border: 1px solid rgba(255, 209, 102, 0.55);
   background: rgba(16, 20, 32, 0.66);
@@ -564,7 +565,7 @@
 }
 
 .levelup-card__title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   color: #ffd166;
 }
@@ -572,8 +573,7 @@
 .levelup-card__chips {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -598,7 +598,7 @@
 @keyframes levelup-card-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 12px);
+    transform: translateY(12px);
   }
 }
 

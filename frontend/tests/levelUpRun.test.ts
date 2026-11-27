@@ -3,13 +3,25 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { Mode } from "../src/api.ts";
+import type { BuildingXp, Mode } from "../src/api.ts";
 import { celebrate, LevelUpRunner, newThings, type Moment } from "../src/belt/levelUpRun.ts";
 import { PIECE_IDS } from "../src/belt/growth/ladders.ts";
 import { PIECE_NAMES } from "../src/belt/levelUpNames.ts";
 import { LOOK } from "../src/belt/look.ts";
 
 const plan = { id: "jobs" as const, fromTier: 0, toTier: 2 };
+const record: BuildingXp = {
+  id: "jobs",
+  earning: true,
+  xp: 900,
+  level: 20,
+  level_start_xp: 880,
+  next_level_xp: 1000,
+  tier: 2,
+  seen_level: 20,
+  celebrated_tier: 0,
+  upgrade_waiting: true,
+};
 const { settleSeconds, dockSeconds, cheerSeconds } = LOOK.growth.moment;
 const WHOLE = dockSeconds + cheerSeconds + LOOK.growth.buildInSeconds;
 
@@ -33,21 +45,44 @@ test("it waits until ready has held for a moment, and starts again from nothing"
   /** Seconds of steady frames until it says yes, at most 5. */
   const steps = (seconds: number) => {
     let ready = false;
-    for (let t = 0; t < seconds - 1e-9; t += 0.05) ready = runner.settle(plan, 0.05);
+    for (let t = 0; t < seconds - 1e-9; t += 0.05) ready = runner.settle(true, 0.05);
     return ready;
   };
   assert.equal(steps(settleSeconds - 0.1), false);
-  assert.equal(runner.settle(null, 0.05), false);
+  assert.equal(runner.settle(false, 0.05), false);
   assert.equal(steps(settleSeconds - 0.1), false);
   assert.equal(steps(0.15), true);
 });
 
 test("a hitch doesn't skip the settle or a phase", () => {
   const { runner, start } = setup();
-  assert.equal(runner.settle(plan, 30), false);
+  assert.equal(runner.settle(true, 30), false);
   start();
   runner.advance(30);
   assert.equal(runner.running()?.phase, "dock");
+});
+
+// Asked every frame, so it hands back what it was given and builds nothing new.
+test("what's due is the building's own record, until it has played", () => {
+  const { runner, start } = setup();
+  const waiting = [
+    { ...record, id: "planner" as const },
+    { ...record, id: "jobs" as const },
+  ];
+  const inside = { level: "building", id: "jobs" } as const;
+  for (let i = 0; i < 3; i++) {
+    assert.equal(runner.due(waiting, inside, "sample", true), waiting[1]);
+  }
+  assert.equal(runner.due(waiting, inside, "sample", false), null);
+  assert.equal(runner.due(waiting, { level: "belt" }, "sample", true), null);
+  assert.equal(runner.due(waiting, { level: "screen", id: "jobs" }, "sample", true), null);
+  assert.equal(runner.due([], inside, "sample", true), null);
+  start();
+  runner.finish("skip");
+  assert.equal(runner.due(waiting, inside, "sample", true), null);
+  assert.equal(runner.due(waiting, inside, "personal", true), waiting[1]);
+  const higher = [{ ...record, tier: 3 }];
+  assert.equal(runner.due(higher, inside, "sample", true), higher[0]);
 });
 
 test("the plan is held: re-renders and refetches never restart it", () => {
@@ -73,7 +108,6 @@ test("it plays once: the same plan still waiting after done doesn't replay", () 
     ["end"],
   );
   assert.equal(start(), false); // ["xp"] not refetched yet, or the POST failed
-  assert.equal(runner.settle(plan, 0.05), false);
   assert.equal(done.length, 1);
 });
 

@@ -143,7 +143,8 @@ export function createBuildIn(
     overlay,
     /** k runs 0 (nothing yet) to 1 (all built). Call after the pieces have updated. */
     apply(k: number) {
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
         const own = clamp01((clamp01(k) - item.delay) / (1 - STAGGER));
         const s = Math.max(SMALLEST, pop(own, motion));
         item.position.copy(item.group.position);
@@ -159,7 +160,8 @@ export function createBuildIn(
     },
     /** Put back what apply() changed. Call before the pieces update. */
     restore() {
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
         if (!item.applied) continue;
         item.group.position.copy(item.position);
         item.group.scale.copy(item.scale);

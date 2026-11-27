@@ -1,4 +1,5 @@
-// The card that names a level-up in the building view: which level, and what's new.
+// The card that names a level-up in the building view (bottom left): which level, and
+// what's new.
 // A new thing the building view can't show says where to look. It stays for a few
 // seconds after the moment. Counts and names of decorations only, so the Vault's
 // needs no Touch ID. Nothing in it is clickable. Render with key={id}.

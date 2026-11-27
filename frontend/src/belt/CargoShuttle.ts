@@ -201,7 +201,10 @@ export function createCargoShuttle(dock: Dock, tint: string, texture = softGlow(
 
       const thrust = still ? 0.35 : 1;
       const flicker = 0.9 + 0.1 * Math.sin(t * 31) * Math.sin(t * 17);
-      for (const flame of flames) flame.scale.set(thrust, thrust * flicker, thrust);
+      // By index here and below: this runs every frame, and should make nothing.
+      for (let i = 0; i < flames.length; i++) {
+        flames[i]!.scale.set(thrust, thrust * flicker, thrust);
+      }
       flameMat.opacity = still ? 0.65 : 0.85;
       engineGlow.opacity = 0.75 * thrust * flicker;
       haloMat.opacity = 0.16 * glow;
@@ -217,13 +220,14 @@ export function createCargoShuttle(dock: Dock, tint: string, texture = softGlow(
       beamMat.opacity = (0.32 + 0.1 * Math.sin(t * 9)) * glow;
       ring.position.copy(dock.at).addScaledVector(along, length);
       ring.scale.setScalar(dock.size * (0.14 + 0.03 * Math.sin(t * 6)));
-      crates.forEach((crate, i) => {
+      for (let i = 0; i < crates.length; i++) {
+        const crate = crates[i]!;
         const at = pose.unload < 0 ? -1 : pose.unload * 2.4 - i * 0.28;
         crate.visible = at > 0 && at < 1;
-        if (!crate.visible) return;
+        if (!crate.visible) continue;
         crate.position.copy(dock.at).addScaledVector(along, at * length);
         crate.rotation.set(at * 5, at * 7, 0);
-      });
+      }
     },
     dispose() {
       group.removeFromParent();

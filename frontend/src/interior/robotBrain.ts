@@ -97,6 +97,13 @@ export class RobotBrain {
     this.forced = action;
   }
 
+  /** Stop a cheer, under way or still to come (the moment was skipped or dropped). */
+  endCheer(): void {
+    if (this.forced === "cheer") this.forced = null;
+    // No time left: the next update picks something else.
+    if (this.action === "cheer") this.length = 0;
+  }
+
   /** Ask the robot to react (it was clicked): it waves or spins next. */
   react(): void {
     this.reactNext = true;

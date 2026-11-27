@@ -15,7 +15,6 @@ import {
   hasVaultKey,
   markCelebrated,
   type BuildingId,
-  type BuildingXp,
   type Mode,
   type XpView,
 } from "../api";
@@ -46,6 +45,8 @@ export type LevelUpWorld = {
 
 type Playing = {
   moment: Moment;
+  /** The asteroid it plays on, or undefined at a station module. */
+  asteroid: AsteroidBuilding | undefined;
   /** Where the shuttle and the glow hang: it moves with what the camera looks at. */
   root: THREE.Group;
   cargo: CargoShuttle;
@@ -56,7 +57,6 @@ type Playing = {
 };
 
 const SWITCHING = { mutationKey: MODE_SWITCH_KEY };
-const NONE: readonly BuildingXp[] = [];
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
@@ -148,6 +148,8 @@ export function useLevelUpScene({
       p.buildIn?.dispose();
       p.cargo.dispose();
       p.root.removeFromParent();
+      // A skipped or dropped moment ends its cheer with it.
+      robotBrains.get(p.moment.id)?.endCheer();
       // If it was dropped mid-build, the asteroid goes back to its tier's own size.
       const a = asteroidOf(p.moment.id);
       if (a) a.setScale(asteroidScaleAt(a.growth.tier, a.id as GrowthId));
@@ -201,6 +203,7 @@ export function useLevelUpScene({
       root.add(cargo.group);
       playing.current = {
         moment: m,
+        asteroid: a,
         root,
         cargo,
         buildIn: null,
@@ -226,22 +229,19 @@ export function useLevelUpScene({
       if (last && current !== last.mode) levelUp.abandon();
       const here = viewRef.current;
       if (off || here.level !== "building") {
-        levelUp.settle(null, delta);
+        levelUp.settle(false, delta);
         return;
       }
-      let building: BuildingXp | undefined;
-      for (const b of known?.buildings ?? NONE) if (b.id === here.id) building = b;
       const ready =
         !!current &&
         !switching &&
         !flightState.flying() &&
         (here.id !== "finance" || vaultReady(current));
-      const plan = building ? planLevelUp(building, here, ready) : null;
-      // Already played this session (not refetched yet, or the save failed): nothing due.
-      const due =
-        plan && current && levelUp.playedTier(current, plan.id) < plan.toTier ? plan : null;
-      if (!levelUp.settle(due, delta) || !due || !current) return;
-      levelUp.start(due, current, { reducedMotion, onDone });
+      const building = current && known ? levelUp.due(known.buildings, here, current, ready) : null;
+      if (!levelUp.settle(building !== null, delta) || !building || !current) return;
+      const plan = planLevelUp(building, here, ready);
+      if (!plan) return;
+      levelUp.start(plan, current, { reducedMotion, onDone });
       const started = levelUp.running();
       if (started) begin(started, state.size.width / state.size.height);
     };
@@ -283,7 +283,7 @@ export function useLevelUpScene({
         if (!p.buildIn) startBuild(p, running);
         built = clamp01((t - dockSeconds - cheerSeconds) / LOOK.growth.buildInSeconds);
         p.buildIn?.apply(built);
-        const a = asteroidOf(running.id);
+        const a = p.asteroid;
         if (a) {
           // The asteroid grows along with the new pieces instead of jumping.
           const id = a.id as GrowthId;
@@ -306,15 +306,18 @@ export function useLevelUpScene({
   }, [world, scene, queryClient, reducedMotion, off]);
 
   // Leaving the building mid-moment still ends it at done. A layout effect, so it
-  // happens before the next frame is drawn.
+  // happens before the next frame is drawn. Keyed on where the view is, not on the
+  // object: the page makes a new one each time it re-renders.
+  const level = view.level;
+  const viewId = view.level === "belt" ? null : view.id;
   useLayoutEffect(() => {
     viewRef.current = view;
     levelUp.releaseClick();
-    const here = view.level === "building" ? view.id : null;
+    const here = level === "building" ? viewId : null;
     const m = levelUp.running() ?? levelUp.last();
     if (m && m.id !== here) levelUp.finish("leave");
     if (playing.current && playing.current.moment.id !== here) drive.remove();
-  }, [view, drive]);
+  }, [level, viewId, drive]);
 
   // The scene going away is leaving too.
   useEffect(

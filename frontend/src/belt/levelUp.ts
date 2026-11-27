@@ -13,9 +13,14 @@ export type LevelUpPlan = { id: BuildingId; fromTier: number; toTier: number } |
  * it's unlocked and the door greeting is over. Several waiting tiers play as one.
  */
 export function planLevelUp(b: BuildingXp, view: View, ready: boolean): LevelUpPlan {
-  if (!ready || !b.earning || !b.upgrade_waiting) return null;
-  if (view.level !== "building" || view.id !== b.id) return null;
+  if (!isDue(b, view, ready)) return null;
   return { id: b.id, fromTier: b.celebrated_tier, toTier: b.tier };
+}
+
+/** Whether planLevelUp has a plan. It builds nothing, so it can be asked every frame. */
+export function isDue(b: BuildingXp, view: View, ready: boolean): boolean {
+  if (!ready || !b.earning || !b.upgrade_waiting) return false;
+  return view.level === "building" && view.id === b.id;
 }
 
 export type LevelUpPhase = "dock" | "cheer" | "build" | "done";

@@ -3,9 +3,10 @@
 // it. Each upgrade plays once per mode in a session, even if saving it failed.
 // A click, Escape or leaving the building ends it at done. Pure logic; the scene
 // draws it (useLevelUpScene.ts).
-import type { BuildingId, Mode } from "../api";
+import type { BuildingId, BuildingXp, Mode } from "../api";
 import { LADDERS, type GrowthId } from "./growth/ladders.ts";
-import { phaseAt, type LevelUpPhase, type LevelUpPlan } from "./levelUp.ts";
+import { isDue, phaseAt, type LevelUpPhase, type LevelUpPlan } from "./levelUp.ts";
+import type { View } from "./levels.ts";
 import { LANDMARK_NAMES, PIECE_NAMES } from "./levelUpNames.ts";
 import { LOOK } from "./look.ts";
 
@@ -40,7 +41,10 @@ export class LevelUpRunner {
   private swallow = false;
   private onDone: ((moment: Moment, ending: Ending) => void) | null = null;
   /** The newest tier played this session, by mode and building. */
-  private readonly played = new Map<string, number>();
+  private readonly played: Record<Mode, Map<BuildingId, number>> = {
+    sample: new Map(),
+    personal: new Map(),
+  };
   private readonly listeners = new Set<() => void>();
 
   snapshot = (): Snapshot => this.state;
@@ -54,7 +58,7 @@ export class LevelUpRunner {
   elapsed = (): number => this.seconds;
 
   playedTier(mode: Mode | undefined, id: BuildingId): number {
-    return mode ? (this.played.get(`${mode}:${id}`) ?? 0) : 0;
+    return mode ? (this.played[mode].get(id) ?? 0) : 0;
   }
 
   /** The tier the scene shows: the old one until the build, then the new one from then on. */
@@ -66,9 +70,22 @@ export class LevelUpRunner {
     return Math.max(serverTier, this.playedTier(mode, id));
   }
 
-  /** Call each frame with what's due. True once it has been due long enough to start. */
-  settle(plan: LevelUpPlan, dt: number): boolean {
-    if (!plan || this.state.running) this.settled = 0;
+  /**
+   * The viewed building's record, if it has an upgrade to play now: due (levelUp.ts)
+   * and not played yet. Asked every frame, so it creates nothing.
+   */
+  due(buildings: readonly BuildingXp[], view: View, mode: Mode, ready: boolean): BuildingXp | null {
+    // By index: a for-of would make an iterator each time.
+    for (let i = 0; i < buildings.length; i++) {
+      const b = buildings[i]!;
+      if (isDue(b, view, ready)) return this.playedTier(mode, b.id) < b.tier ? b : null;
+    }
+    return null;
+  }
+
+  /** Call each frame with whether one is due. True once it has been due long enough to start. */
+  settle(due: boolean, dt: number): boolean {
+    if (!due || this.state.running) this.settled = 0;
     else this.settled += Math.min(dt, LONGEST_STEP);
     return this.settled >= LOOK.growth.moment.settleSeconds - 1e-9;
   }
@@ -110,7 +127,7 @@ export class LevelUpRunner {
       return;
     }
     const done: Moment = { ...m, phase: "done" };
-    this.played.set(`${m.mode}:${m.id}`, m.toTier);
+    this.played[m.mode].set(m.id, m.toTier);
     const onDone = this.onDone;
     this.onDone = null;
     this.set({

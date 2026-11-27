@@ -40,3 +40,20 @@ test("a 'locked' answer to a save tells the screen to show the lock again", asyn
   assert.equal(told, 1);
   stop();
 });
+
+test("a mode switch forgets the key; a refused switch keeps it", async () => {
+  const { setMode } = await import("../src/api.ts");
+  let refuse = true;
+  globalThis.fetch = (async (path: string) => {
+    if (path === "/api/vault/unlock") return answer(200, { key: "k3" });
+    return refuse
+      ? answer(403, { detail: "Touch ID didn't confirm." })
+      : answer(200, { mode: "sample" });
+  }) as typeof fetch;
+  await unlockVault();
+  await assert.rejects(setMode("personal"));
+  assert.equal(hasVaultKey(), true);
+  refuse = false;
+  await setMode("sample");
+  assert.equal(hasVaultKey(), false);
+});
