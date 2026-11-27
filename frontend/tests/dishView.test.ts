@@ -29,8 +29,12 @@ function sweep(tier: number) {
   return s;
 }
 
+// One measurement per tier covers all of SHAPES: the lens is a fixed vertical angle, so
+// gaps in view heights are the same at every shape (see dishScreen.ts). Dishes are
+// posed every 4 degrees; between poses a rim moves about 1% of view height at most,
+// and the gaps are about 10%.
 for (const tier of TIERS) {
-  test(`jobs tier ${tier}: the turning dish keeps clear of the robot, desk and monitor`, () => {
+  test(`jobs tier ${tier}: at every window shape, the turning dish keeps clear of the desk`, () => {
     const { gap, nearest } = sweep(tier);
     assert.ok(gap >= CLEAR, `${(gap * 100).toFixed(1)}% of view height from the ${nearest}`);
   });
