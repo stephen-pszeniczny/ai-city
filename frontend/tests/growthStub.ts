@@ -52,7 +52,7 @@ export function stubKit() {
 }
 
 const grounds = new Map<Asteroid, ReturnType<typeof rockGround>>();
-function groundOf(id: Asteroid) {
+export function groundOf(id: Asteroid) {
   let g = grounds.get(id);
   if (!g) {
     g = rockGround(rockGeometry(LOOKS[id].seed, LOOKS[id].tint), ROCK_SCALE, DECK_Y);

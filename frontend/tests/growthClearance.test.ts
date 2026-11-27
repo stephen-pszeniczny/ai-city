@@ -104,6 +104,26 @@ for (const id of ASTEROIDS) {
   }
 }
 
+// What stands still isn't covered above: the dishes' platforms and booms reach out
+// among the pieces round the rock.
+for (const tier of [0, 2, 5, 6, 7, 8, 9, 10]) {
+  test(`jobs tier ${tier}: the dishes, platforms and booms cut through no piece`, () => {
+    const a = make("jobs");
+    a.growth.setTier(tier);
+    a.growth.update(0);
+    a.world.updateMatrixWorld(true);
+    const parts = partsOf(a);
+    const landmark = parts.filter((p) => p.unit === "landmark").map((p) => solidOf(p.mesh));
+    const found = new Set<string>();
+    for (const other of parts) {
+      if (other.unit === "landmark" || found.has(other.unit) || !shown(other.mesh)) continue;
+      const solid = solidOf(other.mesh);
+      if (landmark.some((s) => crosses(s, solid))) found.add(other.unit);
+    }
+    assert.deepEqual([...found], []);
+  });
+}
+
 /** Belt camera spots all round an asteroid, in its deck coordinates. */
 function beltSpots(): Pose[] {
   const out: Pose[] = [];

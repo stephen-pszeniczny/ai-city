@@ -40,6 +40,7 @@ export function createLandmark(
       const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 1.8, 10), mats.steel);
       mast.position.y = 0.9;
       const head = new THREE.Group();
+      head.name = "dishHead";
       head.position.y = 1.9;
       const dish = new THREE.Mesh(
         new THREE.LatheGeometry(

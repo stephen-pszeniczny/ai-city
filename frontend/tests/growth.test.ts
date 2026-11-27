@@ -9,11 +9,11 @@ import { asteroidScaleAt, piecesUpTo, PIECE_IDS } from "../src/belt/growth/ladde
 import { createPiece, hasPiece } from "../src/belt/growth/pieces.ts";
 import { previewTier } from "../src/belt/growth/preview.ts";
 import { DECK_R } from "../src/belt/growth/deck.ts";
-import { LANDMARK_SPOT } from "../src/belt/growth/jobsPieces.ts";
+import { DISH_SPOT, LANDMARK_SPOT } from "../src/belt/growth/jobsPieces.ts";
 import { PAD_AT } from "../src/belt/growth/sharedPieces.ts";
 import { DESK_SPOT, MONITOR_AT, MONITOR_TURN, workToDeck } from "../src/interior/workspace.ts";
 import type { GrowthHandle } from "../src/belt/growth/applyGrowth.ts";
-import { ASTEROIDS, make, shown, stubKit, type Asteroid } from "./growthStub.ts";
+import { ASTEROIDS, groundOf, make, shown, stubKit, type Asteroid } from "./growthStub.ts";
 
 const TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
@@ -39,8 +39,9 @@ test("a built asteroid starts at tier 0: today's landmark, its own size, no piec
     assert.equal(a.growth.tier, 0);
     assert.deepEqual(names(a.growth.pieces), []);
     assert.equal(a.growth.landmark(), a.first.group);
-    // On the same off-centre pad as the grown stages, clear of the desk.
-    assert.deepEqual(a.first.group.position.toArray(), LANDMARK_SPOT.toArray());
+    // Where the grown stages stand too, clear of the desk.
+    const spot = id === "jobs" ? DISH_SPOT : LANDMARK_SPOT;
+    assert.deepEqual(a.first.group.position.toArray(), spot.toArray());
     assert.equal(a.body.scale.x, 1);
     assert.equal(a.growth.labelHeight(), 4.6);
   }
@@ -118,22 +119,37 @@ test("a tier outside 0 to 10 is held at the nearest end", () => {
   assert.equal(a.growth.tier, 0);
 });
 
-test("Opportunity Office's first landmark stands wholly on the deck", () => {
-  // Nothing has grown yet, so there's no second ring for its pad or mast to rest on.
+test("Opportunity Office's dishes stand well past the deck, on booms buried in the rock", () => {
+  const ground = groundOf("jobs");
   const a = make("jobs");
-  a.world.updateMatrixWorld(true);
   const v = new THREE.Vector3();
-  let widest = 0;
-  a.first.group.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const p = mesh.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrixWorld);
-      if (v.y < 0.3) widest = Math.max(widest, Math.hypot(v.x, v.z)); // what touches the deck
+  for (const tier of [0, ...TIERS]) {
+    a.growth.setTier(tier);
+    a.world.updateMatrixWorld(true);
+    // In the deck's own units, whatever the asteroid has grown to.
+    const local = (p: THREE.Vector3) => a.holder.worldToLocal(p);
+    const booms: THREE.Object3D[] = [];
+    a.growth.landmark().traverse((o) => {
+      if (o.name === "dishHead") {
+        const at = local(o.getWorldPosition(v));
+        assert.ok(Math.hypot(at.x, at.z) > DECK_R * 2.5, `tier ${tier}: too near the desk`);
+      }
+      if (o.name === "boom") booms.push(o);
+    });
+    assert.equal(booms.length, tier >= 6 ? 3 : 1, `tier ${tier}`);
+    for (const boom of booms) {
+      let buried = 0;
+      boom.traverse((o) => {
+        const p = (o as THREE.Mesh).geometry?.attributes.position as THREE.BufferAttribute;
+        for (let i = 0; i < (p?.count ?? 0); i++) {
+          local(v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld));
+          const inside = ground.radius(Math.atan2(v.z, v.x), v.y);
+          if (v.y < -1.4 && Math.hypot(v.x, v.z) < inside) buried++;
+        }
+      });
+      assert.ok(buried > 0, `tier ${tier}: a boom doesn't reach the rock`);
     }
-  });
-  assert.ok(widest <= DECK_R, `reaches ${widest.toFixed(2)}`);
+  }
 });
 
 test("an unbuilt asteroid's landmark stays in the middle, for its hologram", () => {

@@ -1,10 +1,16 @@
 // The grown landmarks: stages 2 to 4 (stage 1 is in ../landmarks.ts). They stand
-// on their own spot at the back of the deck, clear of the desk.
+// clear of the desk: the radar dish out on its own platforms past the deck, the
+// ship on a pad at the back of the deck.
 import * as THREE from "three";
 
 import type { Kit } from "../materials.ts";
-import { DISH_HEIGHT, LANDMARK_SPOT } from "./jobsPieces.ts";
+import { DISH_HEIGHT, DISH_SPOT, LANDMARK_SPOT } from "./jobsPieces.ts";
 import { builder, chaseLamps, palette, polar, type Builder, type Palette } from "./parts.ts";
+
+/** Where a dish boom's two chords start, out from the middle and down: inside the rock. */
+export const BOOM_ROOT = { upper: [3.2, -1.75], lower: [3.4, -2.45] } as const;
+/** The heights the chords reach under the platform. */
+const BOOM_END = { upper: -1.72, lower: -1.86 } as const;
 
 type Model = { group: THREE.Group; update(t: number): void };
 type Stage = 2 | 3 | 4;
@@ -14,6 +20,7 @@ type Stage = 2 | 3 | 4;
 /** A dish on a turning head: bowl, lit lip, feed arms and a glowing tip. */
 function dishHead(c: Palette, kit: Kit, size: number, flagship: boolean): THREE.Group {
   const head = new THREE.Group();
+  head.name = "dishHead";
   const bowlAt = new THREE.Group();
   bowlAt.rotation.x = -0.9;
   bowlAt.scale.setScalar(size);
@@ -51,34 +58,83 @@ function dishHead(c: Palette, kit: Kit, size: number, flagship: boolean): THREE.
   return head;
 }
 
-/** A dish on its tower, from the deck (or ring) up to `height`. */
+/**
+ * A round platform out past the deck, with its top at `at`, carried by a truss boom
+ * whose far ends are buried in the rock at the bearing `root` (degrees). The boom
+ * comes back as its own group.
+ */
+function platform(
+  c: Palette,
+  kit: Kit,
+  b: Builder,
+  at: THREE.Vector3,
+  wide: number,
+  root: number,
+): THREE.Group {
+  b.cylinder(wide, wide * 0.8, 0.22, c.dark, [at.x, at.y - 0.11, at.z], { sides: 28 });
+  b.hoop(wide, 0.05, c.lit, [at.x, at.y, at.z]);
+  const across = polar((Math.atan2(at.z, at.x) * 180) / Math.PI + 90, 0.28);
+  const truss = builder(kit);
+  const BAYS = 5;
+  // A short post at the boom's end lifts the platform. The boom itself runs low, under
+  // the second deck's ring, and the platform stands just outside that ring.
+  truss.rod(at.clone().setY(BOOM_END.upper), at.clone().setY(at.y - 0.2), 0.13, c.paint);
+  for (const side of [-1, 1]) {
+    const edge = across.clone().multiplyScalar(side);
+    const from = [polar(root, ...BOOM_ROOT.upper), polar(root, ...BOOM_ROOT.lower)] as const;
+    const to = [at.clone().setY(BOOM_END.upper), at.clone().setY(BOOM_END.lower)] as const;
+    // Points along the boom's upper (0) and lower (1) chords.
+    const on = (chord: 0 | 1, k: number) =>
+      from[chord]
+        .clone()
+        .lerp(to[chord], k / BAYS)
+        .add(edge);
+    // In short lengths, so each can be told apart from what the deck hides.
+    for (let k = 0; k < BAYS; k++) {
+      truss.rod(on(0, k), on(0, k + 1), 0.07, c.steel);
+      truss.rod(on(1, k), on(1, k + 1), 0.09, c.paint);
+      truss.rod(on(1, k), on(0, k), 0.035, c.steel);
+      truss.rod(on(1, k), on(0, k + 1), 0.03, c.steel, { near: true });
+    }
+  }
+  const boom = new THREE.Group();
+  boom.name = "boom";
+  truss.into(boom);
+  return boom;
+}
+
+/** A dish on its platform and tower. `height` is the head's, over the platform's top at `foot`. */
 function dishTower(
   c: Palette,
   kit: Kit,
   b: Builder,
-  foot: THREE.Vector3,
+  { at: foot, root }: Footing,
   height: number,
   size: number,
   flagship: boolean,
-): THREE.Group {
-  b.cylinder(0.55 * size + 0.15, 0.65 * size + 0.15, 0.2, c.dark, [foot.x, 0.08, foot.z], {
-    sides: 24,
-  });
-  b.hoop(0.55 * size + 0.15, 0.05, c.lit, [foot.x, 0.19, foot.z]);
+): { head: THREE.Group; boom: THREE.Group } {
+  const wide = 0.55 * size + 0.15;
+  const up = (y: number) => foot.clone().setY(foot.y + y);
+  const boom = platform(c, kit, b, foot, wide, root);
+  b.cylinder(wide, wide + 0.1, 0.2, c.dark, up(0.08), { sides: 24 });
+  b.hoop(wide, 0.05, c.lit, up(0.19));
   const neck = height - 0.4 * size;
-  b.lattice(
-    foot.clone().setY(0.15),
-    neck - 0.15,
-    0.55 * size + 0.15,
-    0.22 * size + 0.1,
-    c.steel,
-    4,
-  );
-  b.cylinder(0.2 * size + 0.06, 0.2 * size + 0.06, 0.12, c.paint, [foot.x, neck, foot.z]);
+  b.lattice(up(0.15), neck - 0.15, wide, 0.22 * size + 0.1, c.steel, 4);
+  b.cylinder(0.2 * size + 0.06, 0.2 * size + 0.06, 0.12, c.paint, up(neck));
   const head = dishHead(c, kit, size, flagship);
-  head.position.set(foot.x, height, foot.z);
-  return head;
+  head.position.copy(up(height));
+  return { head, boom };
 }
+
+/** A dish's platform, and the bearing its boom comes from (turned away from the desk). */
+type Footing = { at: THREE.Vector3; root: number };
+
+const MAIN_DISH: Footing = { at: DISH_SPOT, root: 68 };
+/** The side dishes at stages 3 and 4: one back to the right, one far round to the left. */
+const SIDE_DISHES: Footing[] = [
+  { at: polar(138, 9.1, DISH_SPOT.y), root: 150 },
+  { at: polar(60, 9.1, DISH_SPOT.y), root: 52 },
+];
 
 function radar(stage: Stage, tint: string, kit: Kit): Model {
   const c = palette(tint, kit);
@@ -88,27 +144,30 @@ function radar(stage: Stage, tint: string, kit: Kit): Model {
     c,
     kit,
     b,
-    LANDMARK_SPOT,
+    MAIN_DISH,
     DISH_HEIGHT[stage],
-    { 2: 1.12, 3: 1.18, 4: 1.55 }[stage],
+    { 2: 1.12, 3: 1.18, 4: 1.34 }[stage],
     stage === 4,
   );
-  const heads = [main];
-  const updates: ((t: number) => void)[] = [(t) => (main.rotation.y = t * 0.45)];
+  const heads = [main.head];
+  group.add(main.boom);
+  const updates: ((t: number) => void)[] = [(t) => (main.head.rotation.y = t * 0.45)];
   if (stage >= 3) {
     // Two more dishes on raised towers, linked to the first by glowing cables.
     const size = stage === 4 ? 0.82 : 0.68;
-    const height = stage === 4 ? 3.1 : 2.6;
-    for (const [i, foot] of [polar(40, 3.7), polar(186, 3.7)].entries()) {
-      const head = dishTower(c, kit, b, foot, height, size, false);
+    const height = stage === 4 ? 2.5 : 2.2;
+    for (const [i, side] of SIDE_DISHES.entries()) {
+      const foot = side.at;
+      const { head, boom } = dishTower(c, kit, b, side, height, size, false);
       heads.push(head);
+      group.add(boom);
       updates.push((t) => (head.rotation.y = -t * (0.3 + i * 0.12) + i * 2.1));
-      const from = LANDMARK_SPOT.clone().setY(DISH_HEIGHT[stage] - 1.0);
-      const to = foot.clone().setY(height - 0.7);
+      const from = DISH_SPOT.clone().setY(DISH_SPOT.y + DISH_HEIGHT[stage] - 0.8);
+      const to = foot.clone().setY(foot.y + height - 0.6);
       const sag = from.clone().lerp(to, 0.5);
-      sag.y -= 0.35;
-      // The first cable bows out behind the screen.
-      if (i === 0) sag.z += 0.9;
+      sag.y -= 0.2;
+      // Bowed outward, away from the desk.
+      sag.addScaledVector(sag.clone().setY(0).normalize(), 0.9);
       b.pipe([from, sag, to], 0.03, c.lit);
       const packet = new THREE.Mesh(kit.keep(new THREE.SphereGeometry(0.08, 8, 6)), c.lamp);
       group.add(packet);
@@ -244,9 +303,13 @@ function hangarShip(stage: Stage, tint: string, kit: Kit): Model {
   };
 }
 
+/** Today's dish and mast out on the platform, a little smaller so it sits in the background. */
+const FIRST_DISH_SIZE = 0.86;
+
 /**
- * Stand today's landmark (stage 1) on its own pad where the grown ones stand,
- * clear of the desk. The pad reaches down past the deck's edge to the rock.
+ * Stand today's landmark (stage 1) where the grown ones stand, clear of the desk:
+ * the dish on its platform past the deck, the ship on a pad that reaches down past
+ * the deck's edge to the rock.
  */
 export function standLandmark(
   group: THREE.Group,
@@ -255,8 +318,22 @@ export function standLandmark(
   kit: Kit,
 ): void {
   const c = palette(tint, kit);
-  const wide = { jobs: 0.45, career: 0.95 }[id];
   const b = builder(kit);
+  if (id === "jobs") {
+    const dish = new THREE.Group();
+    dish.scale.setScalar(FIRST_DISH_SIZE);
+    dish.add(...group.children);
+    group.add(dish);
+    // Built in deck coordinates, then moved into the landmark's own.
+    const stand = new THREE.Group();
+    stand.position.copy(DISH_SPOT).negate();
+    stand.add(platform(c, kit, b, DISH_SPOT, 0.62, MAIN_DISH.root));
+    b.into(stand);
+    group.add(stand);
+    group.position.copy(DISH_SPOT);
+    return;
+  }
+  const wide = 0.95;
   b.cylinder(wide, wide * 0.82, 0.6, c.dark, [0, -0.28, 0], { sides: 28 });
   b.hoop(wide, 0.045, c.lit, [0, 0.025, 0]);
   b.into(group);

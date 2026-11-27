@@ -27,10 +27,16 @@ import {
   REACH_DEGREES,
 } from "./sharedPieces.ts";
 
-/** Where a grown landmark stands: its own pad at the back, to the right of the screen. */
+/** Where Flight School's landmark stands: its own pad at the back, to the right of the screen. */
 export const LANDMARK_SPOT = polar(137, 2.5);
-/** The grown radar dish's head height at each landmark stage. */
-export const DISH_HEIGHT = { 2: 3.0, 3: 3.9, 4: 4.7 } as const;
+/**
+ * Where Opportunity Office's radar dish stands, at every stage: on a platform of its
+ * own, well out past the deck and a little below it, to the back left of the building
+ * view. That keeps the turning dish clear of the robot, desk and screen.
+ */
+export const DISH_SPOT = polar(82, 9.1, -0.9);
+/** The grown radar dish's head height over its platform at each landmark stage. */
+export const DISH_HEIGHT = { 2: 2.5, 3: 2.95, 4: 3.4 } as const;
 export const RING2_OUTER = 4.3;
 
 /** The rock's top at a spot, never so low that a building would hang off the side. */
@@ -113,7 +119,7 @@ export function deckRing2(tint: string, kit: Kit, ground: Ground): Piece {
 export function signalRings(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
   const group = new THREE.Group();
-  group.position.copy(LANDMARK_SPOT);
+  group.position.copy(DISH_SPOT);
   const geo = kit.keep(new THREE.TorusGeometry(1, 0.018, 6, 64));
   const rings = [0, 1, 2].map(() => {
     const material = c.beam(0.8);
@@ -224,7 +230,7 @@ export function minedSeams(tint: string, kit: Kit, ground: Ground): Piece {
   const c = palette(tint, kit);
   return still(kit, (b) => {
     const rng = mulberry32(5150);
-    for (const start of [8, 62, 128, 196, 262, 322]) {
+    for (const start of [354, 22, 108, 196, 262, 322]) {
       const walk = (degrees: number, y: number, steps: number, thick: number) => {
         const points: THREE.Vector3[] = [];
         let a = degrees;
