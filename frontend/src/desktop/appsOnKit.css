@@ -137,3 +137,118 @@
   align-items: center;
   gap: var(--kit-space-2);
 }
+
+/* Daily plan: the week as glass tiles. */
+.window__pane .plan__days {
+  gap: var(--kit-space-2);
+}
+
+.window__pane .plan__day {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--kit-space-2) var(--kit-space-1);
+  border: 1px solid var(--kit-line);
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  backdrop-filter: blur(var(--kit-blur));
+  -webkit-backdrop-filter: blur(var(--kit-blur));
+  overflow: hidden;
+}
+
+.window__pane .plan__day[aria-selected="true"] {
+  border-color: rgba(120, 160, 255, 0.6);
+  background: linear-gradient(160deg, rgba(61, 109, 242, 0.42), rgba(61, 109, 242, 0.14));
+  box-shadow: 0 0 18px rgba(61, 109, 242, 0.25);
+}
+
+.window__pane .plan__day--today::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--kit-accent);
+}
+
+.window__pane .plan__dayname {
+  color: var(--kit-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.window__pane .plan__day--today .plan__dayname {
+  color: #8aa4ff;
+}
+
+.window__pane .plan__daydate {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.window__pane .plan__daycount {
+  color: var(--kit-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+/* Blocks: a glass row with a coloured kind bar. */
+.window__pane .plan__block,
+.window__pane .plan__item {
+  border: 1px solid var(--kit-line);
+  border-left-width: 4px;
+  border-radius: var(--kit-radius-m);
+  background: var(--kit-glass);
+  padding: var(--kit-space-2) var(--kit-space-3);
+}
+
+.window__pane .plan__block--work {
+  border-left-color: #3d6df2;
+}
+
+.window__pane .plan__block--commute {
+  border-left-color: #8e8e93;
+}
+
+.window__pane .plan__block--event {
+  border-left-color: #bf5af2;
+}
+
+.window__pane .plan__time {
+  min-width: 0;
+  padding: 2px var(--kit-space-2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--kit-muted);
+  font-size: 0.75rem;
+}
+
+.window__pane .plan__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.window__pane .plan__actions .btn {
+  min-height: 28px;
+  padding: 0 var(--kit-space-3);
+  font-size: 0.75rem;
+}
+
+.window__pane .plan__todo h3 {
+  margin: 0 0 var(--kit-space-2);
+  color: var(--kit-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.window__pane .plan__block--gym {
+  border-left-color: #34c759;
+}
+
+.window__pane .plan__block--side_work,
+.window__pane .plan__block--build {
+  border-left-color: var(--kit-warn);
+}

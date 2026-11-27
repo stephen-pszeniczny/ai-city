@@ -6,6 +6,7 @@ import type { PlanBlock, Task } from "../src/api.ts";
 import {
   canMarkGym,
   dayLabel,
+  dayTile,
   isPast,
   overlapping,
   shiftWeek,
@@ -107,4 +108,10 @@ test("canMarkGym: today and up to 7 days back, never ahead", () => {
   assert.equal(canMarkGym("2026-11-17", "2026-11-25"), false);
   assert.equal(canMarkGym("2026-11-26", "2026-11-25"), false);
   assert.equal(canMarkGym("2026-11-30", "2026-12-02"), true); // across a month end
+});
+
+test("a day tile shows weekday, date and a short block count", () => {
+  assert.deepEqual(dayTile("2026-11-23", 3), { weekday: "Mon", date: "23", count: "3 blocks" });
+  assert.equal(dayTile("2026-11-24", 1).count, "1 block");
+  assert.equal(dayTile("2026-11-29", 0).count, "Free");
 });

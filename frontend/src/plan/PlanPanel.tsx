@@ -28,7 +28,7 @@ import { categoryLabel } from "../todo/categories";
 import { BlockForm } from "./BlockForm";
 import { itemCountLabel } from "./grocery";
 import { TodayRoutines } from "./RoutineCard";
-import { canMarkGym, dayLabel, isPast, overlapping, shiftWeek, todosFor } from "./week";
+import { canMarkGym, dayLabel, dayTile, isPast, overlapping, shiftWeek, todosFor } from "./week";
 import "./plan.css";
 
 /** Read the week; if it isn't saved yet, ask the server to open (create) it. */
@@ -179,8 +179,7 @@ export function PlanPanel() {
                 className={`plan__day${d.day === today ? " plan__day--today" : ""}${isPast(d.day, today) ? " plan__day--past" : ""}`}
                 onClick={() => setChosenDay(d.day)}
               >
-                {dayLabel(d.day)}
-                {d.day === today && <span className="plan__today"> (today)</span>}
+                <DayTile day={d.day} blocks={d.blocks.length} isToday={d.day === today} />
               </button>
             ))}
           </div>
@@ -200,9 +199,9 @@ export function PlanPanel() {
           </ul>
 
           {w.grocery_day === day && (
-            <p className="plan__grocery">
+            <span className="plan__tag plan__grocery">
               🛒 Grocery day{grocery.data ? ` · ${itemCountLabel(grocery.data.open)}` : ""}
-            </p>
+            </span>
           )}
 
           {!isPast(day, today) && (
@@ -369,5 +368,16 @@ function AddBlock({
       }}
       onError={onError}
     />
+  );
+}
+
+function DayTile({ day, blocks, isToday }: { day: string; blocks: number; isToday: boolean }) {
+  const tile = dayTile(day, blocks);
+  return (
+    <>
+      <span className="plan__dayname">{isToday ? "Today" : tile.weekday}</span>
+      <span className="plan__daydate">{tile.date}</span>
+      <span className="plan__daycount">{tile.count}</span>
+    </>
   );
 }
