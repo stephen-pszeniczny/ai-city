@@ -82,6 +82,11 @@ SAMPLE_INCOME = IncomeSettings(
     tax_set_aside_percent=Decimal(20), tax_set_aside_is_placeholder=True, statement_due_day=8
 )
 
+# Made-up XP added to each earning building in Sample mode only (never stored), so
+# screenshots show a belt part-way up: with the seeded records, about Mission Control
+# level 34, the Vault 27 and Opportunity Office 22.
+SAMPLE_XP_HEAD_START: dict[str, int] = {"planner": 4500, "finance": 60, "jobs": 270}
+
 # Sample mode's Opportunity Office settings: made-up platforms, never the private
 # settings. Nothing is ever fetched from them.
 SAMPLE_JOBS = JobsSettings(

@@ -4,8 +4,10 @@ Everything here is made up. Temporary Sample-labelled databases only. Times are 
 unless a test is about local days, so the Toronto date matches the UTC one.
 """
 
+import re
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -568,6 +570,20 @@ def test_building_view_of_a_building_not_earning_is_all_zeros(conn, building):
     )
 
 
+def test_head_start_is_added_before_level_and_tier(conn, clock):
+    add_gym_done(conn, 2)
+    head_start = xp_for_level("planner", 30) - 30
+    ahead = building_view(conn, "planner", ROUTINES, TZ, head_start=head_start)
+    assert (ahead.xp, ahead.level, ahead.tier) == (xp_for_level("planner", 30), 30, 3)
+    assert ahead.upgrade_waiting is True
+    # A celebrated upgrade still holds the level up over the head start.
+    XpStore(conn, clock).mark_celebrated("planner", 5, current_tier=5)
+    held = building_view(conn, "planner", ROUTINES, TZ, head_start=head_start)
+    assert (held.level, held.tier) == (50, 5)
+    # A building not earning yet gets none of it.
+    assert building_view(conn, "career", ROUTINES, TZ, head_start=500).xp == 0
+
+
 def add_gym_done(conn, count):
     conn.execute(
         "INSERT INTO plan_weeks (id, week_start, created_at) VALUES (1, '2026-11-23', ?)", (STAMP,)
@@ -720,3 +736,14 @@ def test_xp_history_is_append_only(conn, jobs, table, change):
 def test_new_tables_refuse_bad_data(conn, sql):
     with pytest.raises(Exception, match="CHECK constraint"):
         conn.execute(sql)
+
+
+# --- In step with the page ----------------------------------------------------------------
+
+
+def test_earning_buildings_match_frontend_built():
+    """Buildings earn XP once they're built: when one ships, both lists change together."""
+    source = (Path(__file__).resolve().parents[1] / "frontend/src/belt/built.ts").read_text()
+    literal = re.search(r"BUILT\b[^=]*=\s*new Set<BuildingId>\(\[(.*?)\]\)", source, re.DOTALL)
+    assert literal, "Couldn't find the BUILT set in built.ts."
+    assert set(re.findall(r'"([a-z_]+)"', literal[1])) == xp_rules.EARNING_BUILDINGS

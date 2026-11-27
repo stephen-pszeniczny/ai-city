@@ -73,12 +73,21 @@ def building_xp(
 
 
 def building_view(
-    conn: sqlite3.Connection, building: str, routines: tuple[Routine, ...], tz: tzinfo
+    conn: sqlite3.Connection,
+    building: str,
+    routines: tuple[Routine, ...],
+    tz: tzinfo,
+    *,
+    head_start: int = 0,
 ) -> BuildingXp:
-    """A building's XP, level and upgrades, with what the page has already shown."""
+    """A building's XP, level and upgrades, with what the page has already shown.
+
+    head_start is extra XP counted on top of the records (Sample mode only); a
+    building not earning yet gets none.
+    """
     if building not in xp_rules.EARNING_BUILDINGS:
         return BuildingXp(building, False, 0, 0, 0, 0, 0, 0, 0, False)
-    xp = building_xp(conn, building, routines, tz)
+    xp = building_xp(conn, building, routines, tz) + head_start
     seen_level, celebrated_tier = _seen(conn, building)
     level = max(xp_rules.level_for_xp(building, xp), celebrated_tier * _LEVELS_PER_TIER)
     tier = level // _LEVELS_PER_TIER
