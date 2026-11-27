@@ -17,6 +17,22 @@ const farWall = (room: "planner" | "finance") => {
 };
 const ROYAL_BLUE = 0x4169e1;
 
+/**
+ * The control room's own smooth gold. (The hull's crumpled foil, right for the
+ * outside, turns to speckles this close up.)
+ */
+const smoothGold = (kit: Kit) =>
+  kit.keep(
+    new THREE.MeshStandardMaterial({
+      color: 0xd9a63e,
+      roughness: 0.3,
+      metalness: 0.9,
+      // The room is dim: a faint glow of its own keeps it reading as gold, not olive.
+      emissive: 0x6a4708,
+      emissiveIntensity: 0.45,
+    }),
+  );
+
 /** Level 50, Mission Control: more screens on the wall, their readouts moving. */
 export function wallScreens(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
@@ -142,7 +158,7 @@ export function mapTable(tint: string, kit: Kit): Piece {
 /** Level 50, the Vault: more deposit boxes, each with a gold light. */
 export function depositBoxes(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
-  const gold = kit.mats.gold;
+  const gold = smoothGold(kit);
   const wall = farWall("finance");
   const group = new THREE.Group();
   const steel = kit.keep(
@@ -187,7 +203,7 @@ const SHELF_AT = { x: 1.72, z: 0.5 } as const;
 /** Level 70, the Vault: a gold display shelf with stacked bars and a trophy. */
 export function goldShelf(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
-  const gold = kit.mats.gold;
+  const gold = smoothGold(kit);
   const bright = kit.keep(
     new THREE.MeshStandardMaterial({
       color: 0xffd36a,
@@ -277,7 +293,7 @@ export function goldShelf(tint: string, kit: Kit): Piece {
 /** Level 90, the Vault: a gold finish on the round vault door. */
 export function goldVaultDoor(tint: string, kit: Kit): Piece {
   const c = palette(tint, kit);
-  const gold = kit.mats.gold;
+  const gold = smoothGold(kit);
   const bright = kit.keep(
     new THREE.MeshStandardMaterial({
       color: 0xffd36a,

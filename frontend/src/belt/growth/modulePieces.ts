@@ -142,8 +142,9 @@ export function roofDish(tint: string, kit: Kit): Piece {
     const k = i / 11;
     return new THREE.Vector2(k * R, k * k * depth);
   });
+  // A lathe only draws one face: the profile run backwards draws the inside.
   const bowl = new THREE.LatheGeometry(profile, 48);
-  const inner = bowl.clone();
+  const inner = new THREE.LatheGeometry([...profile].reverse(), 48);
   inner.translate(0, 0.045, 0);
   b.add(bowl, c.deep);
   b.add(inner, c.white);
@@ -296,7 +297,12 @@ export function satellite(tint: string, kit: Kit): Piece {
     Array.from({ length: 6 }, (_, i) => new THREE.Vector2(i * 0.055, (i * 0.055) ** 2 * 0.9)),
     24,
   );
-  b.add(bowl, c.white, [0, 0, 0.5], { turn: [Math.PI / 2, 0, 0] });
+  const face = new THREE.LatheGeometry(
+    [...(bowl.parameters.points as THREE.Vector2[])].reverse(),
+    24,
+  );
+  b.add(face, c.white, [0, 0, 0.51], { turn: [Math.PI / 2, 0, 0] });
+  b.add(bowl, c.deep, [0, 0, 0.5], { turn: [Math.PI / 2, 0, 0] });
   b.rod(v3(0, 0, 0.28), v3(0, 0, 0.74), 0.022, c.steel);
   b.ball(0.06, c.lamp, [0, 0, 0.76]);
   b.into(craft);

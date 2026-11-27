@@ -272,3 +272,18 @@ test("with no XP everything is at tier 0, and the preview overrides it all", () 
   const xp = { buildings: [building("jobs", true, 2)] } as unknown as XpView;
   assert.equal(sceneTier(xp, 0, "jobs"), 0);
 });
+
+test("the roof dish shows a solid face to whoever looks into it", () => {
+  const { station, growth } = makeStation();
+  growth.planner.setTier(3);
+  station.group.updateMatrixWorld(true);
+  const dish = growth.planner.pieces.getObjectByName("roofDish")!;
+  // From in front and above, as the home view does, into the bowl beside its middle.
+  const ray = new THREE.Raycaster();
+  const head = dish.children[1]!;
+  const into = head.children[0]!.localToWorld(new THREE.Vector3(0.7, 0.2, 0.3));
+  const from = head.children[0]!.localToWorld(new THREE.Vector3(0.7, 8, 0.3));
+  ray.set(from, into.clone().sub(from).normalize());
+  const hit = ray.intersectObject(dish, true)[0];
+  assert.ok(hit && hit.distance < from.distanceTo(into) + 0.4, "sees through the bowl");
+});
