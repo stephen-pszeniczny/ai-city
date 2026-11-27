@@ -6,6 +6,9 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import type { BuildingId } from "../api";
@@ -255,7 +258,9 @@ export function Monitor({
     last.current.key = "";
   }, [title, tint, built, lines]);
 
+  const hold = useHold();
   useFrame(() => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     if (!live && last.current.key !== "") return;
     const s = brain.last;
     const typing = s.action === "type";

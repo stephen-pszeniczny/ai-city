@@ -6,6 +6,9 @@ import { useFrame, type ThreeElements } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
+
 import { LOOK, motionScale } from "../belt/look";
 
 type PanelTextures = { bars: THREE.CanvasTexture; wave: THREE.CanvasTexture };
@@ -117,7 +120,9 @@ export function PanelTexturesProvider({ children }: { children: ReactNode }) {
     [parts],
   );
   const next = useRef(0);
+  const hold = useHold();
   useFrame((state) => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     const now = state.clock.elapsedTime;
     if (now < next.current) return;
     next.current = now + 0.1;

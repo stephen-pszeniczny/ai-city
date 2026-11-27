@@ -5,6 +5,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
+
 const BUTTON_COLOURS = [0xff453a, 0xffb340, 0x30d158, 0x4169e1, 0x8aa4ff, 0x64d2ff];
 
 export function Console({ tint }: { tint: string }) {
@@ -39,7 +42,9 @@ export function Console({ tint }: { tint: string }) {
 
   const needles = useRef<THREE.Group>(null);
   const chase = useRef<THREE.Group>(null);
+  const hold = useHold();
   useFrame((state) => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     const t = state.clock.elapsedTime * (reducedMotion ? 0.3 : 1);
     needles.current?.children.forEach(
       (n, i) => (n.rotation.z = -0.9 + Math.sin(t * (0.7 + i * 0.4) + i) * 0.8),

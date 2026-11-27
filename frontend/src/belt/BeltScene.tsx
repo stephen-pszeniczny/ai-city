@@ -3,6 +3,8 @@
 // labels (plain page elements, see Labels.tsx) to follow their buildings.
 import { useQuery } from "@tanstack/react-query";
 import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+
+import { useHold } from "./HoldContext";
 import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 
@@ -232,13 +234,17 @@ export function BeltScene({
     };
   }, [api, world]);
 
+  const hold = useHold();
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (space) {
-      space.update(t, state.camera);
-      world.station.update(t);
+      // Behind the open computer screen the scene holds still, except the asteroid orbit.
+      if (!hold) {
+        space.update(t, state.camera);
+        world.station.update(t);
+        world.kit.updateBlinkers(t);
+      }
       for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
-      world.kit.updateBlinkers(t);
       world.kit.setStationLights(space.nightAmount());
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.

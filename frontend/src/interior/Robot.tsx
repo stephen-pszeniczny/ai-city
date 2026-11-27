@@ -11,6 +11,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
+import { shouldAnimate } from "../belt/hold";
+import { useHold, useInView } from "../belt/HoldContext";
+
 import { LOOK, motionScale } from "../belt/look";
 import { RobotBrain } from "./robotBrain";
 import { ROBOT_HOVER } from "./stationLayout";
@@ -205,7 +208,10 @@ export function Robot({
 
   const near = detail === "near";
 
+  const hold = useHold();
+  const inView = useInView(swivel);
   useFrame((state) => {
+    if (!shouldAnimate({ hold, inView: inView.current, keepMoving: false })) return;
     const speed = motionScale(reducedMotion);
     const t = state.clock.elapsedTime;
     const s = brain.update(t * speed);

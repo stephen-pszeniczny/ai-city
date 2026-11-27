@@ -6,6 +6,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type Ref } from "react";
 import * as THREE from "three";
 
+import { shouldAnimate } from "../belt/hold";
+import { useHold } from "../belt/HoldContext";
+
 import type { Detail } from "../belt/lod";
 import { ROBOT } from "./Robot";
 import { PROJECTOR_LENS } from "./workspace";
@@ -82,7 +85,9 @@ export function DeskProps({
   useEffect(() => () => leaves.geo.dispose(), [leaves]);
 
   const lensRef = useRef<THREE.Mesh>(null);
+  const hold = useHold();
   useFrame((state) => {
+    if (!shouldAnimate({ hold, inView: true, keepMoving: false })) return;
     if (lensRef.current)
       lensRef.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 6) * 0.08);
   });
