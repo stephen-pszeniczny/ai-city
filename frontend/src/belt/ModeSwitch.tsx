@@ -10,6 +10,9 @@ import { useEffect, useState } from "react";
 import { getMode, setMode, type Mode } from "../api";
 import { canSwitchTo, switchStatus } from "./switchRules";
 
+/** Names the switch, so others can tell when one is under way. */
+export const MODE_SWITCH_KEY = ["set-mode"];
+
 const ERROR_SHOWN_MS = 6000;
 const LABELS: Record<Mode, string> = { sample: "Sample", personal: "Personal" };
 
@@ -19,6 +22,7 @@ export function ModeSwitch() {
   const [error, setError] = useState<string | null>(null);
 
   const change = useMutation({
+    mutationKey: MODE_SWITCH_KEY,
     mutationFn: setMode,
     onMutate: () => setError(null),
     onSuccess: () => queryClient.resetQueries(),

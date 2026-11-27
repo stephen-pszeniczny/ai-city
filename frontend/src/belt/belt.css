@@ -25,19 +25,21 @@
   left: 0;
   right: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   padding: 18px max(16px, env(safe-area-inset-left));
   pointer-events: none;
 }
 
 .belt__brand {
+  margin-top: 9px; /* level with the 40px Sample | Personal pill */
   font-size: 1.125rem;
   font-weight: 700;
   color: var(--text);
 }
 
 .belt__sample {
+  margin-top: 9px;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
   background: rgba(255, 179, 64, 0.16);
@@ -122,6 +124,8 @@
 .belt__labels {
   position: absolute;
   inset: 0;
+  /* Labels' own z-index stays among them, so they pass behind the top bar's controls. */
+  isolation: isolate;
   pointer-events: none;
   overflow: hidden;
 }
@@ -330,13 +334,14 @@
   cursor: pointer;
 }
 
-/* The Sky button (day and night override), just left of the Sample | Personal switch. */
-.sky-toggle {
+/* Belt XP bubble (level, bar and the day/night switch), just left of Sample | Personal. */
+.xp-bubble {
   margin-left: auto;
-  align-self: flex-start;
-  min-height: 38px;
-  padding: 0 16px;
-  border-radius: 999px;
+  display: grid;
+  gap: 8px;
+  width: 248px;
+  padding: 10px 12px;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(16, 20, 32, 0.52);
   -webkit-backdrop-filter: blur(22px) saturate(1.4);
@@ -346,16 +351,118 @@
     600 13px -apple-system,
     BlinkMacSystemFont,
     sans-serif;
-  cursor: pointer;
   pointer-events: auto;
 }
 
-.sky-toggle:focus-visible {
+.xp-bubble__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.xp-bubble__title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.xp-bubble__level {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "+1" beside the level; it rises, holds and fades (BeltXpBubble removes it). */
+.xp-bubble__plus {
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 0;
+  color: #8aa4ff;
+  font-weight: 700;
+  animation: xp-plus-pop 2.4s ease-out both;
+}
+
+@keyframes xp-plus-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.25);
+  }
+  30%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Reduced motion: the "+1" just shows, then goes. */
+@media (prefers-reduced-motion: reduce) {
+  .xp-bubble__plus {
+    animation: none;
+  }
+}
+
+.xp-bubble__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.xp-bubble__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #3456e0;
+  box-shadow: 0 0 8px #3456e0;
+}
+
+.xp-bubble__total {
+  justify-self: end;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.xp-bubble__sky {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.xp-bubble__option {
+  min-height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.xp-bubble__option[aria-pressed="true"] {
+  background: #3456e0;
+  color: #fff;
+  cursor: default;
+}
+
+.xp-bubble__option:focus-visible {
   outline: 2px solid #8aa4ff;
   outline-offset: 2px;
 }
 
-/* The Sky button already pushes both to the right. */
-.sky-toggle + .mode-switch {
+/* The bubble already pushes both to the right. */
+.xp-bubble + .mode-switch {
   margin-left: 0;
 }

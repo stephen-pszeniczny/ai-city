@@ -94,7 +94,7 @@ _Added as problems come up. Format: **Symptom** → what to do._
 
 **Switching to Personal says "Touch ID isn't available"** → run the one-time setup above, then try again. You stay in Sample until it works.
 
-**The belt is in the wrong mode for the time of day** → check the Sky button says Auto. Then check `[location]` in your settings file: latitude, longitude (west is negative) and `timezone`, which must be a name from the standard list, like `Europe/London`. No restart needed: reload the page to see the change. If the backend is down, Auto shows day.
+**The belt is in the wrong mode for the time of day** → check Auto is selected in the Belt XP bubble (top right of the belt). Then check `[location]` in your settings file: latitude, longitude (west is negative) and `timezone`, which must be a name from the standard list, like `Europe/London`. No restart needed: reload the page to see the change. If the backend is down, Auto shows day.
 
 **Mac notifications** → when a Personal reminder comes due and you're not looking at the app (window closed, or behind other windows), a Mac notification from "Asteroid Belt" appears; click it to open the app. While the app is in Sample mode it only says "You have a reminder" (never the task), so nothing real shows during a demo. Several at once come as one ("3 reminders came due"). Sample's made-up reminders never make Mac notifications. The shuttle still flies when you next look at the app.
 
