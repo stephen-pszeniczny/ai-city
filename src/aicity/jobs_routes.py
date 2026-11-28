@@ -2,7 +2,7 @@
 
     POST /api/jobs/unlock                         Touch ID -> {"key"} (null in Sample mode)
     GET  /api/jobs/badge                          {"text"}: "2 platforms to check" or null
-    GET  /api/jobs/platforms                      {"platforms", "due", "refresh"}: cards
+    GET  /api/jobs/platforms                      {"platforms", "due", "refresh", "current_resume_label"}
     PUT  /api/jobs/platforms/{platform_id}/status   {status} -> the card
     POST /api/jobs/platforms/{platform_id}/check    {outcome: nothing | found} -> the card
     PUT  /api/jobs/platforms/{platform_id}/profile  {any profile field} -> the card
@@ -172,7 +172,9 @@ def badge(request: Request) -> dict[str, str | None]:
 def get_platforms(request: Request) -> dict:
     with _open(request) as (store, _settings_found, _rate_found):
         cards = store.platforms()
+        resume = store.current_resume_label()
     return {
+        "current_resume_label": resume,
         "platforms": [asdict(c) for c in cards],
         "due": [asdict(c) for c in cards if c.due],
         "refresh": [asdict(c) for c in cards if c.refresh_due],

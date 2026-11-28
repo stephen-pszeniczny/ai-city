@@ -4,6 +4,7 @@ Every platform and project here is made up. Times are 15:00 UTC (daytime on the 
 so the Mac's local date is the same day.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -380,3 +381,40 @@ def test_project_on_a_removed_platform_shows_its_id(conn, clock):
     )
     [p] = JobsStore(conn, fewer_platforms(), clock=clock).projects()
     assert p.platform_name == "platform_c"
+
+
+# --- The resume label comes from Flight School ------------------------------------------
+
+
+def add_resume_version(conn, label):
+    conn.execute(
+        "INSERT INTO fs_resume_versions (label, snapshot_json, created_at) "
+        "VALUES (?, '[]', '2026-11-01T15:00:00Z')",
+        (label,),
+    )
+
+
+def test_settings_label_is_used_until_flight_school_has_a_version(store):
+    assert store.current_resume_label() == "v2"
+
+
+def test_flight_schools_newest_version_wins_over_the_settings_label(store, conn):
+    add_resume_version(conn, "v1 Oct 2026")
+    add_resume_version(conn, "v2 Nov 2026")
+    assert store.current_resume_label() == "v2 Nov 2026"
+
+
+def test_refresh_follows_flight_schools_version(store, conn):
+    store.set_profile("platform_a", resume_label="v2", profile_updated_on="2026-11-29")
+    assert card(store, "platform_a").refresh_due is False
+    add_resume_version(conn, "v1 Nov 2026")
+    assert card(store, "platform_a").refresh_due is True
+    store.set_profile("platform_a", resume_label="v1 Nov 2026")
+    assert card(store, "platform_a").refresh_due is False
+
+
+def test_no_label_anywhere_means_no_label_nudge(conn, clock):
+    bare = JobsStore(conn, replace(SETTINGS, master_resume_label=None), clock=clock)
+    assert bare.current_resume_label() is None
+    bare.set_profile("platform_a", resume_label="anything", profile_updated_on="2026-11-29")
+    assert card(bare, "platform_a").refresh_due is False
