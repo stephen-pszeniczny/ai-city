@@ -12,6 +12,9 @@ import { getBuildings, listTasks, type BuildingId } from "../api";
 import { Shuttle } from "../notifications/Shuttle";
 import { BUILT } from "./built";
 import { flightState } from "./flightState";
+import { createInteriorGrowth, createModuleGrowth } from "./growth/applyGrowth";
+import { sceneTier } from "./growth/tiers";
+import { previewTier } from "./growth/preview";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { StationInterior } from "../interior/StationInterior";
 import { hallwayStatus } from "./hallwayStatus";
@@ -22,14 +25,26 @@ import { tintOf } from "./tints";
 import type { LabelElements } from "./Labels";
 import { fadeSecondsFor } from "./dayNight";
 import { DESK_LIGHT_COUNT, deskLights } from "./deskLights";
-import { LOOK } from "./look";
+import { detailFor } from "./lod";
+import { LOOK, motionScale } from "./look";
 import { createKit } from "./materials";
 import { createSpace, type Space } from "./space";
-import { createStation } from "./station";
+import { createStation, type StationModule } from "./station";
 import type { DayNight } from "./useDayNight";
+import { useXp } from "./useXp";
+import { MODULE_X } from "../interior/stationLayout";
 
 /** Pointer movement (px) below which a press counts as a click, not a drag. */
 const CLICK_SLOP = 5;
+const STATION_MODULES: readonly StationModule[] = ["planner", "finance"];
+/** Each module's centre (the station doesn't move). */
+const MODULE_SPOTS: Record<StationModule, THREE.Vector3> = {
+  planner: new THREE.Vector3(MODULE_X.planner, 0, 0),
+  finance: new THREE.Vector3(MODULE_X.finance, 0, 0),
+};
+/** Development only (npm run dev): /?growthPreview=<0 to 10> shows the upgrades. Read
+ * once, as moving between buildings drops it from the address. */
+const GROWTH_PREVIEW = import.meta.env.DEV ? previewTier(window.location.search) : null;
 
 export function BeltScene({
   view,
@@ -56,8 +71,20 @@ export function BeltScene({
   // React to run this more than once in development.
   const world = useMemo(() => {
     const kit = createKit();
-    return { kit, station: createStation(kit), asteroids: createAsteroids(kit) };
-  }, []);
+    const station = createStation(kit);
+    const room = (id: StationModule) => createInteriorGrowth(id, tintOf(id), kit);
+    return {
+      kit,
+      station,
+      asteroids: createAsteroids(kit, { reducedMotion }),
+      /** Upgrades outside the station's two modules, and in their control rooms. */
+      modules: {
+        planner: createModuleGrowth("planner", station, kit),
+        finance: createModuleGrowth("finance", station, kit),
+      },
+      rooms: { planner: room("planner"), finance: room("finance") },
+    };
+  }, [reducedMotion]);
   useEffect(
     () => () => {
       for (const g of [world.station.group, ...world.asteroids.map((a) => a.group)]) disposeTree(g);
@@ -65,6 +92,23 @@ export function BeltScene({
     },
     [world],
   );
+
+  // Each building shows its last celebrated upgrade (tier 0 until XP is known). A mode
+  // switch resets the XP query, so Sample and Personal each show their own.
+  const xp = useXp();
+  const plannerTier = sceneTier(xp, GROWTH_PREVIEW, "planner");
+  const financeTier = sceneTier(xp, GROWTH_PREVIEW, "finance");
+  // As one string, so the effect runs only when a tier really changes.
+  const asteroidTiers = world.asteroids.map((a) => sceneTier(xp, GROWTH_PREVIEW, a.id)).join();
+  // The control rooms get theirs from ControlStation.
+  useEffect(() => {
+    world.modules.planner.setTier(plannerTier);
+    world.modules.finance.setTier(financeTier);
+  }, [world, plannerTier, financeTier]);
+  useEffect(() => {
+    const tiers = asteroidTiers.split(",").map(Number);
+    world.asteroids.forEach((a, i) => a.growth.setTier(tiers[i]!));
+  }, [world, asteroidTiers]);
 
   // Created in an effect (not useMemo): it adds itself to the scene, and React
   // may run memo code twice in development, which would leave a stray copy.
@@ -164,7 +208,9 @@ export function BeltScene({
       cancelled = true;
       window.clearTimeout(id);
     };
-  }, [gl, scene, camera, world]);
+    // Again after a control room gains something (XP arrives after the first draw), so
+    // that's prepared too and the next flight in doesn't stall on it.
+  }, [gl, scene, camera, world, plannerTier, financeTier]);
 
   // Mission Control or the Vault: the station's inside (hub, hallways, rooms)
   // shows while the camera is inside the station; its outside shows otherwise.
@@ -188,13 +234,9 @@ export function BeltScene({
   const atScreen = view.level === "screen";
 
   useEffect(() => {
-    const modules = {
-      planner: new THREE.Vector3(-10.5, 0, 0),
-      finance: new THREE.Vector3(10.5, 0, 0),
-    };
     api.current = {
       locate(id, out) {
-        if (id === "planner" || id === "finance") return out.copy(modules[id]);
+        if (id === "planner" || id === "finance") return out.copy(MODULE_SPOTS[id]);
         const a = world.asteroids.find((x) => x.id === id);
         return a ? out.copy(a.group.position) : out.set(0, 0, 0);
       },
@@ -211,6 +253,11 @@ export function BeltScene({
   }, [api, world]);
 
   const hold = useHold();
+  /** One object, updated each frame, for the station's growth (no per-frame allocations). */
+  const timing = useMemo(
+    () => ({ hold: false, motion: motionScale(reducedMotion) }),
+    [reducedMotion],
+  );
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (space) {
@@ -220,8 +267,16 @@ export function BeltScene({
         world.station.update(t);
         world.kit.updateBlinkers(t);
       }
-      for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera);
+      for (const a of world.asteroids) a.update(t, space.orbitSpeed, state.camera, hold);
       world.kit.setStationLights(space.nightAmount());
+    }
+    timing.hold = hold;
+    for (const id of STATION_MODULES) {
+      const outside = world.modules[id];
+      outside.update(t, timing);
+      outside.setDetail(detailFor(state.camera.position.distanceTo(MODULE_SPOTS[id])));
+      world.station.anchors[id].y = outside.labelHeight(); // the labels read this below
+      world.rooms[id].update(t, timing);
     }
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
     const c = state.camera.position;
@@ -272,6 +327,8 @@ export function BeltScene({
           summary={hallwayStatus.missionSummary(openTasks.data ?? [])}
           screenOf={atScreen ? insideModule : null}
           onOpenScreen={(id) => onOpen(id)}
+          rooms={world.rooms}
+          tiers={{ planner: plannerTier, finance: financeTier }}
         />
       </group>
       {world.asteroids.map((a) => (

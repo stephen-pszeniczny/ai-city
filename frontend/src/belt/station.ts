@@ -11,6 +11,8 @@ export type Station = {
   group: THREE.Group;
   /** Where each module's label sits (local to the station, which doesn't move). */
   anchors: Record<StationModule, THREE.Vector3>;
+  /** Each module's own group, centred on it: upgrades are added here (see growth/). */
+  moduleAnchors: Record<StationModule, THREE.Group>;
   /** Clickable meshes, tagged with userData.buildingId. */
   pickables: THREE.Object3D[];
   update(t: number): void;
@@ -295,6 +297,7 @@ export function createStation(kit: Kit): Station {
       planner: new THREE.Vector3(-10.5, 3.2, 0),
       finance: new THREE.Vector3(10.5, 4.0, 0),
     },
+    moduleAnchors: { planner, finance },
     pickables: [planner, finance],
     update(t) {
       // The ring holds still at an angle where its spokes are diagonal, clear of the

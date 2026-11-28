@@ -5,8 +5,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import type { Detail } from "../belt/lod";
+import { DESK } from "./deskSize";
 
-export const DESK = { width: 1.7, depth: 0.66, topY: 0.75 } as const;
+export { DESK };
 /** Desk centre relative to the robot (the robot sits at the origin, facing +z). */
 export const DESK_Z = 0.78;
 /** Keyboard centre, desk-local (under the robot's hands). */

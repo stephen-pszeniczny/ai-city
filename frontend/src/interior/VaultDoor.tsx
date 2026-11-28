@@ -16,7 +16,12 @@ const THICK = VAULT_DOOR.thickness;
 const HINGE_OUT = VAULT_DOOR.hingeOut;
 const BOLTS = 10;
 
-export function VaultDoor() {
+export function VaultDoor({
+  finish,
+}: {
+  /** What the Vault's upgrades put on the door itself, so it swings with it. */
+  finish: THREE.Group;
+}) {
   const greetPts = useMemo(() => greetingPoints(), []);
   const hinge = useRef<THREE.Group>(null);
   const wheel = useRef<THREE.Group>(null);
@@ -83,6 +88,7 @@ export function VaultDoor() {
           (+x), away from the desk, and folds flat against the wall. */}
         <group ref={hinge} position={[HINGE_OUT, 0, -R]}>
           <group position={[-HINGE_OUT, 0, R]}>
+            <primitive object={finish} />
             <mesh rotation={[0, 0, Math.PI / 2]} material={mats.steel} castShadow>
               <cylinderGeometry args={[R, R, THICK, 64]} />
             </mesh>

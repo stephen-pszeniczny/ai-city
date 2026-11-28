@@ -9,6 +9,7 @@ import * as THREE from "three";
 
 import { shouldAnimate } from "../belt/hold";
 import { useHold } from "../belt/HoldContext";
+import { SCREEN } from "./deskSize";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import type { BuildingId } from "../api";
@@ -17,7 +18,7 @@ import { useLiveStat } from "./useLiveStat";
 import { workScreen, type WorkScreen } from "./workScreen";
 
 /** Screen size in scene units (16:10), shared with the camera and the desktop overlay. */
-export const SCREEN = { width: 1.28, height: 0.8 } as const;
+export { SCREEN };
 
 /** One task row drawn on the screen. */
 
