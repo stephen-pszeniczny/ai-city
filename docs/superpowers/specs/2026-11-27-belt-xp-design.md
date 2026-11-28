@@ -172,4 +172,5 @@ Where the build differs from, or settles, the design above (2026-11-27):
 - Archiving a finished to-do and rejecting a project keep the XP already earned.
 - The Opportunity Office dish stands on its own platform out past the deck, clear of the desk.
 - A level-up shows a card naming the new upgrade.
+- "After Touch ID" at the Vault, in Personal mode: Touch ID is only asked on the Vault's computer screen, so the Vault's level-up moment plays only after the owner has unlocked the computer and gone back to the room view. Leaving during the moment counts it as seen. This is the approved design.
 - Sample mode adds a fixed, made-up head start to each earning building (never stored) so it opens as a grown belt, with one upgrade waiting. Flight School's made-up Sample history is not written yet; it comes when Flight School is switched on.

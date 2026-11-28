@@ -468,6 +468,25 @@
   outline-offset: 2px;
 }
 
+/* A short window: the ring's far side sits higher up the screen, so the bubble is
+   tighter and starts higher. Labels passing under it then stay clear (checked at
+   1100x700). */
+@media (max-height: 820px) {
+  .xp-bubble {
+    margin-top: -6px;
+    gap: 4px;
+    padding: 5px 10px 6px;
+  }
+
+  .xp-bubble__sky {
+    padding: 2px;
+  }
+
+  .xp-bubble__option {
+    min-height: 24px;
+  }
+}
+
 /* A building's XP bar, in the building view: top right (level with Back), clear of
    the robot, desk and "Use the computer". Nothing in it is clickable. */
 .xp-building {
