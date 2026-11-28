@@ -132,7 +132,7 @@ The builder may adjust pieces for fit (camera clearance, performance) but keeps 
 
 - Ordinary level: a "+1" pop on the bar the next time that bar is shown.
 - Upgrade: the next time the owner opens that building, a cargo shuttle docks, the robot cheers (a new robot action) and the new piece builds itself in place. Then the bar resets toward the next level. A click or Escape skips it, and reduced motion skips straight to the end state.
-- At the Vault, the moment plays after Touch ID and after the first-visit door greeting, once the robot is at its desk. *(Builder's-check call.)*
+- At the Vault, the moment plays after the first-visit door greeting, once the robot is at its desk. It needs no Touch ID: it shows only decorations, and the Vault's money screens keep their lock. *(The owner's choice, 2026-11-27, replacing an earlier "after Touch ID" rule.)*
 - Each upgrade plays once. The app remembers the last upgrade celebrated per building, per mode. Several upgrades waiting at once play as one moment that ends at the newest stage.
 - Until it is celebrated, a waiting upgrade does not appear in the scene, so the owner sees it arrive. The Belt XP bubble may show a small marker on the building's label or badge saying an upgrade is waiting. This is the builder's call on style, but counts and markers only.
 
@@ -172,5 +172,4 @@ Where the build differs from, or settles, the design above (2026-11-27):
 - Archiving a finished to-do and rejecting a project keep the XP already earned.
 - The Opportunity Office dish stands on its own platform out past the deck, clear of the desk.
 - A level-up shows a card naming the new upgrade.
-- "After Touch ID" at the Vault, in Personal mode: Touch ID is only asked on the Vault's computer screen, so the Vault's level-up moment plays only after the owner has unlocked the computer and gone back to the room view. Leaving during the moment counts it as seen. This is the approved design.
 - Sample mode adds a fixed, made-up head start to each earning building (never stored) so it opens as a grown belt, with one upgrade waiting. Flight School's made-up Sample history is not written yet; it comes when Flight School is switched on.

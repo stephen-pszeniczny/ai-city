@@ -1,7 +1,7 @@
 // Draws the level-up moment (levelUpRun.ts holds it): the cargo shuttle docks, the
 // robot cheers, the new pieces build themselves in, and the upgrade is saved. It
 // plays only in a building's view with the camera at rest; at the Vault only once
-// it's unlocked and the door greeting is over. The camera is never moved.
+// the door greeting is over. The camera is never moved.
 //
 // BeltScene calls beforeUpdates() and afterUpdates() around its own frame updates:
 // pieces that are building in are put back to full size before they animate.
@@ -10,17 +10,8 @@ import { useThree, type RootState } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
-import {
-  getMode,
-  hasVaultKey,
-  markCelebrated,
-  type BuildingId,
-  type Mode,
-  type XpView,
-} from "../api";
-import { VAULT_GREETING } from "../interior/stationLayout";
+import { getMode, markCelebrated, type BuildingId, type Mode, type XpView } from "../api";
 import { robotBrains } from "../interior/robotBrain";
-import { greetingClock } from "../interior/vaultGreeting";
 import { DECK_R, DECK_Y, type AsteroidBuilding } from "./asteroids";
 import { FOV } from "./CameraRig";
 import { createCargoShuttle, type CargoPose, type CargoShuttle } from "./CargoShuttle";
@@ -30,7 +21,7 @@ import type { GrowthHandle, InteriorGrowth } from "./growth/applyGrowth";
 import { createBuildIn, type BuildIn } from "./growth/buildIn";
 import { asteroidScaleAt, type GrowthId } from "./growth/ladders";
 import type { View } from "./levels";
-import { planLevelUp } from "./levelUp";
+import { planLevelUp, vaultReady } from "./levelUp";
 import { celebrate, levelUp, newThings, type Ending, type Moment } from "./levelUpRun";
 import { SEEN_SHARE, shareInView } from "./levelUpView";
 import { LOOK } from "./look";
@@ -60,10 +51,6 @@ const SWITCHING = { mutationKey: MODE_SWITCH_KEY };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (x: number) => x * x * (3 - 2 * x);
-
-/** At the Vault: unlocked (Touch ID, in Personal mode) and the door greeting over. */
-const vaultReady = (mode: Mode) =>
-  (mode === "sample" || hasVaultKey()) && greetingClock(performance.now()) >= VAULT_GREETING.seated;
 
 export function useLevelUpScene({
   world,
@@ -236,7 +223,7 @@ export function useLevelUpScene({
         !!current &&
         !switching &&
         !flightState.flying() &&
-        (here.id !== "finance" || vaultReady(current));
+        (here.id !== "finance" || vaultReady(performance.now()));
       const building = current && known ? levelUp.due(known.buildings, here, current, ready) : null;
       if (!levelUp.settle(building !== null, delta) || !building || !current) return;
       const plan = planLevelUp(building, here, ready);

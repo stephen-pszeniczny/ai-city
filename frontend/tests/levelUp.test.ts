@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { BuildingXp } from "../src/api.ts";
-import { phaseAt, planLevelUp } from "../src/belt/levelUp.ts";
+import { phaseAt, planLevelUp, vaultReady } from "../src/belt/levelUp.ts";
 import type { View } from "../src/belt/levels.ts";
 import { LOOK } from "../src/belt/look.ts";
+import { vaultDoor } from "../src/belt/vaultDoor.ts";
+import { VAULT_GREETING } from "../src/interior/stationLayout.ts";
 
 const building = (over: Partial<BuildingXp> = {}): BuildingXp => ({
   id: "jobs",
@@ -78,4 +80,17 @@ test("each phase starts where the one before ends", () => {
   assert.equal(phaseAt(cheer), "build");
   assert.equal(phaseAt(end - 0.01), "build");
   assert.equal(phaseAt(end), "done");
+});
+
+test("the Vault is ready once its door greeting is over, with no Touch ID needed", () => {
+  // No Vault key exists here: the moment shows only decorations, and the Vault's
+  // money screens keep their own Touch ID lock.
+  vaultDoor.resetForTests();
+  const now = 1_000_000;
+  assert.equal(vaultReady(now), false); // the door hasn't opened this session
+  vaultDoor.claimFirstOpening();
+  vaultDoor.scheduleOpening(now);
+  assert.equal(vaultReady(now + VAULT_GREETING.seated * 1000 - 100), false); // still greeting
+  assert.equal(vaultReady(now + VAULT_GREETING.seated * 1000), true);
+  vaultDoor.resetForTests();
 });
