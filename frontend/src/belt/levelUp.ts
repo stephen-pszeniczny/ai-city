@@ -1,6 +1,8 @@
 // The level-up moment: when a waiting upgrade plays, and which phase it's in.
 // Pure logic; the scene draws each phase.
 import type { BuildingId, BuildingXp } from "../api";
+import { VAULT_GREETING } from "../interior/stationLayout.ts";
+import { greetingClock } from "../interior/vaultGreeting.ts";
 import type { View } from "./levels.ts";
 import { LOOK } from "./look.ts";
 
@@ -10,7 +12,7 @@ export type LevelUpPlan = { id: BuildingId; fromTier: number; toTier: number } |
 /**
  * The upgrade to play now, or null. It plays only inside its own building (never on
  * the belt or at the screen). `ready` means no flight is running and, for the Vault,
- * it's unlocked and the door greeting is over. Several waiting tiers play as one.
+ * the door greeting is over. Several waiting tiers play as one.
  */
 export function planLevelUp(b: BuildingXp, view: View, ready: boolean): LevelUpPlan {
   if (!isDue(b, view, ready)) return null;
@@ -21,6 +23,14 @@ export function planLevelUp(b: BuildingXp, view: View, ready: boolean): LevelUpP
 export function isDue(b: BuildingXp, view: View, ready: boolean): boolean {
   if (!ready || !b.earning || !b.upgrade_waiting) return false;
   return view.level === "building" && view.id === b.id;
+}
+
+/**
+ * At the Vault: the door greeting is over. No Touch ID: the moment shows only
+ * decorations, and the money screens keep their own lock (checked by the server).
+ */
+export function vaultReady(nowMs: number): boolean {
+  return greetingClock(nowMs) >= VAULT_GREETING.seated;
 }
 
 export type LevelUpPhase = "dock" | "cheer" | "build" | "done";
