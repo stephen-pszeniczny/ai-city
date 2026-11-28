@@ -468,6 +468,25 @@
   outline-offset: 2px;
 }
 
+/* A short window: the ring's far side sits higher up the screen, so the bubble is
+   tighter and starts higher. Labels passing under it then stay clear (checked at
+   1100x700). */
+@media (max-height: 820px) {
+  .xp-bubble {
+    margin-top: -6px;
+    gap: 4px;
+    padding: 5px 10px 6px;
+  }
+
+  .xp-bubble__sky {
+    padding: 2px;
+  }
+
+  .xp-bubble__option {
+    min-height: 24px;
+  }
+}
+
 /* A building's XP bar, in the building view: top right (level with Back), clear of
    the robot, desk and "Use the computer". Nothing in it is clickable. */
 .xp-building {
@@ -520,4 +539,90 @@
 /* The bubble already pushes both to the right. */
 .xp-bubble + .mode-switch {
   margin-left: 0;
+}
+
+/* The level-up moment: the building's XP bar fills and glows while it plays... */
+.xp-building--levelup {
+  border-color: rgba(255, 209, 102, 0.75);
+  box-shadow: 0 0 24px rgba(255, 190, 70, 0.35);
+}
+
+.xp-building--levelup .xp-bar__fill {
+  background: linear-gradient(90deg, #ffb340, #ffe08a);
+}
+
+.xp-building--levelup .xp-progress__text {
+  color: #ffd166;
+}
+
+/* ...and a glass card names what's new, bottom left: clear of the robot, desk,
+   screen and controls in every building view, and above the ticker however wide. */
+.levelup-card {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: 76px;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 250px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 209, 102, 0.55);
+  background: rgba(16, 20, 32, 0.66);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font:
+    600 13px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  pointer-events: none;
+  animation: levelup-card-in 0.45s ease-out;
+}
+
+.levelup-card__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.levelup-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.levelup-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.levelup-chip--away {
+  background: rgba(52, 86, 224, 0.45);
+}
+
+.levelup-card__where {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+@keyframes levelup-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .levelup-card {
+    animation: none;
+  }
 }

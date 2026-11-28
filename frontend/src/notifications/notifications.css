@@ -34,10 +34,11 @@
   transition: opacity 0.25s;
 }
 
-/* Reduced motion: the same ribbon, still, at the top centre for a few seconds. */
+/* Reduced motion: the same ribbon, still, at the top centre for a few seconds. It sits
+   below the Belt XP bubble, so however long the text, the day/night switch stays clear. */
 .shuttle-banner--still {
   left: 50%;
-  top: 76px;
+  top: 136px;
   transform: translateX(-50%);
   animation: shuttle-banner-fade var(--still-seconds, 5s) ease-in-out both;
 }

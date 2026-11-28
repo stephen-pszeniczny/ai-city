@@ -307,9 +307,10 @@ function hangarShip(stage: Stage, tint: string, kit: Kit): Model {
 const FIRST_DISH_SIZE = 0.86;
 
 /**
- * Stand today's landmark (stage 1) where the grown ones stand, clear of the desk:
- * the dish on its platform past the deck, the ship on a pad that reaches down past
- * the deck's edge to the rock.
+ * Stand today's landmark (stage 1) where the grown ones stand, clear of the desk.
+ * Opportunity Office: the dish on its own platform, well out past the deck, held by a
+ * boom rooted in the rock. Flight School: the ship on a pad at the back of the deck,
+ * its rim just over the deck's edge and its base sunk into the rock.
  */
 export function standLandmark(
   group: THREE.Group,

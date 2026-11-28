@@ -2,9 +2,20 @@
 // next one is picked at random (weighted, so typing is still the most common),
 // never the same action twice in a row, with a random length. Clicking the
 // robot makes it wave or spin next. Pure logic, so it can be tested.
+import type { BuildingId } from "../api";
 
 export type RobotAction =
-  "type" | "switchTab" | "read" | "sip" | "stretch" | "lookAround" | "spin" | "wave" | "gadget";
+  | "type"
+  | "switchTab"
+  | "read"
+  | "sip"
+  | "stretch"
+  | "lookAround"
+  | "spin"
+  | "wave"
+  | "gadget"
+  /** The level-up moment only: never picked at random (see force). */
+  | "cheer";
 
 /** Shortest and longest length of each action, in seconds (before busyness). */
 export const DURATIONS: Record<RobotAction, readonly [number, number]> = {
@@ -17,6 +28,7 @@ export const DURATIONS: Record<RobotAction, readonly [number, number]> = {
   stretch: [2, 3],
   spin: [2.2, 3],
   wave: [1.8, 2.5],
+  cheer: [2.6, 2.6],
 };
 
 const WORK_WEIGHTS: [RobotAction, number][] = [
@@ -80,9 +92,16 @@ export class RobotBrain {
     this.weights = [...WORK_WEIGHTS, ...FUN.map((a): [RobotAction, number] => [a, funEach])];
   }
 
-  /** Make the robot do `action` next (the vault greeting's wave). */
+  /** Make the robot do `action` next (the vault greeting's wave, a level-up's cheer). */
   force(action: RobotAction): void {
     this.forced = action;
+  }
+
+  /** Stop a cheer, under way or still to come (the moment was skipped or dropped). */
+  endCheer(): void {
+    if (this.forced === "cheer") this.forced = null;
+    // No time left: the next update picks something else.
+    if (this.action === "cheer") this.length = 0;
   }
 
   /** Ask the robot to react (it was clicked): it waves or spins next. */
@@ -130,7 +149,9 @@ export class RobotBrain {
     const [min, max] = DURATIONS[action];
     this.action = action;
     this.start = t;
-    this.length = (min + (max - min) * this.rng()) / this.busyness;
+    const length = min + (max - min) * this.rng();
+    // A cheer is timed to the level-up moment, however busy the robot is.
+    this.length = action === "cheer" ? length : length / this.busyness;
   }
 
   /** A weighted random action, never the same as `previous`. */
@@ -145,3 +166,6 @@ export class RobotBrain {
     return options[options.length - 1]?.[0] ?? "type";
   }
 }
+
+/** Each building's robot, while it's on screen, so the level-up moment can make it cheer. */
+export const robotBrains = new Map<BuildingId, RobotBrain>();

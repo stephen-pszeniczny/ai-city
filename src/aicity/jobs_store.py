@@ -161,7 +161,8 @@ class JobsStore:
 
         def work() -> None:
             stored = self._profile(platform_id)
-            row = _checked_profile({**stored, **fields})
+            wanted = {**stored, **fields}
+            row = _checked_profile(wanted)
             stamp = self._stamp()
             self._conn.execute(
                 "INSERT INTO platform_profiles (platform_id, pay_low_cents, pay_high_cents, "
@@ -177,7 +178,7 @@ class JobsStore:
                 "updated_at = excluded.updated_at",
                 (platform_id, *row, stamp),
             )
-            updated_on = row[-1]
+            updated_on = wanted["profile_updated_on"]
             if updated_on is not None and updated_on != stored["profile_updated_on"]:
                 # The permanent record of profile refreshes (Belt XP counts them).
                 self._conn.execute(

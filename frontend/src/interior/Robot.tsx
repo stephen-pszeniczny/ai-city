@@ -15,7 +15,8 @@ import { shouldAnimate } from "../belt/hold";
 import { useHold, useInView } from "../belt/HoldContext";
 
 import { LOOK, motionScale } from "../belt/look";
-import { RobotBrain } from "./robotBrain";
+import { robotBrains, RobotBrain } from "./robotBrain";
+import type { BuildingId } from "../api";
 import { ROBOT_HOVER } from "./stationLayout";
 
 export type RobotDetail = "near" | "far";
@@ -41,6 +42,16 @@ export function useRobotBrain(seedText: string): RobotBrain {
       busyness: LOOK.robot.busyness,
     });
   }, [seedText]);
+}
+
+/** A building's robot brain, findable by the level-up moment while it's on screen. */
+export function useRegisteredBrain(id: BuildingId, seedText: string): RobotBrain {
+  const brain = useRobotBrain(seedText);
+  useEffect(() => {
+    robotBrains.set(id, brain);
+    return () => void robotBrains.delete(id);
+  }, [id, brain]);
+  return brain;
 }
 
 /** Robot-local layout, shared with the desk so hands land on the keys. */
@@ -140,6 +151,8 @@ export function Robot({
       ],
       glassAt: new THREE.Vector3(),
       mouth: new THREE.Vector3(0.12, HEAD_Y - 0.02, 0.3),
+      cheerHand: new THREE.Vector3(),
+      camera: new THREE.Vector3(),
     }),
     [],
   );
@@ -224,6 +237,14 @@ export function Robot({
     if (s.action === "spin") yaw = ease(p) * Math.PI * 2;
     else if (s.action === "wave") yaw = window01(p, 0, 1, 0.22) * 2.3;
     else if (s.action === "gadget") yaw = window01(p, 0, 1, 0.25) * 0.55;
+    // Cheering: round to face whoever is watching, so the visor shows.
+    const cheer = s.action === "cheer" ? window01(p, 0, 1, 0.14) : 0;
+    if (cheer > 0 && swivel.current?.parent) {
+      swivel.current.parent.worldToLocal(tmp.camera.copy(state.camera.position));
+      yaw = Math.atan2(tmp.camera.x, tmp.camera.z) * ramp(cheer, 0, 1);
+    }
+    // Three hops off the seat.
+    const hop = cheer > 0 && p < 0.86 ? Math.abs(Math.sin((p / 0.86) * Math.PI * 3)) * 0.2 : 0;
     // Off the chair: hover at the given spot, legs tucked away (the chair stays still).
     const off = away?.active === true;
     if (off) yaw = 0;
@@ -233,7 +254,7 @@ export function Robot({
         awayRoot.current.position.copy(away.position).setY(away.position.y + ROBOT_HOVER);
         awayRoot.current.rotation.y = away.yaw - yaw;
       } else {
-        awayRoot.current.position.set(0, 0, 0);
+        awayRoot.current.position.set(0, hop, 0);
         awayRoot.current.rotation.y = 0;
       }
     }
@@ -244,6 +265,7 @@ export function Robot({
     let lean = 0.06;
     if (s.action === "stretch") lean = -0.22 * window01(p, 0, 1, 0.3);
     if (s.action === "read") lean = 0.14 * window01(p, 0, 1, 0.25);
+    if (s.action === "cheer") lean = 0.06 - 0.18 * cheer;
     if (body.current) {
       body.current.position.y = bob;
       body.current.rotation.x = lean;
@@ -260,12 +282,19 @@ export function Robot({
       if (s.action === "wave") roll = Math.sin(tt * 4) * 0.12;
       if (s.action === "gadget") yawH = 0.5 * window01(p, 0, 1);
       if (s.action === "switchTab") yawH = 0.12;
+      if (s.action === "cheer") {
+        pitch = 0.1 - 0.35 * cheer;
+        roll = Math.sin(tt * 7) * 0.1 * cheer;
+      }
       head.current.rotation.set(pitch, yawH, roll);
     }
 
     // Visor: blink (dims) briefly every few seconds; antenna tip blinks.
     const blink = (tt + brain.seedOffset) % 4.3 < 0.12;
-    mats.visor.emissiveIntensity = (blink ? 0.25 : 1.6) * LOOK.robot.glowStrength;
+    // A cheer makes the visor flash instead of blinking.
+    const visor =
+      cheer > 0 ? 1.6 + 2.6 * cheer * Math.max(0, Math.sin(tt * 13)) : blink ? 0.25 : 1.6;
+    mats.visor.emissiveIntensity = visor * LOOK.robot.glowStrength;
     const tipOn = (tt + brain.seedOffset) % 1.4 < 0.18;
     mats.tip.color.set(tint).multiplyScalar(tipOn ? 2.4 : 0.35);
 
@@ -331,6 +360,13 @@ export function Robot({
         const g = ROBOT.gadget.clone();
         g.y += Math.max(0, Math.sin(tt * 7)) * 0.03 * reach;
         L.lerp(g, reach);
+        break;
+      }
+      case "cheer": {
+        // Both arms up and pumping.
+        const pump = Math.sin(tt * 11) * 0.09;
+        L.lerp(tmp.cheerHand.set(-0.5, 1.45 + pump, 0.12), cheer);
+        R.lerp(tmp.cheerHand.set(0.5, 1.45 - pump, 0.12), cheer);
         break;
       }
       case "lookAround":

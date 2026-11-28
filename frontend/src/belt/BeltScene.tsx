@@ -5,16 +5,26 @@ import { useQuery } from "@tanstack/react-query";
 import { createPortal, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 
 import { useHold } from "./HoldContext";
-import { Fragment, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import * as THREE from "three";
 
-import { getBuildings, listTasks, type BuildingId } from "../api";
+import { getBuildings, getMode, listTasks, type BuildingId } from "../api";
 import { Shuttle } from "../notifications/Shuttle";
 import { BUILT } from "./built";
 import { flightState } from "./flightState";
 import { createInteriorGrowth, createModuleGrowth } from "./growth/applyGrowth";
 import { sceneTier } from "./growth/tiers";
 import { previewTier } from "./growth/preview";
+import { levelUp } from "./levelUpRun";
+import { useLevelUpScene } from "./useLevelUpScene";
 import { AsteroidDesk } from "../interior/AsteroidDesk";
 import { StationInterior } from "../interior/StationInterior";
 import { hallwayStatus } from "./hallwayStatus";
@@ -94,12 +104,17 @@ export function BeltScene({
   );
 
   // Each building shows its last celebrated upgrade (tier 0 until XP is known). A mode
-  // switch resets the XP query, so Sample and Personal each show their own.
+  // switch resets the XP query, so Sample and Personal each show their own. While a
+  // level-up moment plays, and afterwards, the runner says which tier shows.
   const xp = useXp();
-  const plannerTier = sceneTier(xp, GROWTH_PREVIEW, "planner");
-  const financeTier = sceneTier(xp, GROWTH_PREVIEW, "finance");
+  const mode = useQuery({ queryKey: ["mode"], queryFn: getMode, retry: false }).data;
+  useSyncExternalStore(levelUp.subscribe, levelUp.snapshot);
+  const tierOf = (id: BuildingId) =>
+    GROWTH_PREVIEW ?? levelUp.shownTier(mode, id, sceneTier(xp, null, id));
+  const plannerTier = tierOf("planner");
+  const financeTier = tierOf("finance");
   // As one string, so the effect runs only when a tier really changes.
-  const asteroidTiers = world.asteroids.map((a) => sceneTier(xp, GROWTH_PREVIEW, a.id)).join();
+  const asteroidTiers = world.asteroids.map((a) => tierOf(a.id)).join();
   // The control rooms get theirs from ControlStation.
   useEffect(() => {
     world.modules.planner.setTier(plannerTier);
@@ -253,13 +268,22 @@ export function BeltScene({
   }, [api, world]);
 
   const hold = useHold();
+  const levelUpScene = useLevelUpScene({
+    world,
+    view,
+    reducedMotion,
+    xp,
+    mode,
+    off: GROWTH_PREVIEW !== null,
+  });
   /** One object, updated each frame, for the station's growth (no per-frame allocations). */
   const timing = useMemo(
     () => ({ hold: false, motion: motionScale(reducedMotion) }),
     [reducedMotion],
   );
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
+    levelUpScene.beforeUpdates();
     if (space) {
       // Behind the open computer screen the scene holds still, except the asteroid orbit.
       if (!hold) {
@@ -278,6 +302,7 @@ export function BeltScene({
       world.station.anchors[id].y = outside.labelHeight(); // the labels read this below
       world.rooms[id].update(t, timing);
     }
+    levelUpScene.afterUpdates(state, delta);
     // Inside the station's box (hatch, hub, hallways, rooms): show the inside.
     const c = state.camera.position;
     const inStation = Math.abs(c.x) < 12.9 && c.y > -1.3 && c.y < 2.2 && Math.abs(c.z) < 2.55;

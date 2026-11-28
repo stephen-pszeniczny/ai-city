@@ -31,7 +31,7 @@ export const FLIGHT_SECONDS = 1.2;
 /** The belt view the app opens on (matches the Canvas camera in BeltCanvas). */
 export const BELT_HOME = { position: [0, 22, 78], target: [0, 0, 0] } as const;
 /** Lens: narrow on the belt, wider indoors so the room and window fit. */
-const FOV = { belt: 38, inside: 55 } as const;
+export const FOV = { belt: 38, inside: 55 } as const;
 
 export type SceneApi = {
   /** World position of a building's centre, this frame. */

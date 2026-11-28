@@ -97,6 +97,19 @@ export const LOOK = {
     pieceMotion: 1.0,
     /** Seconds a new piece takes to build itself in during an upgrade. */
     buildInSeconds: 2.5,
+    /** The rest of the level-up moment, in seconds. */
+    moment: {
+      /** How long the building view must be still before the moment starts. */
+      settleSeconds: 0.6,
+      /** The cargo shuttle flies in and docks. */
+      dockSeconds: 2.5,
+      /** The robot cheers before the new pieces start to build. */
+      cheerSeconds: 1.5,
+      /** Afterwards the shuttle flies off. */
+      departSeconds: 2.2,
+      /** How long the card naming the new pieces stays after the moment. */
+      bannerSeconds: 7,
+    },
   },
 
   /** Gap between shooting stars, in seconds. */

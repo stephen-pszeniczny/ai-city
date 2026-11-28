@@ -132,3 +132,48 @@ test("force() makes that action next, even a repeat-safe one", () => {
   brain.force("wave");
   assert.equal(brain.update(0.01).action, "wave");
 });
+
+test("cheer never comes from the random pool", () => {
+  for (const funShare of [0.15, 0.9]) {
+    const seq = sequence(new RobotBrain(21, { funShare }), 10_000);
+    assert.ok(!seq.includes("cheer"), `cheer was picked at funShare ${funShare}`);
+  }
+});
+
+test('a forced "cheer" runs its full length, then normal actions return', () => {
+  // Busier robots don't cut the cheer short: it has to last through the moment.
+  const brain = new RobotBrain(6, { busyness: 3 });
+  brain.update(0);
+  brain.force("cheer");
+  assert.equal(brain.update(0.01).action, "cheer");
+  assert.equal(brain.update(DURATIONS.cheer[0] - 0.05).action, "cheer");
+  const after = brain.update(DURATIONS.cheer[1] + 0.05).action;
+  assert.notEqual(after, "cheer");
+});
+
+test("ending a cheer early puts the robot back to work on the next frame", () => {
+  const brain = new RobotBrain(6);
+  brain.update(0);
+  brain.force("cheer");
+  assert.equal(brain.update(0.01).action, "cheer");
+  brain.endCheer();
+  assert.notEqual(brain.update(0.02).action, "cheer");
+});
+
+test("a cheer asked for but not yet started is dropped", () => {
+  const brain = new RobotBrain(6);
+  brain.update(0);
+  brain.force("cheer");
+  brain.endCheer();
+  for (let t = 0.01; t < 20; t += 0.1) assert.notEqual(brain.update(t).action, "cheer");
+});
+
+test("ending a cheer leaves anything else alone", () => {
+  const brain = new RobotBrain(6);
+  brain.update(0);
+  brain.force("wave");
+  brain.endCheer();
+  assert.equal(brain.update(0.01).action, "wave");
+  brain.endCheer();
+  assert.equal(brain.update(0.02).action, "wave");
+});

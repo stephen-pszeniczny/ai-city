@@ -12,11 +12,12 @@ import type { BuildingId } from "../api";
 import { DECK_R } from "../belt/asteroids";
 import { deskLights } from "../belt/deskLights";
 import { detailFor, type Detail } from "../belt/lod";
+import { levelUp } from "../belt/levelUpRun";
 import { Desk, DESK_Z } from "./Desk";
 import { DeskProps } from "./DeskProps";
 import { Gadget } from "./Gadget";
 import { Monitor } from "./Monitor";
-import { Robot, useRobotBrain } from "./Robot";
+import { Robot, useRegisteredBrain } from "./Robot";
 import { deckToWork, MONITOR_AT, MONITOR_TURN, WORK_AT, WORK_SCALE } from "./workspace";
 
 export { DESK_SPOT } from "./workspace";
@@ -50,7 +51,7 @@ export function AsteroidDesk({
   /** Clicking the desk or screen (and the robot, from outside the building). */
   onDesk: () => void;
 }) {
-  const brain = useRobotBrain(id + tint);
+  const brain = useRegisteredBrain(id, id + tint);
   const root = useRef<THREE.Group>(null);
   const [detail, setDetail] = useState<Detail>("far");
   const nextCheck = useRef(0);
@@ -80,8 +81,9 @@ export function AsteroidDesk({
   const click = (robot: boolean) => (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 5) return; // a drag, not a click
     e.stopPropagation();
-    if (robot && inside) brain.react();
-    else onDesk();
+    if (robot && inside) {
+      if (!levelUp.swallowsClick()) brain.react();
+    } else onDesk();
   };
 
   const orbit = useMemo(
