@@ -7,7 +7,8 @@ last check and its last status change; a platform with no history is due today.
 
 A profile refresh is due for a platform that has applied or gone further (not
 rejected) when its profile date is missing or 90+ days old, or its resume label
-differs from the master resume label.
+differs from the current resume label
+(Flight School's newest version, or the settings label until it has one).
 
 Logged projects move forward along found -> applied -> assessment -> accepted ->
 active -> ended (skipping is fine), or to rejected before they're active. Rejected
@@ -126,6 +127,16 @@ class JobsStore:
 
     def platforms(self) -> list[PlatformCard]:
         return [self._card(p) for p in self._settings.platforms]
+
+    def current_resume_label(self) -> str | None:
+        """Flight School's newest resume version; the settings label until it has one.
+
+        Only the label is read: Opportunity Office never reads the resume itself.
+        """
+        row = self._conn.execute(
+            "SELECT label FROM fs_resume_versions ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return row[0] if row else self._settings.master_resume_label
 
     def due(self) -> list[PlatformCard]:
         return [c for c in self.platforms() if c.due]
@@ -336,7 +347,7 @@ class JobsStore:
         updated = profile["profile_updated_on"]
         if updated is None or (today - date.fromisoformat(updated)).days >= REFRESH_DAYS:
             return True
-        master = self._settings.master_resume_label
+        master = self.current_resume_label()
         return master is not None and profile["resume_label"] != master
 
     def _profile(self, platform_id: str) -> dict:

@@ -33,7 +33,7 @@ function Platforms() {
         {list.error.message}
       </p>
     );
-  const { platforms, due, refresh } = list.data;
+  const { platforms, due, refresh, current_resume_label: resume } = list.data;
   return (
     <div className="jobs">
       <div className="jobs__summary">
@@ -44,6 +44,7 @@ function Platforms() {
         <span className={`jobs__chip${refresh.length ? " jobs__chip--warn" : ""}`}>
           {refresh.length} profile{refresh.length === 1 ? "" : "s"} to refresh
         </span>
+        {resume && <span className="jobs__chip">Current resume: {resume}</span>}
       </div>
       <ul className="jobs__cards" aria-label="Platforms">
         {platforms.map((card) => (

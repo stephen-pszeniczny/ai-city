@@ -132,12 +132,13 @@ tax_set_aside_is_placeholder = true
 
 # Optional: Opportunity Office, a platform tracker. The AI-training platforms on the
 # roster, the pay floor logged projects are compared against (US dollars per hour, as
-# text), the master resume's version label, and how many days between checks for each
-# status (not_applied and rejected are never checked). Example values only.
+# text), a resume version label (used only until Flight School has a version), and how
+# many days between checks for each status (not_applied and rejected are never
+# checked). Example values only.
 # [jobs]
 # pay_floor_usd = "30"                  # default
 # pay_preferred_usd = "40"              # default
-# master_resume_label = "v1 Nov 2026"   # optional
+# master_resume_label = "v1 Nov 2026"   # optional; Flight School's newest version wins
 #
 # [jobs.check_days]                     # optional; these are the defaults
 # active = 3

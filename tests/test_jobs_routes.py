@@ -188,6 +188,7 @@ def test_platforms_due_and_check(client):
     assert [c["id"] for c in body["platforms"]] == ["platform_a", "platform_b"]
     assert [c["id"] for c in body["due"]] == ["platform_a"]
     assert [c["id"] for c in body["refresh"]] == ["platform_a"]
+    assert "current_resume_label" in body
     after = client.post("/api/jobs/platforms/platform_a/check", json={"outcome": "nothing"})
     assert after.status_code == 200
     assert after.json()["due"] is False

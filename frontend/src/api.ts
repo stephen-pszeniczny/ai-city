@@ -747,6 +747,8 @@ export type PlatformsView = {
   platforms: PlatformCard[];
   due: PlatformCard[];
   refresh: PlatformCard[];
+  /** Flight School's newest resume version (or the settings label until it has one). */
+  current_resume_label: string | null;
 };
 export type ProjectsView = {
   projects: ProjectView[];
